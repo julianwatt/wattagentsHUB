@@ -1,0 +1,531 @@
+'use client';
+import { useState, useEffect, FormEvent } from 'react';
+import { Session } from 'next-auth';
+import AppLayout from './AppLayout';
+import { useLanguage } from './LanguageContext';
+import { useColorTheme } from './ColorThemeContext';
+import { THEMES } from '@/lib/themes';
+
+type UserRole = 'agent' | 'jr_manager' | 'sr_manager' | 'admin' | 'ceo';
+interface User {
+  id: string;
+  username: string;
+  name: string;
+  email: string | null;
+  role: UserRole;
+  manager_id: string | null;
+  must_change_password: boolean;
+  is_active: boolean;
+  hire_date: string;
+  created_at: string;
+}
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+function roleBadgeClass(role: UserRole): string {
+  switch (role) {
+    case 'ceo':        return 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300';
+    case 'admin':      return 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300';
+    case 'sr_manager': return 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300';
+    case 'jr_manager': return 'bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300';
+    default:           return 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300';
+  }
+}
+
+interface CreatedUserInfo { username: string; tempPassword: string; emailSent: boolean; email: string | null; }
+
+export default function AdminClient({ session }: { session: Session }) {
+  const { t } = useLanguage();
+  const { themeId, setTheme } = useColorTheme();
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const viewerRole = session.user.role as UserRole;
+  const isCeoViewer = viewerRole === 'ceo';
+  const ceoExists = users.some((u) => u.role === 'ceo');
+
+  const [form, setForm] = useState({
+    username: '', name: '', email: '',
+    role: 'agent' as UserRole,
+    manager_id: '', sr_manager_filter: '',
+    hire_date: today(),
+  });
+  const [formError, setFormError] = useState('');
+  const [created, setCreated] = useState<CreatedUserInfo | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [themeApplying, setThemeApplying] = useState(false);
+  const [themeSuccess, setThemeSuccess] = useState(false);
+  const [editing, setEditing] = useState<User | null>(null);
+
+  const fetchUsers = async () => {
+    setLoading(true);
+    const res = await fetch('/api/users');
+    if (res.ok) setUsers(await res.json());
+    setLoading(false);
+  };
+  useEffect(() => { fetchUsers(); }, []);
+
+  const handleAdd = async (e: FormEvent) => {
+    e.preventDefault();
+    setFormError(''); setCreated(null); setSubmitting(true);
+    const { sr_manager_filter: _sr, ...formData } = form;
+    const payload = {
+      ...formData,
+      manager_id: formData.manager_id || null,
+      email: formData.email || null,
+    };
+    const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    setSubmitting(false);
+    if (res.ok) {
+      const data = await res.json();
+      setCreated({
+        username: data.username,
+        tempPassword: data.tempPassword,
+        emailSent: data.emailSent,
+        email: data.email,
+      });
+      setForm({ username: '', name: '', email: '', role: 'agent', manager_id: '', sr_manager_filter: '', hire_date: today() });
+      fetchUsers();
+    } else {
+      const d = await res.json();
+      setFormError(d.error || 'Error');
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`${t('admin.deleteConfirm')} "${name}"?`)) return;
+    const res = await fetch('/api/users', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+    if (res.ok) fetchUsers();
+  };
+
+  const handleThemeChange = async (id: string) => {
+    setThemeApplying(true);
+    setThemeSuccess(false);
+    await setTheme(id);
+    setThemeApplying(false);
+    setThemeSuccess(true);
+    setTimeout(() => setThemeSuccess(false), 3000);
+  };
+
+  return (
+    <AppLayout session={session}>
+      <div className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-6">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{t('admin.title')}</h1>
+        </div>
+
+        {/* === THEME PICKER === */}
+        {!isCeoViewer && (
+        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm flex items-center gap-2">
+                <span>🎨</span> {t('admin.themeSection')}
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('admin.themeSectionSub')}</p>
+            </div>
+            {themeSuccess && (
+              <span className="text-xs font-semibold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded-xl px-3 py-1.5 flex-shrink-0">
+                {t('admin.themeApplied')}
+              </span>
+            )}
+            {themeApplying && (
+              <span className="text-xs text-gray-400 flex-shrink-0">{t('admin.themeApplying')}</span>
+            )}
+          </div>
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+            {THEMES.map((theme) => {
+              const isActive = themeId === theme.id;
+              return (
+                <button
+                  key={theme.id}
+                  onClick={() => handleThemeChange(theme.id)}
+                  disabled={themeApplying}
+                  title={theme.name}
+                  className={`group flex flex-col items-center gap-2 p-2.5 rounded-xl border-2 transition-all ${
+                    isActive
+                      ? 'border-[var(--primary)] bg-[var(--primary-light)]'
+                      : 'border-gray-100 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
+                  } disabled:opacity-60`}
+                >
+                  <div className="flex gap-1 items-center">
+                    <div className="w-6 h-6 rounded-full shadow-sm border border-white/30" style={{ backgroundColor: theme.primary }} />
+                    <div className="w-4 h-4 rounded-full shadow-sm border border-white/30" style={{ backgroundColor: theme.dark }} />
+                  </div>
+                  <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-300 text-center leading-tight">{theme.name}</span>
+                  {isActive && (
+                    <span className="text-[9px] font-bold text-white rounded-full px-1.5 py-0.5" style={{ backgroundColor: 'var(--primary)' }}>✓</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        )}
+
+        <div className="grid md:grid-cols-3 gap-5">
+          {/* Add user form */}
+          <div className="md:col-span-1">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
+              <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-5 flex items-center gap-2 text-sm">
+                <svg className="w-4 h-4" style={{ color: 'var(--primary)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
+                {t('admin.addUser')}
+              </h3>
+              <form onSubmit={handleAdd} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.fullName')}</label>
+                  <input type="text" value={form.name} required onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    placeholder="Ej. María López"
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm placeholder-gray-400" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.username')}</label>
+                  <input type="text" value={form.username} required onChange={(e) => setForm({ ...form, username: e.target.value })}
+                    placeholder="mlopez"
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm placeholder-gray-400" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Email</label>
+                  <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    placeholder="maria@watt.com"
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm placeholder-gray-400" />
+                  <p className="text-[10px] text-gray-400 mt-1">Si se ingresa, se enviará una contraseña temporal por correo.</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.hireDate')}</label>
+                  <input type="date" value={form.hire_date} required onChange={(e) => setForm({ ...form, hire_date: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.role')}</label>
+                  <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole, manager_id: '', sr_manager_filter: '' })}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm">
+                    <option value="agent">{t('admin.roleAgent')}</option>
+                    <option value="jr_manager">{t('admin.roleJrManager')}</option>
+                    <option value="sr_manager">{t('admin.roleSrManager')}</option>
+                    <option value="ceo" disabled={ceoExists}>{t('admin.roleCeo')}{ceoExists ? ' (ya existe)' : ''}</option>
+                  </select>
+                </div>
+                {form.role === 'agent' && (
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Sr Manager (opcional)</label>
+                      <select value={form.sr_manager_filter} onChange={(e) => setForm({ ...form, sr_manager_filter: e.target.value, manager_id: '' })}
+                        className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm">
+                        <option value="">Sin Sr Manager</option>
+                        {users.filter((u) => u.role === 'sr_manager').map((u) => (
+                          <option key={u.id} value={u.id}>{u.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Jr Manager (opcional)</label>
+                      <select value={form.manager_id} onChange={(e) => setForm({ ...form, manager_id: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm">
+                        <option value="">Sin Jr Manager</option>
+                        {users
+                          .filter((u) => u.role === 'jr_manager' && (!form.sr_manager_filter || u.manager_id === form.sr_manager_filter))
+                          .map((u) => (
+                            <option key={u.id} value={u.id}>{u.name}</option>
+                          ))}
+                      </select>
+                    </div>
+                  </>
+                )}
+                {form.role === 'jr_manager' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Sr Manager (opcional)</label>
+                    <select value={form.manager_id} onChange={(e) => setForm({ ...form, manager_id: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm">
+                      <option value="">Sin Sr Manager</option>
+                      {users.filter((u) => u.role === 'sr_manager').map((u) => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {formError && <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl px-3 py-2">{formError}</p>}
+
+                {created && (
+                  <div className="rounded-xl border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 p-3 space-y-1.5">
+                    <p className="text-xs font-bold text-green-700 dark:text-green-300">✓ Usuario creado: @{created.username}</p>
+                    <div className="text-xs">
+                      <p className="text-gray-600 dark:text-gray-300">Contraseña temporal:</p>
+                      <code className="block mt-1 bg-white dark:bg-gray-800 px-2 py-1.5 rounded text-sm font-mono font-bold text-gray-800 dark:text-gray-100 select-all">{created.tempPassword}</code>
+                    </div>
+                    {created.email && (
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                        {created.emailSent
+                          ? `📧 Enviada a ${created.email}`
+                          : `⚠ No se pudo enviar el correo a ${created.email}. Comparte la contraseña manualmente.`}
+                      </p>
+                    )}
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400">El usuario deberá cambiarla al iniciar sesión.</p>
+                    <button type="button" onClick={() => setCreated(null)} className="text-[11px] text-gray-400 hover:text-gray-600 underline mt-1">Cerrar</button>
+                  </div>
+                )}
+
+                <button type="submit" disabled={submitting}
+                  className="w-full py-2.5 rounded-xl text-white font-bold text-sm transition-colors disabled:opacity-60"
+                  style={{ backgroundColor: 'var(--primary)' }}>
+                  {submitting ? t('admin.creating') : t('admin.createBtn')}
+                </button>
+              </form>
+            </div>
+          </div>
+
+          {/* Users table */}
+          <div className="md:col-span-2 space-y-4">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between">
+                <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">{t('admin.usersTable')}</h3>
+                <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full px-2.5 py-0.5 font-semibold">{users.length} {t('admin.usersCount')}</span>
+              </div>
+              {loading ? (
+                <div className="p-12 text-center text-gray-400 text-sm">...</div>
+              ) : (
+                <div className="divide-y divide-gray-50 dark:divide-gray-800">
+                  {users.map((u) => (
+                    <div key={u.id} className="flex items-center justify-between px-5 py-4 hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0"
+                          style={u.role === 'admin' || u.role === 'ceo'
+                            ? { backgroundColor: 'var(--dark-light)', color: 'var(--dark)' }
+                            : { backgroundColor: 'var(--primary-light)', color: 'var(--primary)' }}
+                        >
+                          {u.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm truncate">{u.name}</p>
+                          <p className="text-xs text-gray-400">@{u.username}{u.email ? ` · ${u.email}` : ''}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {u.must_change_password && (
+                          <span title="Pendiente cambiar contraseña" className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">⏳ temp</span>
+                        )}
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${roleBadgeClass(u.role)}`}>
+                          {u.role === 'ceo' ? t('admin.roleCeo')
+                            : u.role === 'admin' ? t('admin.roleAdmin')
+                            : u.role === 'sr_manager' ? t('admin.roleSrManager')
+                            : u.role === 'jr_manager' ? t('admin.roleJrManager')
+                            : t('admin.roleAgent')}
+                        </span>
+                        {!(isCeoViewer && u.role === 'admin') && (
+                          <button onClick={() => setEditing(u)}
+                            title="Editar"
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-[var(--primary)] hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                          </button>
+                        )}
+                        {u.id !== session.user.id && !(isCeoViewer && u.role === 'admin') && (
+                          <button onClick={() => handleDelete(u.id, u.name)}
+                            title="Eliminar"
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-2xl p-4 flex gap-3">
+              <span className="text-green-600 text-lg">✓</span>
+              <p className="text-sm text-green-700 dark:text-green-300">{t('admin.storageNotice')}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {editing && (
+        <EditUserModal
+          user={editing}
+          users={users}
+          viewerRole={viewerRole}
+          ceoExists={ceoExists}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); fetchUsers(); }}
+        />
+      )}
+    </AppLayout>
+  );
+}
+
+// ────────────────────────────────────────────────────────
+// Edit user modal
+// ────────────────────────────────────────────────────────
+function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved }: {
+  user: User;
+  users: User[];
+  viewerRole: UserRole;
+  ceoExists: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const isCeoViewer = viewerRole === 'ceo';
+  const initialSr = (() => {
+    if (user.role === 'jr_manager') return user.manager_id ?? '';
+    if (user.role === 'agent' && user.manager_id) {
+      const jr = users.find((u) => u.id === user.manager_id);
+      return jr?.manager_id ?? '';
+    }
+    return '';
+  })();
+
+  const [name, setName] = useState(user.name);
+  const [email, setEmail] = useState(user.email ?? '');
+  const [role, setRole] = useState<UserRole>(user.role);
+  const [hireDate, setHireDate] = useState(user.hire_date);
+  const [srManager, setSrManager] = useState(initialSr);
+  const [managerId, setManagerId] = useState(user.manager_id ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [resetResult, setResetResult] = useState<{ tempPassword: string; emailSent: boolean } | null>(null);
+
+  async function handleSave(e: FormEvent) {
+    e.preventDefault();
+    setError(''); setSaving(true);
+    const payload: Record<string, unknown> = {
+      id: user.id,
+      name,
+      email: email || null,
+      role,
+      hire_date: hireDate,
+      manager_id: role === 'agent' || role === 'jr_manager' ? (managerId || null) : null,
+    };
+    // For an agent, manager_id is the jr_manager's id; for a jr_manager, it's the sr_manager's id.
+    if (role === 'jr_manager') payload.manager_id = srManager || null;
+    const res = await fetch('/api/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    setSaving(false);
+    if (res.ok) onSaved();
+    else {
+      const d = await res.json().catch(() => ({}));
+      setError(d.error || 'Error');
+    }
+  }
+
+  async function handleReset() {
+    if (!confirm('¿Generar una nueva contraseña temporal? El usuario deberá cambiarla al iniciar sesión.')) return;
+    setSaving(true); setError('');
+    const res = await fetch('/api/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: user.id, resetPassword: true, email }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      const d = await res.json();
+      setResetResult({ tempPassword: d.tempPassword, emailSent: d.emailSent });
+    } else {
+      setError('Error al restablecer contraseña');
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+          <h3 className="font-bold text-gray-800 dark:text-gray-100">Editar usuario</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+        </div>
+        <form onSubmit={handleSave} className="p-5 space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Usuario</label>
+            <p className="text-sm text-gray-500 dark:text-gray-400">@{user.username}</p>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Nombre completo</label>
+            <input type="text" value={name} required onChange={(e) => setName(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Email</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+              placeholder="correo@watt.com"
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Fecha de contratación</label>
+            <input type="date" value={hireDate} required onChange={(e) => setHireDate(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Rol</label>
+            <select value={role} onChange={(e) => { setRole(e.target.value as UserRole); setManagerId(''); setSrManager(''); }}
+              disabled={isCeoViewer && user.role === 'admin'}
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm disabled:opacity-60">
+              <option value="agent">Agente</option>
+              <option value="jr_manager">Jr Manager</option>
+              <option value="sr_manager">Sr Manager</option>
+              <option value="ceo" disabled={ceoExists && user.role !== 'ceo'}>CEO{ceoExists && user.role !== 'ceo' ? ' (ya existe)' : ''}</option>
+              {user.role === 'admin' && <option value="admin">Admin</option>}
+            </select>
+          </div>
+          {role === 'agent' && (
+            <>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Sr Manager (filtro)</label>
+                <select value={srManager} onChange={(e) => { setSrManager(e.target.value); setManagerId(''); }}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm">
+                  <option value="">Sin Sr Manager</option>
+                  {users.filter((u) => u.role === 'sr_manager').map((u) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Jr Manager</label>
+                <select value={managerId} onChange={(e) => setManagerId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm">
+                  <option value="">Sin Jr Manager</option>
+                  {users.filter((u) => u.role === 'jr_manager' && (!srManager || u.manager_id === srManager)).map((u) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+          {role === 'jr_manager' && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Sr Manager</label>
+              <select value={srManager} onChange={(e) => setSrManager(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm">
+                <option value="">Sin Sr Manager</option>
+                {users.filter((u) => u.role === 'sr_manager').map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {error && <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl px-3 py-2">{error}</p>}
+
+          {resetResult && (
+            <div className="rounded-xl border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 p-3 space-y-1">
+              <p className="text-xs font-bold text-green-700 dark:text-green-300">✓ Contraseña restablecida</p>
+              <code className="block bg-white dark:bg-gray-800 px-2 py-1.5 rounded text-sm font-mono font-bold text-gray-800 dark:text-gray-100 select-all">{resetResult.tempPassword}</code>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                {resetResult.emailSent ? '📧 Enviada por correo.' : '⚠ Comparte esta contraseña con el usuario manualmente.'}
+              </p>
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-2">
+            <button type="button" onClick={handleReset} disabled={saving}
+              className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 font-semibold text-xs hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60">
+              🔑 Restablecer contraseña
+            </button>
+            <button type="submit" disabled={saving}
+              className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm disabled:opacity-60"
+              style={{ backgroundColor: 'var(--primary)' }}>
+              {saving ? 'Guardando...' : 'Guardar'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

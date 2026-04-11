@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* === DEFAULT THEME (Watt Gold) === */
+:root {
+  --logo-bg-fill: transparent;
+  --primary: #c2994b;
+  --primary-hover: #a87a3a;
+  --primary-light: rgba(194, 153, 75, 0.12);
+  --primary-ring: rgba(194, 153, 75, 0.45);
+  --dark: #0b182b;
+  --dark-alt: #0d2040;
+  --dark-light: rgba(11, 24, 43, 0.10);
+}
+
+/* Dark mode: show logo background in the dark navy color */
+.dark {
+  --logo-bg-fill: var(--dark);
+}
+
+/* === GLOBAL UTILITY CLASSES === */
+.btn-primary {
+  background-color: var(--primary);
+  color: #fff;
+}
+.btn-primary:hover { background-color: var(--primary-hover); }
+
+.text-brand { color: var(--primary); }
+.bg-brand { background-color: var(--primary); }
+.border-brand { border-color: var(--primary); }
+.bg-dark { background-color: var(--dark); }
+.text-dark { color: var(--dark); }
+.ring-brand { --tw-ring-color: var(--primary); }
+
+@media print {
+  .print\:hidden { display: none !important; }
+  body { background: white !important; color: black !important; }
+}

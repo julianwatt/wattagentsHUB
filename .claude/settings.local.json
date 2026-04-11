@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git)",
+      "Bash(echo \"PATH: $PATH\")",
+      "Read(//c/Program Files/**)",
+      "Read(//c/Users/julia/AppData/Roaming/**)",
+      "Read(//c/Users/julia/**)",
+      "Bash(powershell -Command \"winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements 2>&1\")",
+      "Bash(export PATH=\"/c/Program Files/nodejs:$PATH\")",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --yes)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "mcp__5063b333-6549-4978-a74a-3e419cd1d417__deploy_to_vercel",
+      "Bash(vercel whoami:*)",
+      "Bash(export PATH=\"/c/Program Files/nodejs:$PATH:/c/Users/julia/AppData/Roaming/npm\")",
+      "Bash(vercel env:*)",
+      "Bash(1:*)",
+      "Bash(printf 'admin')",
+      "Bash(printf 'WattAdmin2024')",
+      "Bash(printf 'https://wattdistributorsbillsimulator.vercel.app')",
+      "Bash(printf '[{\"\"\"\"username\"\"\"\":\"\"\"\"agente1\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"Agente123\"\"\"\",\"\"\"\"name\"\"\"\":\"\"\"\"Agente Prueba\"\"\"\",\"\"\"\"role\"\"\"\":\"\"\"\"agent\"\"\"\"}]')",
+      "Bash(npm uninstall:*)",
+      "Bash(vercel deploy:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(node -e \":*)",
+      "Bash(npx tsc:*)",
+      "mcp__98c7fb15-2988-4e6c-8a6e-321803a8324b__get_project_url",
+      "mcp__98c7fb15-2988-4e6c-8a6e-321803a8324b__get_publishable_keys",
+      "mcp__98c7fb15-2988-4e6c-8a6e-321803a8324b__list_tables",
+      "mcp__98c7fb15-2988-4e6c-8a6e-321803a8324b__execute_sql",
+      "mcp__98c7fb15-2988-4e6c-8a6e-321803a8324b__apply_migration"
+    ]
+  }
+}
