@@ -60,6 +60,10 @@ export default function AppLayout({ session, children }: Props) {
 
   // ── Notification bell (admin only) ──
   interface NotifItem { id: string; type: string; user_name?: string; user_username?: string; status: string; created_at: string; }
+  const notifTypeLabel = (type: string) => {
+    if (type === 'password_reset') return lang === 'es' ? 'Reseteo de contraseña' : 'Password reset';
+    return type;
+  };
   const [notifItems, setNotifItems] = useState<NotifItem[]>([]);
   const [notifOpen, setNotifOpen] = useState(false);
   const bellRef = useRef<HTMLDivElement>(null);
@@ -203,6 +207,7 @@ export default function AppLayout({ session, children }: Props) {
                         <div key={n.id} className={`px-4 py-2.5 ${n.status === 'pending' ? 'bg-amber-50/50 dark:bg-amber-900/10' : ''}`}>
                           <div className="flex items-center justify-between gap-2">
                             <div className="min-w-0">
+                              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{notifTypeLabel(n.type)}</p>
                               <p className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">{n.user_name ?? '—'}</p>
                               <p className="text-[10px] text-gray-400">@{n.user_username} · {fmtDate(n.created_at, lang)}</p>
                             </div>

@@ -191,24 +191,21 @@ export default function AdminClient({ session }: { session: Session }) {
                     <p className="text-xs text-gray-400">{t('admin.notifNoSummary')}</p>
                   ) : (
                     <div className="space-y-2">
-                      {dailySummary.d2d.count > 0 && (
-                        <div className="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl px-3 py-2">
-                          <p className="text-xs font-bold text-sky-700 dark:text-sky-300 mb-1">D2D — {fmtDate(dailySummary.date, lang)}</p>
-                          <div className="flex gap-3 text-[11px] text-gray-600 dark:text-gray-300">
-                            <span><strong>{dailySummary.d2d.sales}</strong> {t('admin.notifCierres')}</span>
-                            <span><strong>{dailySummary.d2d.interactions}</strong> {t('admin.notifInteracciones')}</span>
-                            <span><strong>{dailySummary.d2d.contacts > 0 ? ((dailySummary.d2d.sales / dailySummary.d2d.contacts) * 100).toFixed(1) : '0.0'}%</strong> {t('admin.notifEfectividad')}</span>
-                          </div>
-                        </div>
-                      )}
+                      <p className="text-[10px] text-gray-500 mb-1">{fmtDate(dailySummary.date, lang)}</p>
                       {dailySummary.rtl.count > 0 && (
                         <div className="bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-xl px-3 py-2">
-                          <p className="text-xs font-bold text-violet-700 dark:text-violet-300 mb-1">RTL — {fmtDate(dailySummary.date, lang)}</p>
-                          <div className="flex gap-3 text-[11px] text-gray-600 dark:text-gray-300">
-                            <span><strong>{dailySummary.rtl.sales}</strong> {t('admin.notifCierres')}</span>
-                            <span><strong>{dailySummary.rtl.interactions}</strong> {t('admin.notifInteracciones')}</span>
-                            <span><strong>{dailySummary.rtl.contacts > 0 ? ((dailySummary.rtl.sales / dailySummary.rtl.contacts) * 100).toFixed(1) : '0.0'}%</strong> {t('admin.notifEfectividad')}</span>
-                          </div>
+                          <p className="text-xs text-gray-700 dark:text-gray-200">
+                            <strong className="text-violet-700 dark:text-violet-300">RTL</strong>
+                            {' — '}{t('admin.notifCierres')}: {dailySummary.rtl.sales} | {t('admin.notifInteracciones')}: {dailySummary.rtl.interactions} | {t('admin.notifEfectividad')}: {dailySummary.rtl.contacts > 0 ? ((dailySummary.rtl.sales / dailySummary.rtl.contacts) * 100).toFixed(1) : '0.0'}%
+                          </p>
+                        </div>
+                      )}
+                      {dailySummary.d2d.count > 0 && (
+                        <div className="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl px-3 py-2">
+                          <p className="text-xs text-gray-700 dark:text-gray-200">
+                            <strong className="text-sky-700 dark:text-sky-300">D2D</strong>
+                            {' — '}{t('admin.notifCierres')}: {dailySummary.d2d.sales} | {t('admin.notifInteracciones')}: {dailySummary.d2d.interactions} | {t('admin.notifEfectividad')}: {dailySummary.d2d.contacts > 0 ? ((dailySummary.d2d.sales / dailySummary.d2d.contacts) * 100).toFixed(1) : '0.0'}%
+                          </p>
                         </div>
                       )}
                     </div>
