@@ -40,7 +40,7 @@ function buildChartData(entries: ActivityEntryWithAgent[]) {
   return Array.from(byDate.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, v]) => ({
-      date: date.slice(5),
+      date: fmtDate(date),
       fullDate: date,
       primary: v.primary,
       secondary: v.secondary,
@@ -56,6 +56,15 @@ function sumField(entries: ActivityEntryWithAgent[], fn: (e: ActivityEntryWithAg
 function fmtTime(iso: string | null | undefined): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+}
+
+const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+function fmtDate(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mmm = MONTHS_SHORT[d.getMonth()];
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}/${mmm}/${yy}`;
 }
 
 interface StatCardProps { label: string; value: string | number; sub?: string; color?: string; icon?: string; }
@@ -206,7 +215,7 @@ export default function DashboardClient({ session }: { session: Session }) {
               <StatCard
                 label={t('dashboard.bestDayCard')}
                 value={best && best.sales > 0 ? `${best.sales}` : '—'}
-                sub={best && best.sales > 0 ? best.date : t('dashboard.noData')}
+                sub={best && best.sales > 0 ? fmtDate(best.date) : t('dashboard.noData')}
                 icon="🏆"
                 color="gold"
               />
@@ -216,115 +225,102 @@ export default function DashboardClient({ session }: { session: Session }) {
               <StatCard label={t('dashboard.effectiveness')} value={`${avgEff}%`} icon="🎯" color="green" />
             </div>
 
-            {/* Manager-only: daily head count by campaign */}
-            {isManager && headcountByDay.length > 0 && (
-              <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
-                <div className="px-5 py-3 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between">
-                  <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">
-                    {t('dashboard.headcountTitle')}
-                  </h3>
-                  <span className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold">
-                    {t('dashboard.headcountSub')}
-                  </span>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 dark:bg-gray-800/50">
-                      <tr className="text-left text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                        <th className="px-5 py-2">{t('dashboard.headcountDate')}</th>
-                        <th className="px-5 py-2">
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#0284c7' }} />
-                            D2D
-                          </span>
-                        </th>
-                        <th className="px-5 py-2">
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#9333ea' }} />
-                            Retail
-                          </span>
-                        </th>
-                        <th className="px-5 py-2 text-right">{t('dashboard.headcountTotal')}</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                      {headcountByDay.map((row) => (
-                        <tr key={row.date} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
-                          <td className="px-5 py-2 font-semibold text-gray-700 dark:text-gray-200">{row.date}</td>
-                          <td className="px-5 py-2">
-                            <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2 py-0.5 rounded-full bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300">
-                              {row.d2d}
-                            </span>
-                          </td>
-                          <td className="px-5 py-2">
-                            <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300">
-                              {row.retail}
-                            </span>
-                          </td>
-                          <td className="px-5 py-2 text-right font-bold text-gray-800 dark:text-gray-100">
-                            {row.d2d + row.retail}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+            {/* Chart (dominant) + summary + headcount in same row */}
+            {(() => {
+              const showHeadcount = isManager && headcountByDay.length > 0;
+              const gridCols = showHeadcount ? 'lg:grid-cols-5' : 'lg:grid-cols-4';
+              return (
+                <div className={`grid ${gridCols} gap-4`}>
+                  {/* Chart — takes most space */}
+                  <div className={`${showHeadcount ? 'lg:col-span-3' : 'lg:col-span-3'} bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-4 sm:p-5`}>
+                    <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-3">{t('dashboard.chartTitle')}</h3>
+                    <ResponsiveContainer width="100%" height={280}>
+                      <ComposedChart data={chartData} margin={{ top: 4, right: 8, left: -14, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: axisColor }} />
+                        <YAxis yAxisId="left" tick={{ fontSize: 10, fill: axisColor }} />
+                        <YAxis yAxisId="right" orientation="right" tickFormatter={(v: number) => `${v}%`} tick={{ fontSize: 10, fill: axisColor }} domain={[0, 100]} />
+                        <Tooltip contentStyle={{ backgroundColor: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11 }} labelStyle={{ fontWeight: 700 }} />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <Bar yAxisId="left" dataKey="primary" name="Interacciones" fill="#0284c7" radius={[4, 4, 0, 0]} />
+                        <Bar yAxisId="left" dataKey="secondary" name="Contactos/Zipcodes" fill="#f97316" radius={[4, 4, 0, 0]} />
+                        <Bar yAxisId="left" dataKey="sales" name="Ventas" fill="#1e293b" radius={[4, 4, 0, 0]} />
+                        <Line yAxisId="right" type="monotone" dataKey="efectividad" name="Efectividad %" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3, fill: '#10b981' }} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
 
-            {/* Chart (left) + compact summary table (right) */}
-            <div className="grid lg:grid-cols-3 gap-4">
-              <div className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-4 sm:p-6">
-                <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-4">{t('dashboard.chartTitle')}</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <ComposedChart data={chartData} margin={{ top: 4, right: 12, left: -10, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: axisColor }} />
-                    <YAxis yAxisId="left" tick={{ fontSize: 11, fill: axisColor }} />
-                    <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11, fill: axisColor }} domain={[0, 100]} />
-                    <Tooltip contentStyle={{ backgroundColor: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 12 }} labelStyle={{ fontWeight: 700 }} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar yAxisId="left" dataKey="primary" name="Interacciones" fill="#0284c7" radius={[4, 4, 0, 0]} />
-                    <Bar yAxisId="left" dataKey="secondary" name="Contactos/Zipcodes" fill="#f97316" radius={[4, 4, 0, 0]} />
-                    <Bar yAxisId="left" dataKey="sales" name="Ventas" fill="#1e293b" radius={[4, 4, 0, 0]} />
-                    <Line yAxisId="right" type="monotone" dataKey="efectividad" name="Efectividad %" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3, fill: '#10b981' }} />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-50 dark:border-gray-800">
-                  <h3 className="font-bold text-gray-800 dark:text-gray-100 text-xs">{t('dashboard.summaryTitle')}</h3>
-                </div>
-                <div className="divide-y divide-gray-50 dark:divide-gray-800 max-h-[300px] overflow-y-auto">
-                  {last7.length === 0 ? (
-                    <p className="text-xs text-gray-400 px-4 py-4">Sin datos.</p>
-                  ) : last7.map((e) => {
-                    const isD2D = e.campaign_type === 'D2D';
-                    return (
-                      <div key={e.id} className="px-4 py-2.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0 flex items-center gap-1.5">
-                            <span className="text-[9px] px-1 py-0.5 rounded font-bold text-white flex-shrink-0" style={{ backgroundColor: isD2D ? '#0284c7' : '#9333ea' }}>
-                              {isD2D ? 'D2D' : 'RT'}
-                            </span>
-                            <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 truncate">{e.date.slice(5)}</span>
+                  {/* Summary — thin */}
+                  <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+                    <div className="px-3 py-2 border-b border-gray-50 dark:border-gray-800">
+                      <h3 className="font-bold text-gray-800 dark:text-gray-100 text-xs">{t('dashboard.summaryTitle')}</h3>
+                    </div>
+                    <div className="divide-y divide-gray-50 dark:divide-gray-800 max-h-[280px] overflow-y-auto">
+                      {last7.length === 0 ? (
+                        <p className="text-xs text-gray-400 px-3 py-3">Sin datos.</p>
+                      ) : last7.map((e) => {
+                        const isD2D = e.campaign_type === 'D2D';
+                        return (
+                          <div key={e.id} className="px-3 py-2">
+                            <div className="flex items-center justify-between gap-1">
+                              <div className="min-w-0 flex items-center gap-1">
+                                <span className="text-[9px] px-1 py-0.5 rounded font-bold text-white flex-shrink-0" style={{ backgroundColor: isD2D ? '#0284c7' : '#9333ea' }}>
+                                  {isD2D ? 'D2D' : 'RTL'}
+                                </span>
+                                <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200 truncate">{fmtDate(e.date)}</span>
+                              </div>
+                              <span className="text-[11px] font-bold flex-shrink-0" style={{ color: 'var(--primary)' }}>{e.sales} cierres</span>
+                            </div>
+                            <div className="flex gap-2 text-[10px] text-gray-400 mt-0.5">
+                              <span>🕐 {fmtTime(e.first_activity_at)}–{fmtTime(e.last_activity_at)}</span>
+                              <span className="ml-auto">{effectivenessRate(e).toFixed(1)}%</span>
+                            </div>
+                            {canSeeTeam && e.agent_name && (
+                              <p className="text-[10px] text-gray-400 truncate mt-0.5">{e.agent_name}</p>
+                            )}
                           </div>
-                          <span className="text-xs font-bold flex-shrink-0" style={{ color: 'var(--primary)' }}>{e.sales}v</span>
-                        </div>
-                        <div className="flex gap-2 text-[10px] text-gray-400 mt-0.5">
-                          <span>🕐 {fmtTime(e.first_activity_at)}–{fmtTime(e.last_activity_at)}</span>
-                          <span className="ml-auto">{effectivenessRate(e).toFixed(0)}%</span>
-                        </div>
-                        {canSeeTeam && e.agent_name && (
-                          <p className="text-[10px] text-gray-400 truncate mt-0.5">{e.agent_name}</p>
-                        )}
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Headcount — thin, manager+ only */}
+                  {showHeadcount && (
+                    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+                      <div className="px-3 py-2 border-b border-gray-50 dark:border-gray-800">
+                        <h3 className="font-bold text-gray-800 dark:text-gray-100 text-xs">{t('dashboard.headcountTitle')}</h3>
                       </div>
-                    );
-                  })}
+                      <div className="max-h-[280px] overflow-y-auto">
+                        <table className="w-full text-xs">
+                          <thead className="bg-gray-50 dark:bg-gray-800/50 sticky top-0">
+                            <tr className="text-left text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">
+                              <th className="px-3 py-1.5">{t('dashboard.headcountDate')}</th>
+                              <th className="px-2 py-1.5">D2D</th>
+                              <th className="px-2 py-1.5">RTL</th>
+                              <th className="px-2 py-1.5 text-right">#</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+                            {headcountByDay.map((row) => (
+                              <tr key={row.date}>
+                                <td className="px-3 py-1.5 font-semibold text-gray-700 dark:text-gray-200">{fmtDate(row.date)}</td>
+                                <td className="px-2 py-1.5">
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300">{row.d2d}</span>
+                                </td>
+                                <td className="px-2 py-1.5">
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300">{row.retail}</span>
+                                </td>
+                                <td className="px-2 py-1.5 text-right font-bold text-gray-800 dark:text-gray-100">{row.d2d + row.retail}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            </div>
+              );
+            })()}
           </>
         )}
       </div>

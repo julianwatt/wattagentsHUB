@@ -3,8 +3,7 @@ import { useState, useEffect, FormEvent } from 'react';
 import { Session } from 'next-auth';
 import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
-import { useColorTheme } from './ColorThemeContext';
-import { THEMES } from '@/lib/themes';
+// Theme picker removed — Watt Gold only
 
 type UserRole = 'agent' | 'jr_manager' | 'sr_manager' | 'admin' | 'ceo';
 interface User {
@@ -32,11 +31,11 @@ function roleBadgeClass(role: UserRole): string {
   }
 }
 
-interface CreatedUserInfo { username: string; tempPassword: string; emailSent: boolean; email: string | null; }
+interface CreatedUserInfo { username: string; name: string; tempPassword: string; emailSent: boolean; email: string | null; }
 
 export default function AdminClient({ session }: { session: Session }) {
   const { t } = useLanguage();
-  const { themeId, setTheme } = useColorTheme();
+  // Theme picker removed
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const viewerRole = session.user.role as UserRole;
@@ -52,9 +51,34 @@ export default function AdminClient({ session }: { session: Session }) {
   const [formError, setFormError] = useState('');
   const [created, setCreated] = useState<CreatedUserInfo | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [themeApplying, setThemeApplying] = useState(false);
-  const [themeSuccess, setThemeSuccess] = useState(false);
+  // Theme state removed
   const [editing, setEditing] = useState<User | null>(null);
+
+  // Notifications state
+  interface ResetRequest { id: string; user_name: string; user_username: string; created_at: string; }
+  interface DailySummary { date: string; d2d: { sales: number; interactions: number; contacts: number; count: number }; rtl: { sales: number; interactions: number; contacts: number; count: number } }
+  const [resetRequests, setResetRequests] = useState<ResetRequest[]>([]);
+  const [dailySummary, setDailySummary] = useState<DailySummary | null>(null);
+  const [notifLoading, setNotifLoading] = useState(true);
+
+  const fetchNotifications = async () => {
+    setNotifLoading(true);
+    try {
+      const res = await fetch('/api/notifications');
+      if (res.ok) {
+        const data = await res.json();
+        setResetRequests(data.resetRequests ?? []);
+        setDailySummary(data.summary ?? null);
+      }
+    } catch {}
+    setNotifLoading(false);
+  };
+  useEffect(() => { if (!isCeoViewer) fetchNotifications(); }, [isCeoViewer]);
+
+  const handleDismissNotif = async (id: string) => {
+    await fetch('/api/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+    setResetRequests((prev) => prev.filter((r) => r.id !== id));
+  };
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -79,6 +103,7 @@ export default function AdminClient({ session }: { session: Session }) {
       const data = await res.json();
       setCreated({
         username: data.username,
+        name: data.name,
         tempPassword: data.tempPassword,
         emailSent: data.emailSent,
         email: data.email,
@@ -97,14 +122,7 @@ export default function AdminClient({ session }: { session: Session }) {
     if (res.ok) fetchUsers();
   };
 
-  const handleThemeChange = async (id: string) => {
-    setThemeApplying(true);
-    setThemeSuccess(false);
-    await setTheme(id);
-    setThemeApplying(false);
-    setThemeSuccess(true);
-    setTimeout(() => setThemeSuccess(false), 3000);
-  };
+  // Theme change handler removed
 
   return (
     <AppLayout session={session}>
@@ -113,58 +131,79 @@ export default function AdminClient({ session }: { session: Session }) {
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{t('admin.title')}</h1>
         </div>
 
-        {/* === THEME PICKER === */}
+        {/* Theme picker removed — Watt Gold is the only active theme */}
+
+        {/* === NOTIFICATIONS === */}
         {!isCeoViewer && (
-        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
-          <div className="flex items-start justify-between gap-3 mb-4">
-            <div>
-              <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm flex items-center gap-2">
-                <span>🎨</span> {t('admin.themeSection')}
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('admin.themeSectionSub')}</p>
-            </div>
-            {themeSuccess && (
-              <span className="text-xs font-semibold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded-xl px-3 py-1.5 flex-shrink-0">
-                {t('admin.themeApplied')}
-              </span>
-            )}
-            {themeApplying && (
-              <span className="text-xs text-gray-400 flex-shrink-0">{t('admin.themeApplying')}</span>
-            )}
-          </div>
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-            {THEMES.map((theme) => {
-              const isActive = themeId === theme.id;
-              return (
-                <button
-                  key={theme.id}
-                  onClick={() => handleThemeChange(theme.id)}
-                  disabled={themeApplying}
-                  title={theme.name}
-                  className={`group flex flex-col items-center gap-2 p-2.5 rounded-xl border-2 transition-all ${
-                    isActive
-                      ? 'border-[var(--primary)] bg-[var(--primary-light)]'
-                      : 'border-gray-100 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
-                  } disabled:opacity-60`}
-                >
-                  <div className="flex gap-1 items-center">
-                    <div className="w-6 h-6 rounded-full shadow-sm border border-white/30" style={{ backgroundColor: theme.primary }} />
-                    <div className="w-4 h-4 rounded-full shadow-sm border border-white/30" style={{ backgroundColor: theme.dark }} />
-                  </div>
-                  <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-300 text-center leading-tight">{theme.name}</span>
-                  {isActive && (
-                    <span className="text-[9px] font-bold text-white rounded-full px-1.5 py-0.5" style={{ backgroundColor: 'var(--primary)' }}>✓</span>
+          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
+            <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-4 flex items-center gap-2">
+              <span>🔔</span> {t('admin.notifications')}
+            </h3>
+            {notifLoading ? (
+              <p className="text-xs text-gray-400">...</p>
+            ) : (
+              <div className="grid md:grid-cols-2 gap-4">
+                {/* Password reset requests */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2">{t('admin.notifPasswordReset')}</h4>
+                  {resetRequests.length === 0 ? (
+                    <p className="text-xs text-gray-400">{t('admin.notifNoRequests')}</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {resetRequests.map((r) => (
+                        <div key={r.id} className="flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2">
+                          <div>
+                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{r.user_name}</p>
+                            <p className="text-[10px] text-gray-400">@{r.user_username} · {new Date(r.created_at).toLocaleString()}</p>
+                          </div>
+                          <button onClick={() => handleDismissNotif(r.id)}
+                            className="text-[10px] px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:text-green-600 hover:border-green-300 transition-colors">
+                            {t('admin.notifMarkDone')}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   )}
-                </button>
-              );
-            })}
+                </div>
+
+                {/* Daily summary */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2">{t('admin.notifDailySummary')}</h4>
+                  {!dailySummary || (dailySummary.d2d.count === 0 && dailySummary.rtl.count === 0) ? (
+                    <p className="text-xs text-gray-400">{t('admin.notifNoSummary')}</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {dailySummary.d2d.count > 0 && (
+                        <div className="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl px-3 py-2">
+                          <p className="text-xs font-bold text-sky-700 dark:text-sky-300 mb-1">D2D — {dailySummary.date}</p>
+                          <div className="flex gap-3 text-[11px] text-gray-600 dark:text-gray-300">
+                            <span><strong>{dailySummary.d2d.sales}</strong> {t('admin.notifCierres')}</span>
+                            <span><strong>{dailySummary.d2d.interactions}</strong> {t('admin.notifInteracciones')}</span>
+                            <span><strong>{dailySummary.d2d.contacts > 0 ? ((dailySummary.d2d.sales / dailySummary.d2d.contacts) * 100).toFixed(1) : '0.0'}%</strong> {t('admin.notifEfectividad')}</span>
+                          </div>
+                        </div>
+                      )}
+                      {dailySummary.rtl.count > 0 && (
+                        <div className="bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-xl px-3 py-2">
+                          <p className="text-xs font-bold text-violet-700 dark:text-violet-300 mb-1">RTL — {dailySummary.date}</p>
+                          <div className="flex gap-3 text-[11px] text-gray-600 dark:text-gray-300">
+                            <span><strong>{dailySummary.rtl.sales}</strong> {t('admin.notifCierres')}</span>
+                            <span><strong>{dailySummary.rtl.interactions}</strong> {t('admin.notifInteracciones')}</span>
+                            <span><strong>{dailySummary.rtl.contacts > 0 ? ((dailySummary.rtl.sales / dailySummary.rtl.contacts) * 100).toFixed(1) : '0.0'}%</strong> {t('admin.notifEfectividad')}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
         )}
 
         <div className="grid md:grid-cols-3 gap-5">
           {/* Add user form */}
-          <div className="md:col-span-1">
+          <div className="md:col-span-1 max-w-sm mx-auto md:max-w-none md:mx-0">
             <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
               <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-5 flex items-center gap-2 text-sm">
                 <svg className="w-4 h-4" style={{ color: 'var(--primary)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
@@ -247,7 +286,7 @@ export default function AdminClient({ session }: { session: Session }) {
 
                 {created && (
                   <div className="rounded-xl border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 p-3 space-y-1.5">
-                    <p className="text-xs font-bold text-green-700 dark:text-green-300">✓ Usuario creado: @{created.username}</p>
+                    <p className="text-sm font-bold text-green-700 dark:text-green-300">✓ Usuario {created.name} registrado exitosamente</p>
                     <div className="text-xs">
                       <p className="text-gray-600 dark:text-gray-300">Contraseña temporal:</p>
                       <code className="block mt-1 bg-white dark:bg-gray-800 px-2 py-1.5 rounded text-sm font-mono font-bold text-gray-800 dark:text-gray-100 select-all">{created.tempPassword}</code>
@@ -259,7 +298,6 @@ export default function AdminClient({ session }: { session: Session }) {
                           : `⚠ No se pudo enviar el correo a ${created.email}. Comparte la contraseña manualmente.`}
                       </p>
                     )}
-                    <p className="text-[11px] text-gray-500 dark:text-gray-400">El usuario deberá cambiarla al iniciar sesión.</p>
                     <button type="button" onClick={() => setCreated(null)} className="text-[11px] text-gray-400 hover:text-gray-600 underline mt-1">Cerrar</button>
                   </div>
                 )}
@@ -301,9 +339,7 @@ export default function AdminClient({ session }: { session: Session }) {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        {u.must_change_password && (
-                          <span title="Pendiente cambiar contraseña" className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">⏳ temp</span>
-                        )}
+                        {/* temp tag removed */}
                         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${roleBadgeClass(u.role)}`}>
                           {u.role === 'ceo' ? t('admin.roleCeo')
                             : u.role === 'admin' ? t('admin.roleAdmin')
@@ -332,10 +368,7 @@ export default function AdminClient({ session }: { session: Session }) {
               )}
             </div>
 
-            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-2xl p-4 flex gap-3">
-              <span className="text-green-600 text-lg">✓</span>
-              <p className="text-sm text-green-700 dark:text-green-300">{t('admin.storageNotice')}</p>
-            </div>
+            {/* storageNotice removed */}
           </div>
         </div>
       </div>

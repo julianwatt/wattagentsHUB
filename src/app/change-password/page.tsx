@@ -12,6 +12,7 @@ export default function ChangePasswordPage() {
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   // If user already changed password, redirect to activity
   useEffect(() => {
@@ -39,9 +40,11 @@ export default function ChangePasswordPage() {
     });
     setLoading(false);
     if (res.ok) {
-      // Mark the JWT as no longer needing a change so middleware lets us through
-      await update({ must_change_password: false });
-      router.replace('/activity');
+      setSuccess(true);
+      // Show success message then sign out and redirect to login
+      setTimeout(async () => {
+        await signOut({ callbackUrl: '/login' });
+      }, 3000);
     } else {
       const d = await res.json().catch(() => ({}));
       setError(d.error || 'Error al cambiar la contraseña');
@@ -80,6 +83,11 @@ export default function ChangePasswordPage() {
             <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={6} autoComplete="new-password"
               className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
           </div>
+          {success && (
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 rounded-xl px-4 py-3 text-sm font-medium text-center">
+              ✓ Contraseña cambiada exitosamente. Redirigiendo al login...
+            </div>
+          )}
           {error && (
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 rounded-xl px-4 py-2.5 text-sm">{error}</div>
           )}

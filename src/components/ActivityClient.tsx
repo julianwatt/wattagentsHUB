@@ -41,6 +41,15 @@ function fmtTime(iso: string | null | undefined): string {
   return new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
 }
 
+const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+function fmtDate(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mmm = MONTHS_SHORT[d.getMonth()];
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}/${mmm}/${yy}`;
+}
+
 export default function ActivityClient({ session }: { session: Session }) {
   const { t } = useLanguage();
   const [date, setDate] = useState(today());
@@ -258,7 +267,7 @@ export default function ActivityClient({ session }: { session: Session }) {
         <div className="grid lg:grid-cols-5 gap-5">
           {/* ── Form ── */}
           <div className="lg:col-span-2">
-            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-3 sm:p-5">
               {/* Date */}
               <div className="mb-4">
                 <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">{t('activity.date')}</label>
@@ -323,7 +332,7 @@ export default function ActivityClient({ session }: { session: Session }) {
                   const isIncPlus = incrementing === `${f.key}1`;
                   const isIncMinus = incrementing === `${f.key}-1`;
                   return (
-                    <div key={f.key} className="rounded-xl border border-gray-100 dark:border-gray-800 p-3">
+                    <div key={f.key} className="rounded-xl border border-gray-100 dark:border-gray-800 p-2 sm:p-3">
                       <div className="flex items-center justify-between mb-1">
                         <div>
                           <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{f.label}</p>
@@ -406,13 +415,13 @@ export default function ActivityClient({ session }: { session: Session }) {
                     const labelB = isD2D ? 'Contactos' : 'Zipcodes';
                     const labelC = isD2D ? 'Billes' : 'Credit';
                     return (
-                      <div key={entry.id} className="px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                      <div key={entry.id} className="px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
-                              <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{entry.date}</p>
+                              <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{fmtDate(entry.date)}</p>
                               <span className="text-xs px-1.5 py-0.5 rounded font-medium text-white" style={{ backgroundColor: isD2D ? '#0284c7' : '#9333ea' }}>
-                                {entry.campaign_type}
+                                {isD2D ? 'D2D' : 'RTL'}
                               </span>
                               {entry.zip_code && <span className="text-xs text-gray-400">{entry.zip_code}</span>}
                               {entry.store_chain && <span className="text-xs text-gray-400">{entry.store_chain}</span>}
@@ -428,7 +437,7 @@ export default function ActivityClient({ session }: { session: Session }) {
                               <span>{labelB}: <strong className="text-gray-800 dark:text-gray-200">{primaryB}</strong></span>
                               <span>{labelC}: <strong className="text-gray-800 dark:text-gray-200">{primaryC}</strong></span>
                               <span>Ventas: <strong style={{ color: 'var(--primary)' }}>{entry.sales}</strong></span>
-                              <span className={eff >= 20 ? 'text-green-600 font-semibold' : eff >= 10 ? 'text-orange-500 font-semibold' : ''}>
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${eff >= 25 ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' : eff >= 15 ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300' : 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400'}`}>
                                 {eff.toFixed(1)}%
                               </span>
                             </div>

@@ -14,7 +14,7 @@ interface Props {
 }
 
 const BASE_NAV = [
-  { href: '/activity', icon: ActivityIcon, key: 'nav.activity' },
+  { href: '/activity', icon: ActivityIcon, key: 'nav.activity', hideForAdmin: true },
   { href: '/simulator', icon: SimIcon, key: 'nav.simulator' },
   { href: '/dashboard', icon: DashIcon, key: 'nav.dashboard' },
 ];
@@ -30,8 +30,9 @@ export default function AppLayout({ session, children }: Props) {
   const role = (effectiveRole ?? session.user.role) as Role;
   const canSeeAdmin = role === 'admin' || role === 'ceo';
   const canSeeTeam = role === 'jr_manager' || role === 'sr_manager' || role === 'ceo';
+  const isAdminReal = realRole === 'admin' || (realRole ?? session.user.role) === 'admin';
   const allNav = [
-    ...BASE_NAV,
+    ...BASE_NAV.filter((item) => !(item.hideForAdmin && isAdminReal && !previewRole)),
     ...(canSeeTeam ? [TEAM_NAV] : []),
     ...(canSeeAdmin ? [ADMIN_NAV] : []),
   ];
@@ -96,16 +97,16 @@ export default function AppLayout({ session, children }: Props) {
 
           {/* Controls */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            {/* Preview-as selector — admin only */}
+            {/* Preview-as selector — admin only, visible on all screens */}
             {realIsAdmin && (
               <select
                 value={previewRole ?? ''}
                 onChange={(e) => setPreviewRole((e.target.value || null) as Role | null)}
                 title={lang === 'es' ? 'Vista previa como rol' : 'Preview as role'}
-                className="hidden sm:block h-8 px-2 rounded-lg text-[11px] font-bold bg-white/10 text-white hover:bg-white/20 border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 max-w-[140px]"
+                className="h-8 px-1 sm:px-2 rounded-lg text-[10px] sm:text-[11px] font-bold bg-white/10 text-white hover:bg-white/20 border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 max-w-[110px] sm:max-w-[140px]"
               >
                 <option value="" className="text-gray-900">
-                  {lang === 'es' ? '👁️ Vista como…' : '👁️ View as…'}
+                  {lang === 'es' ? '👁️ Ver como…' : '👁️ View as…'}
                 </option>
                 <option value="agent" className="text-gray-900">{t('admin.roleAgent')}</option>
                 <option value="jr_manager" className="text-gray-900">{t('admin.roleJrManager')}</option>
@@ -131,10 +132,10 @@ export default function AppLayout({ session, children }: Props) {
             </button>
 
             {/* User + logout */}
-            <div className="hidden sm:flex items-center gap-2 pl-1 border-l border-white/20 ml-1">
+            <div className="flex items-center gap-2 pl-1 border-l border-white/20 ml-1">
               <div className="text-right leading-none">
-                <p className="text-xs font-semibold text-white max-w-[100px] truncate">{session.user.name}</p>
-                <p className="text-[10px] text-white/50">{roleLabel}</p>
+                <p className="text-xs font-semibold text-white max-w-[80px] sm:max-w-[100px] truncate">{session.user.name}</p>
+                <p className="text-[10px] text-white/50 hidden sm:block">{roleLabel}</p>
               </div>
             </div>
             <button
