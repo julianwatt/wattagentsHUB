@@ -18,8 +18,7 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (!user || !user.email) {
-    // Don't reveal whether user exists — always return success
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
 
   // Generate temp password
