@@ -6,6 +6,6 @@ import RosterClient from '@/components/RosterClient';
 export default async function RosterPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/login');
-  if (session.user.role !== 'admin' && session.user.role !== 'ceo') redirect('/activity');
+  if (session.user.role !== 'admin') redirect('/activity');
   return <RosterClient session={session} />;
 }

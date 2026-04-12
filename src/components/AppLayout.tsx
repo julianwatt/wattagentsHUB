@@ -54,7 +54,7 @@ export default function AppLayout({ session, children }: Props) {
   const allNav = [
     ...BASE_NAV.filter((item) => !(item.hideForAdmin && isAdminReal && !previewRole)),
     ...(canSeeTeam ? [TEAM_NAV] : []),
-    ...(canSeeAdmin ? [ROSTER_NAV] : []),
+    ...(isAdminReal && !previewRole ? [ROSTER_NAV] : []),
     ...(canSeeAdmin ? [ADMIN_NAV] : []),
   ];
 

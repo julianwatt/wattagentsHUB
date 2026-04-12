@@ -154,14 +154,14 @@ export default function RosterClient({ session }: { session: Session }) {
                 <div className="flex items-center gap-3 mb-4">
                   <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
                   <span className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                    Sin asignar
+                    {t('roster.unassigned')}
                   </span>
                   <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
                 </div>
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
                     <div className="px-4 py-3 border-b border-gray-50 dark:border-gray-800" style={{ backgroundColor: 'var(--primary-light)' }}>
-                      <p className="text-xs font-bold text-gray-800 dark:text-gray-100">Sin equipo asignado</p>
+                      <p className="text-xs font-bold text-gray-800 dark:text-gray-100">{t('roster.unassignedTeam')}</p>
                     </div>
                     <div className="divide-y divide-gray-50 dark:divide-gray-800">
                       {unassignedAgents.map((a) => (
