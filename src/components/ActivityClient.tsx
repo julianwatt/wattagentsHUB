@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Session } from 'next-auth';
 import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
+import { fmtDate } from '@/lib/i18n';
 import { ActivityEntry, CampaignType, effectivenessRate } from '@/lib/activity';
 import { createClient } from '@supabase/supabase-js';
 
@@ -41,17 +42,8 @@ function fmtTime(iso: string | null | undefined): string {
   return new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
 }
 
-const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-function fmtDate(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mmm = MONTHS_SHORT[d.getMonth()];
-  const yy = String(d.getFullYear()).slice(-2);
-  return `${dd}/${mmm}/${yy}`;
-}
-
 export default function ActivityClient({ session }: { session: Session }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   // If admin visits /activity without preview mode, redirect to /admin
   const isRealAdmin = session.user.role === 'admin';
   // Check localStorage for preview role (same key as PreviewRoleContext)
@@ -431,7 +423,7 @@ export default function ActivityClient({ session }: { session: Session }) {
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
-                              <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{fmtDate(entry.date)}</p>
+                              <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{fmtDate(entry.date, lang)}</p>
                               <span className="text-xs px-1.5 py-0.5 rounded font-medium text-white" style={{ backgroundColor: isD2D ? '#0284c7' : '#9333ea' }}>
                                 {isD2D ? 'D2D' : 'RTL'}
                               </span>

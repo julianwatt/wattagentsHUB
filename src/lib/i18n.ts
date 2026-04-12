@@ -499,6 +499,19 @@ const en: typeof es = {
 
 export const translations = { es, en };
 
+const MONTHS_ES = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+const MONTHS_EN = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+/** Format date as MMM/DD/YY (uppercase month, bilingual) */
+export function fmtDate(dateStr: string, lang: Lang = 'es'): string {
+  const d = new Date(dateStr.length === 10 ? dateStr + 'T00:00:00' : dateStr);
+  const months = lang === 'en' ? MONTHS_EN : MONTHS_ES;
+  const mmm = months[d.getMonth()];
+  const dd = String(d.getDate()).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${mmm}/${dd}/${yy}`;
+}
+
 export function getT(lang: Lang) {
   const dict = translations[lang];
   return function t(path: string): string {

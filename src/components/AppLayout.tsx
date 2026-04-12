@@ -7,6 +7,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLanguage } from './LanguageContext';
 import { useTheme } from './ThemeContext';
 import { usePreviewRole, Role } from './PreviewRoleContext';
+import { fmtDate } from '@/lib/i18n';
 import WattLogo from './WattLogo';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
 
@@ -203,7 +204,7 @@ export default function AppLayout({ session, children }: Props) {
                           <div className="flex items-center justify-between gap-2">
                             <div className="min-w-0">
                               <p className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">{n.user_name ?? '—'}</p>
-                              <p className="text-[10px] text-gray-400">@{n.user_username} · {fmtDateShort(n.created_at)}</p>
+                              <p className="text-[10px] text-gray-400">@{n.user_username} · {fmtDate(n.created_at, lang)}</p>
                             </div>
                             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${n.status === 'pending' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'}`}>
                               {n.status === 'pending' ? '🔔' : '✓'}
@@ -320,11 +321,3 @@ function RosterIcon({ className }: { className: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>;
 }
 
-const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-function fmtDateShort(isoStr: string): string {
-  const d = new Date(isoStr);
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mmm = MONTHS_SHORT[d.getMonth()];
-  const yy = String(d.getFullYear()).slice(-2);
-  return `${dd}/${mmm}/${yy}`;
-}

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Session } from 'next-auth';
 import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
+import { fmtDate } from '@/lib/i18n';
 import { ActivityEntryWithAgent, effectivenessRate } from '@/lib/activity';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
 
@@ -25,14 +26,6 @@ const today = () => new Date().toISOString().slice(0, 10);
 function fmtTime(iso: string | null | undefined): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-}
-const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-function fmtDate(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mmm = MONTHS_SHORT[d.getMonth()];
-  const yy = String(d.getFullYear()).slice(-2);
-  return `${dd}/${mmm}/${yy}`;
 }
 function daysSince(date: string): number {
   const ms = Date.now() - new Date(date).getTime();
@@ -57,7 +50,7 @@ function roleLabel(role: string, t: (k: string) => string): string {
 }
 
 export default function TeamClient({ session }: { session: Session }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [data, setData] = useState<TeamData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -204,114 +197,107 @@ export default function TeamClient({ session }: { session: Session }) {
           </div>
         ) : (
           <>
-            {/* ── Rankings + Top Rep — same row, horizontal ── */}
-            <div className="flex flex-col lg:flex-row gap-5">
-              {/* Rankings */}
+            {/* ── Rankings (includes Top Rep) ── */}
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
+              <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-4">{t('team.rankingsTitle')}</h3>
               {ranking && (
-                <div className="flex-1 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
-                  <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-4">{t('team.rankingsTitle')}</h3>
-                  <div className="flex flex-wrap gap-3">
-                    <RankCard
-                      label={`${t('team.bestAgent')} · ${t('team.metricSales')}`}
-                      sub={t('team.rankSubBestSales')}
-                      name={ranking.bestSales.agent?.name ?? '—'}
-                      value={ranking.bestSales.sales}
-                      accent="emerald"
-                      icon="🥇"
-                    />
-                    <RankCard
-                      label={`${t('team.worstAgent')} · ${t('team.metricSales')}`}
-                      sub={t('team.rankSubWorstSales')}
-                      name={ranking.worstSales.agent?.name ?? '—'}
-                      value={ranking.worstSales.sales}
-                      accent="rose"
-                      icon="📉"
-                    />
-                    <RankCard
-                      label={`${t('team.bestAgent')} · ${t('team.metricInteractions')}`}
-                      sub={t('team.rankSubBestInteractions')}
-                      name={ranking.bestInteractions.agent?.name ?? '—'}
-                      value={ranking.bestInteractions.interactions}
-                      accent="sky"
-                      icon="🚪"
-                    />
-                    <RankCard
-                      label={`${t('team.bestAgent')} · ${t('team.metricEffectiveness')}`}
-                      sub={t('team.rankSubBestEffectiveness')}
-                      name={ranking.bestEffectiveness.agent?.name ?? '—'}
-                      value={`${ranking.bestEffectiveness.effectiveness.toFixed(1)}%`}
-                      accent="violet"
-                      icon="🎯"
-                    />
-                  </div>
-
-                  {todaysSales && (
-                    <div className="mt-4 flex flex-wrap gap-3">
-                      <div className="flex-1 min-w-[180px] rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/40 px-4 py-3">
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">{t('team.firstSale')}</p>
-                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5">{todaysSales.first.entry.agent_name}</p>
-                        <p className="text-xs text-gray-500">🕐 {fmtTime(todaysSales.first.time)}</p>
-                      </div>
-                      <div className="flex-1 min-w-[180px] rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/40 px-4 py-3">
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">{t('team.lastSale')}</p>
-                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5">{todaysSales.last.entry.agent_name}</p>
-                        <p className="text-xs text-gray-500">🕐 {fmtTime(todaysSales.last.time)}</p>
-                      </div>
-                    </div>
-                  )}
+                <div className="flex flex-wrap gap-3">
+                  <RankCard
+                    label={`${t('team.bestAgent')} · ${t('team.metricSales')}`}
+                    sub={t('team.rankSubBestSales')}
+                    name={ranking.bestSales.agent?.name ?? '—'}
+                    value={ranking.bestSales.sales}
+                    accent="emerald"
+                    icon="🥇"
+                  />
+                  <RankCard
+                    label={`${t('team.worstAgent')} · ${t('team.metricSales')}`}
+                    sub={t('team.rankSubWorstSales')}
+                    name={ranking.worstSales.agent?.name ?? '—'}
+                    value={ranking.worstSales.sales}
+                    accent="rose"
+                    icon="📉"
+                  />
+                  <RankCard
+                    label={`${t('team.bestAgent')} · ${t('team.metricInteractions')}`}
+                    sub={t('team.rankSubBestInteractions')}
+                    name={ranking.bestInteractions.agent?.name ?? '—'}
+                    value={ranking.bestInteractions.interactions}
+                    accent="sky"
+                    icon="🚪"
+                  />
+                  <RankCard
+                    label={`${t('team.bestAgent')} · ${t('team.metricEffectiveness')}`}
+                    sub={t('team.rankSubBestEffectiveness')}
+                    name={ranking.bestEffectiveness.agent?.name ?? '—'}
+                    value={`${ranking.bestEffectiveness.effectiveness.toFixed(1)}%`}
+                    accent="violet"
+                    icon="🎯"
+                  />
+                  {/* Top Rep cards inline */}
+                  <TopRepCard label={`🏆 ${t('team.topWeek')}`} entry={topRep.week} />
+                  <TopRepCard label={`🏆 ${t('team.topMonth')}`} entry={topRep.month} />
+                  <TopRepCard label={`🏆 ${t('team.topYear')}`} entry={topRep.year} />
                 </div>
               )}
 
-              {/* Top Rep */}
-              <div className="lg:w-72 flex-shrink-0 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
-                <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-4">🏆 {t('team.topRepTitle')}</h3>
-                <div className="space-y-3">
-                  <TopRepCard label={t('team.topWeek')} entry={topRep.week} />
-                  <TopRepCard label={t('team.topMonth')} entry={topRep.month} />
-                  <TopRepCard label={t('team.topYear')} entry={topRep.year} />
+              {todaysSales && (
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <div className="flex-1 min-w-[180px] rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/40 px-4 py-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">{t('team.firstSale')}</p>
+                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5">{todaysSales.first.entry.agent_name}</p>
+                    <p className="text-xs text-gray-500">🕐 {fmtTime(todaysSales.first.time)}</p>
+                  </div>
+                  <div className="flex-1 min-w-[180px] rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/40 px-4 py-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">{t('team.lastSale')}</p>
+                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5">{todaysSales.last.entry.agent_name}</p>
+                    <p className="text-xs text-gray-500">🕐 {fmtTime(todaysSales.last.time)}</p>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
-            {/* ── Roster — compact, newest first ── */}
-            <div className="max-w-3xl">
-              <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
-                <div className="px-3 py-2 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between">
-                  <h3 className="font-bold text-gray-800 dark:text-gray-100 text-xs">{t('team.rosterTitle')}</h3>
-                  <span className="text-[10px] bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full px-2 py-0.5 font-semibold">{members.length}</span>
-                </div>
-                <div className="divide-y divide-gray-50 dark:divide-gray-800">
-                  {[...members].sort((a, b) => b.hire_date.localeCompare(a.hire_date)).map((m) => {
-                    const days = daysSince(m.hire_date);
-                    const isNewest = newest?.id === m.id;
-                    const isOldest = oldest?.id === m.id;
-                    return (
-                      <div key={m.id} className="px-3 py-1.5 flex items-center justify-between gap-1.5">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <div className="w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] flex-shrink-0"
-                            style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary)' }}>
-                            {m.name.charAt(0).toUpperCase()}
+            {/* ── Roster + Mini Charts — same row ── */}
+            <div className="flex flex-col lg:flex-row gap-5">
+              {/* Roster — compact, newest first, narrower */}
+              <div className="lg:w-80 flex-shrink-0">
+                <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+                  <div className="px-3 py-2 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between">
+                    <h3 className="font-bold text-gray-800 dark:text-gray-100 text-xs">{t('team.rosterTitle')}</h3>
+                    <span className="text-[10px] bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full px-2 py-0.5 font-semibold">{members.length}</span>
+                  </div>
+                  <div className="divide-y divide-gray-50 dark:divide-gray-800">
+                    {[...members].sort((a, b) => b.hire_date.localeCompare(a.hire_date)).map((m) => {
+                      const days = daysSince(m.hire_date);
+                      const isNewest = newest?.id === m.id;
+                      const isOldest = oldest?.id === m.id;
+                      return (
+                        <div key={m.id} className="px-3 py-1.5 flex items-center justify-between gap-1.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <div className="w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] flex-shrink-0"
+                              style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary)' }}>
+                              {m.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-gray-800 dark:text-gray-100 text-[11px] truncate leading-tight">{m.name}</p>
+                              <p className="text-[9px] text-gray-400 leading-tight">@{m.username} · {roleLabel(m.role, t)}</p>
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <p className="font-semibold text-gray-800 dark:text-gray-100 text-[11px] truncate leading-tight">{m.name}</p>
-                            <p className="text-[9px] text-gray-400 leading-tight">@{m.username} · {roleLabel(m.role, t)}</p>
+                          <div className="flex items-center gap-1 flex-shrink-0 text-right">
+                            {isNewest && <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">★ {t('team.newest')}</span>}
+                            {isOldest && !isNewest && <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">{t('team.oldest')}</span>}
+                            <p className="text-[9px] text-gray-500">{fmtDate(m.hire_date, lang)} · {tenureLabel(days, t)}</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1 flex-shrink-0 text-right">
-                          {isNewest && <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">★ {t('team.newest')}</span>}
-                          {isOldest && !isNewest && <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">{t('team.oldest')}</span>}
-                          <p className="text-[9px] text-gray-500">{fmtDate(m.hire_date)} · {tenureLabel(days, t)}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* ── Per-agent mini charts ── */}
-            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
-              <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-4">{t('team.miniChartsTitle')}</h3>
+              {/* Per-agent mini charts — fills remaining space */}
+              <div className="flex-1 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
+                <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-4">{t('team.miniChartsTitle')}</h3>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {members.map((m) => {
                   const series = miniSeries(m.id);
@@ -339,6 +325,7 @@ export default function TeamClient({ session }: { session: Session }) {
                     </div>
                   );
                 })}
+                </div>
               </div>
             </div>
           </>
@@ -376,12 +363,12 @@ function RankCard({ label, sub, name, value, accent, icon }: {
 
 function TopRepCard({ label, entry }: { label: string; entry: { agent: Member; sales: number } | null }) {
   return (
-    <div className="rounded-xl border border-gray-100 dark:border-gray-800 p-4">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{label}</p>
+    <div className="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 p-3 flex-1 min-w-[140px]">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">{label}</p>
       {entry ? (
         <>
-          <p className="text-base font-bold text-gray-800 dark:text-gray-100 mt-1 truncate">{entry.agent.name}</p>
-          <p className="text-2xl font-extrabold mt-0.5" style={{ color: 'var(--primary)' }}>{entry.sales} <span className="text-xs font-medium text-gray-400">ventas</span></p>
+          <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-1 truncate">{entry.agent.name}</p>
+          <p className="text-xl font-extrabold leading-tight" style={{ color: 'var(--primary)' }}>{entry.sales} <span className="text-xs font-medium text-gray-400">ventas</span></p>
         </>
       ) : (
         <p className="text-sm text-gray-400 mt-2">—</p>

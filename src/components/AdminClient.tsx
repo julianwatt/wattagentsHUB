@@ -3,17 +3,10 @@ import { useState, useEffect, useCallback, FormEvent } from 'react';
 import { Session } from 'next-auth';
 import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
+import { fmtDate } from '@/lib/i18n';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
 // Theme picker removed — Watt Gold only
 
-const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-function fmtDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mmm = MONTHS_SHORT[d.getMonth()];
-  const yy = String(d.getFullYear()).slice(-2);
-  return `${dd}/${mmm}/${yy}`;
-}
 
 type UserRole = 'agent' | 'jr_manager' | 'sr_manager' | 'admin' | 'ceo';
 interface User {
@@ -44,7 +37,7 @@ function roleBadgeClass(role: UserRole): string {
 interface CreatedUserInfo { username: string; name: string; tempPassword: string; emailSent: boolean; email: string | null; }
 
 export default function AdminClient({ session }: { session: Session }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   // Theme picker removed
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -175,7 +168,7 @@ export default function AdminClient({ session }: { session: Session }) {
                         <div key={r.id} className={`flex items-center justify-between rounded-xl px-3 py-2 border ${r.status === 'done' ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800' : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'}`}>
                           <div>
                             <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{r.user_name}</p>
-                            <p className="text-[10px] text-gray-400">@{r.user_username} · {fmtDate(r.created_at)}</p>
+                            <p className="text-[10px] text-gray-400">@{r.user_username} · {fmtDate(r.created_at, lang)}</p>
                           </div>
                           {r.status === 'done' ? (
                             <span className="text-[10px] px-2 py-1 rounded-lg font-bold text-green-600 dark:text-green-400">{t('admin.notifDone')}</span>
@@ -200,7 +193,7 @@ export default function AdminClient({ session }: { session: Session }) {
                     <div className="space-y-2">
                       {dailySummary.d2d.count > 0 && (
                         <div className="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl px-3 py-2">
-                          <p className="text-xs font-bold text-sky-700 dark:text-sky-300 mb-1">D2D — {fmtDate(dailySummary.date)}</p>
+                          <p className="text-xs font-bold text-sky-700 dark:text-sky-300 mb-1">D2D — {fmtDate(dailySummary.date, lang)}</p>
                           <div className="flex gap-3 text-[11px] text-gray-600 dark:text-gray-300">
                             <span><strong>{dailySummary.d2d.sales}</strong> {t('admin.notifCierres')}</span>
                             <span><strong>{dailySummary.d2d.interactions}</strong> {t('admin.notifInteracciones')}</span>
@@ -210,7 +203,7 @@ export default function AdminClient({ session }: { session: Session }) {
                       )}
                       {dailySummary.rtl.count > 0 && (
                         <div className="bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-xl px-3 py-2">
-                          <p className="text-xs font-bold text-violet-700 dark:text-violet-300 mb-1">RTL — {fmtDate(dailySummary.date)}</p>
+                          <p className="text-xs font-bold text-violet-700 dark:text-violet-300 mb-1">RTL — {fmtDate(dailySummary.date, lang)}</p>
                           <div className="flex gap-3 text-[11px] text-gray-600 dark:text-gray-300">
                             <span><strong>{dailySummary.rtl.sales}</strong> {t('admin.notifCierres')}</span>
                             <span><strong>{dailySummary.rtl.interactions}</strong> {t('admin.notifInteracciones')}</span>

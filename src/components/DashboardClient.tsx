@@ -5,6 +5,8 @@ import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
 import { useTheme } from './ThemeContext';
 import { usePreviewRole } from './PreviewRoleContext';
+import { fmtDate } from '@/lib/i18n';
+import type { Lang } from '@/lib/i18n';
 import { ActivityEntryWithAgent, effectivenessRate } from '@/lib/activity';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
@@ -24,7 +26,7 @@ function filterByRange(entries: ActivityEntryWithAgent[], range: Range): Activit
 function primaryField(e: ActivityEntryWithAgent) { return e.campaign_type === 'D2D' ? e.knocks : e.stops; }
 function secondaryField(e: ActivityEntryWithAgent) { return e.campaign_type === 'D2D' ? e.contacts : e.zipcodes; }
 
-function buildChartData(entries: ActivityEntryWithAgent[]) {
+function buildChartData(entries: ActivityEntryWithAgent[], lang: Lang = 'es') {
   // Group by date, summing across agents
   const byDate = new Map<string, { primary: number; secondary: number; sales: number; eff: number; count: number }>();
   entries.forEach((e) => {
@@ -40,7 +42,7 @@ function buildChartData(entries: ActivityEntryWithAgent[]) {
   return Array.from(byDate.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, v]) => ({
-      date: fmtDate(date),
+      date: fmtDate(date, lang),
       fullDate: date,
       primary: v.primary,
       secondary: v.secondary,
@@ -58,14 +60,6 @@ function fmtTime(iso: string | null | undefined): string {
   return new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
 }
 
-const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-function fmtDate(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mmm = MONTHS_SHORT[d.getMonth()];
-  const yy = String(d.getFullYear()).slice(-2);
-  return `${dd}/${mmm}/${yy}`;
-}
 
 interface StatCardProps { label: string; value: string | number; sub?: string; color?: string; icon?: string; }
 function StatCard({ label, value, sub, color = 'orange', icon }: StatCardProps) {
@@ -92,7 +86,7 @@ function StatCard({ label, value, sub, color = 'orange', icon }: StatCardProps) 
 }
 
 export default function DashboardClient({ session }: { session: Session }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { theme } = useTheme();
   const { effectiveRole } = usePreviewRole();
   const viewerRole = effectiveRole ?? session.user.role;
@@ -129,7 +123,7 @@ export default function DashboardClient({ session }: { session: Session }) {
     return filterByRange(entries, range);
   }, [allEntries, selectedAgent, range, canSeeTeam]);
 
-  const chartData = useMemo(() => buildChartData(filtered), [filtered]);
+  const chartData = useMemo(() => buildChartData(filtered, lang), [filtered, lang]);
 
   // Per-day head count: how many distinct people worked D2D vs Retail each day
   const headcountByDay = useMemo(() => {
@@ -215,7 +209,7 @@ export default function DashboardClient({ session }: { session: Session }) {
               <StatCard
                 label={t('dashboard.bestDayCard')}
                 value={best && best.sales > 0 ? `${best.sales}` : '—'}
-                sub={best && best.sales > 0 ? fmtDate(best.date) : t('dashboard.noData')}
+                sub={best && best.sales > 0 ? fmtDate(best.date, lang) : t('dashboard.noData')}
                 icon="🏆"
                 color="gold"
               />
@@ -267,7 +261,7 @@ export default function DashboardClient({ session }: { session: Session }) {
                                 <span className="text-[9px] px-1 py-0.5 rounded font-bold text-white flex-shrink-0" style={{ backgroundColor: isD2D ? '#0284c7' : '#9333ea' }}>
                                   {isD2D ? 'D2D' : 'RTL'}
                                 </span>
-                                <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200 truncate">{fmtDate(e.date)}</span>
+                                <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200 truncate">{fmtDate(e.date, lang)}</span>
                               </div>
                               <span className="text-[11px] font-bold flex-shrink-0" style={{ color: 'var(--primary)' }}>{e.sales} cierres</span>
                             </div>
@@ -303,7 +297,7 @@ export default function DashboardClient({ session }: { session: Session }) {
                           <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
                             {headcountByDay.map((row) => (
                               <tr key={row.date}>
-                                <td className="px-3 py-1.5 font-semibold text-gray-700 dark:text-gray-200">{fmtDate(row.date)}</td>
+                                <td className="px-3 py-1.5 font-semibold text-gray-700 dark:text-gray-200">{fmtDate(row.date, lang)}</td>
                                 <td className="px-2 py-1.5">
                                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300">{row.d2d}</span>
                                 </td>
