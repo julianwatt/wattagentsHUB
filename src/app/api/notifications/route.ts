@@ -14,13 +14,13 @@ export async function GET() {
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  // Pending password reset requests
+  // Password reset requests (pending + done for history)
   const { data: resetRequests } = await supabase
     .from('admin_notifications')
     .select('*')
     .eq('type', 'password_reset')
-    .eq('status', 'pending')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(20);
 
   // Yesterday's activity summary by campaign
   const yesterday = new Date();

@@ -204,15 +204,16 @@ export default function TeamClient({ session }: { session: Session }) {
           </div>
         ) : (
           <>
-            {/* ── Rankings + Top Rep — same row ── */}
-            <div className="grid lg:grid-cols-2 gap-5">
+            {/* ── Rankings + Top Rep — same row, horizontal ── */}
+            <div className="flex flex-col lg:flex-row gap-5">
               {/* Rankings */}
               {ranking && (
-                <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
+                <div className="flex-1 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
                   <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-4">{t('team.rankingsTitle')}</h3>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-wrap gap-3">
                     <RankCard
                       label={`${t('team.bestAgent')} · ${t('team.metricSales')}`}
+                      sub={t('team.rankSubBestSales')}
                       name={ranking.bestSales.agent?.name ?? '—'}
                       value={ranking.bestSales.sales}
                       accent="emerald"
@@ -220,7 +221,7 @@ export default function TeamClient({ session }: { session: Session }) {
                     />
                     <RankCard
                       label={`${t('team.worstAgent')} · ${t('team.metricSales')}`}
-                      sub="Menor total de ventas en el período"
+                      sub={t('team.rankSubWorstSales')}
                       name={ranking.worstSales.agent?.name ?? '—'}
                       value={ranking.worstSales.sales}
                       accent="rose"
@@ -228,6 +229,7 @@ export default function TeamClient({ session }: { session: Session }) {
                     />
                     <RankCard
                       label={`${t('team.bestAgent')} · ${t('team.metricInteractions')}`}
+                      sub={t('team.rankSubBestInteractions')}
                       name={ranking.bestInteractions.agent?.name ?? '—'}
                       value={ranking.bestInteractions.interactions}
                       accent="sky"
@@ -235,7 +237,7 @@ export default function TeamClient({ session }: { session: Session }) {
                     />
                     <RankCard
                       label={`${t('team.bestAgent')} · ${t('team.metricEffectiveness')}`}
-                      sub="Mayor % promedio de conversión"
+                      sub={t('team.rankSubBestEffectiveness')}
                       name={ranking.bestEffectiveness.agent?.name ?? '—'}
                       value={`${ranking.bestEffectiveness.effectiveness.toFixed(1)}%`}
                       accent="violet"
@@ -244,13 +246,13 @@ export default function TeamClient({ session }: { session: Session }) {
                   </div>
 
                   {todaysSales && (
-                    <div className="mt-4 grid sm:grid-cols-2 gap-3">
-                      <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/40 px-4 py-3">
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <div className="flex-1 min-w-[180px] rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/40 px-4 py-3">
                         <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">{t('team.firstSale')}</p>
                         <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5">{todaysSales.first.entry.agent_name}</p>
                         <p className="text-xs text-gray-500">🕐 {fmtTime(todaysSales.first.time)}</p>
                       </div>
-                      <div className="rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/40 px-4 py-3">
+                      <div className="flex-1 min-w-[180px] rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/40 px-4 py-3">
                         <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">{t('team.lastSale')}</p>
                         <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5">{todaysSales.last.entry.agent_name}</p>
                         <p className="text-xs text-gray-500">🕐 {fmtTime(todaysSales.last.time)}</p>
@@ -261,9 +263,9 @@ export default function TeamClient({ session }: { session: Session }) {
               )}
 
               {/* Top Rep */}
-              <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
+              <div className="lg:w-72 flex-shrink-0 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
                 <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-4">🏆 {t('team.topRepTitle')}</h3>
-                <div className="grid grid-cols-1 gap-3">
+                <div className="space-y-3">
                   <TopRepCard label={t('team.topWeek')} entry={topRep.week} />
                   <TopRepCard label={t('team.topMonth')} entry={topRep.month} />
                   <TopRepCard label={t('team.topYear')} entry={topRep.year} />
@@ -271,36 +273,35 @@ export default function TeamClient({ session }: { session: Session }) {
               </div>
             </div>
 
-            {/* ── Roster — after Rankings+TopRep, narrower ── */}
+            {/* ── Roster — compact, newest first ── */}
             <div className="max-w-3xl">
               <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between">
+                <div className="px-4 py-3 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between">
                   <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">{t('team.rosterTitle')}</h3>
                   <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full px-2.5 py-0.5 font-semibold">{members.length}</span>
                 </div>
                 <div className="divide-y divide-gray-50 dark:divide-gray-800">
-                  {members.map((m) => {
+                  {[...members].sort((a, b) => b.hire_date.localeCompare(a.hire_date)).map((m) => {
                     const days = daysSince(m.hire_date);
                     const isNewest = newest?.id === m.id;
                     const isOldest = oldest?.id === m.id;
                     return (
-                      <div key={m.id} className="px-5 py-3 flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0"
+                      <div key={m.id} className="px-4 py-2 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0"
                             style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary)' }}>
                             {m.name.charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm truncate">{m.name}</p>
-                            <p className="text-xs text-gray-400">@{m.username} · {roleLabel(m.role, t)}</p>
+                            <p className="font-semibold text-gray-800 dark:text-gray-100 text-xs truncate">{m.name}</p>
+                            <p className="text-[10px] text-gray-400">@{m.username} · {roleLabel(m.role, t)}</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0 text-right">
-                          {isNewest && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">★ {t('team.newest')}</span>}
-                          {isOldest && !isNewest && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">{t('team.oldest')}</span>}
-                          <div className="text-xs text-gray-500">
-                            <p>{t('team.hireDate')}: <strong className="text-gray-700 dark:text-gray-200">{fmtDate(m.hire_date)}</strong></p>
-                            <p className="text-[10px]">{tenureLabel(days, t)}</p>
+                        <div className="flex items-center gap-1.5 flex-shrink-0 text-right">
+                          {isNewest && <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">★ {t('team.newest')}</span>}
+                          {isOldest && !isNewest && <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">{t('team.oldest')}</span>}
+                          <div className="text-[10px] text-gray-500">
+                            <p>{fmtDate(m.hire_date)} · {tenureLabel(days, t)}</p>
                           </div>
                         </div>
                       </div>
@@ -331,7 +332,7 @@ export default function TeamClient({ session }: { session: Session }) {
                             <LineChart data={series}>
                               <XAxis dataKey="date" hide />
                               <YAxis hide />
-                              <Tooltip contentStyle={{ fontSize: 10, padding: 4, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)', color: '#1f2937' }} formatter={(v: unknown) => typeof v === 'number' ? [Number(v.toFixed(1))] : String(v ?? '')} />
+                              <Tooltip contentStyle={{ fontSize: 10, padding: 4, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)', color: '#1f2937' }} formatter={(v: unknown, name: unknown) => { const val = typeof v === 'number' ? v.toFixed(1) : String(v ?? ''); return [val, String(name ?? '')] as [string, string]; }} />
                               <Line type="monotone" dataKey="sales" stroke="var(--primary)" strokeWidth={2} dot={false} />
                             </LineChart>
                           </ResponsiveContainer>
@@ -361,7 +362,7 @@ function RankCard({ label, sub, name, value, accent, icon }: {
     violet: 'from-violet-500 to-purple-700',
   };
   return (
-    <div className={`bg-gradient-to-br ${colors[accent]} rounded-xl p-3 text-white shadow-sm`}>
+    <div className={`bg-gradient-to-br ${colors[accent]} rounded-xl p-3 text-white shadow-sm flex-1 min-w-[140px]`}>
       <div className="flex items-start justify-between">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-wide text-white/80">{label}</p>

@@ -3,54 +3,65 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
-    <meta name="supported-color-schemes" content="dark" />
+    <meta name="color-scheme" content="light" />
+    <meta name="supported-color-schemes" content="light" />
     <title>Bienvenido a Watt Distributors</title>
   </head>
-  <body style="margin:0;padding:0;background:#0f1115;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#e5e7eb;-webkit-font-smoothing:antialiased;">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#0f1115;">
+  <body style="margin:0;padding:0;background:#f4f1ea;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2937;-webkit-font-smoothing:antialiased;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f4f1ea;">
       <tr>
         <td align="center" style="padding:32px 16px;">
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;width:100%;background:#1a1d24;border-radius:16px;border:1px solid #2a2f3a;overflow:hidden;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.06);overflow:hidden;">
+
+            <!-- Top gold band -->
+            <tr>
+              <td style="background:#c2994b;height:6px;line-height:6px;font-size:0;">&nbsp;</td>
+            </tr>
 
             <!-- Logo header -->
             <tr>
-              <td align="center" style="padding:40px 24px 8px;background:#1a1d24;">
-                <span style="font-family:Georgia,'Times New Roman',serif;font-size:60px;font-weight:800;color:#c2994b;line-height:1;vertical-align:middle;">W</span>
-                <span style="font-family:Georgia,'Times New Roman',serif;font-size:32px;font-weight:700;color:#c2994b;letter-spacing:3px;margin-left:8px;vertical-align:middle;">WATT</span>
+              <td align="center" style="padding:48px 24px 12px;background:#ffffff;">
+                <span style="font-family:Georgia,'Times New Roman',serif;font-size:42px;font-weight:800;color:#c2994b;letter-spacing:14px;">WATT</span>
               </td>
             </tr>
             <tr>
-              <td align="center" style="padding:0 24px 28px;">
-                <div style="font-size:11px;color:#8b95a8;letter-spacing:4px;text-transform:uppercase;">Distributors</div>
+              <td align="center" style="padding:0 24px 32px;">
+                <div style="font-size:11px;color:#9a7a3a;letter-spacing:5px;text-transform:uppercase;font-weight:600;">Distributors</div>
               </td>
             </tr>
 
             <!-- Title -->
             <tr>
-              <td style="padding:0 36px 4px;" align="center">
-                <h1 style="margin:0;font-size:22px;font-weight:700;color:#ffffff;line-height:1.3;">
+              <td style="padding:0 44px 4px;" align="center">
+                <h1 style="margin:0;font-size:26px;font-weight:800;color:#1a1a1a;line-height:1.3;">
                   Bienvenido a Watt Distributors
                 </h1>
-                <p style="margin:6px 0 0;font-size:14px;color:#8b95a8;line-height:1.4;">
+                <p style="margin:8px 0 0;font-size:16px;color:#6b7280;line-height:1.4;font-weight:500;">
                   Welcome to Watt Distributors
                 </p>
               </td>
             </tr>
 
+            <!-- Divider -->
+            <tr>
+              <td style="padding:28px 44px 0;">
+                <div style="height:1px;background:#e5e1d6;line-height:1px;font-size:0;">&nbsp;</div>
+              </td>
+            </tr>
+
             <!-- Greeting -->
             <tr>
-              <td style="padding:28px 36px 0;">
-                <p style="margin:0;font-size:15px;color:#e5e7eb;line-height:1.6;">
-                  Hola <strong style="color:#ffffff;">{{ .Data.name }}</strong>,
+              <td style="padding:28px 44px 0;">
+                <p style="margin:0;font-size:17px;color:#1f2937;line-height:1.6;">
+                  Hola <strong style="color:#1a1a1a;">{{ .Data.name }}</strong>,
                 </p>
-                <p style="margin:2px 0 18px;font-size:13px;color:#8b95a8;line-height:1.5;">
-                  Hi <strong style="color:#cbd1dc;">{{ .Data.name }}</strong>,
+                <p style="margin:4px 0 20px;font-size:15px;color:#6b7280;line-height:1.5;">
+                  Hi <strong style="color:#374151;">{{ .Data.name }}</strong>,
                 </p>
-                <p style="margin:0;font-size:14px;color:#cbd1dc;line-height:1.6;">
+                <p style="margin:0;font-size:16px;color:#1f2937;line-height:1.6;">
                   Tu cuenta ha sido creada. Aquí están tus credenciales de acceso:
                 </p>
-                <p style="margin:4px 0 0;font-size:13px;color:#8b95a8;line-height:1.5;">
+                <p style="margin:4px 0 0;font-size:14px;color:#6b7280;line-height:1.5;">
                   Your account has been created. Here are your access credentials:
                 </p>
               </td>
@@ -58,15 +69,15 @@
 
             <!-- Credentials block -->
             <tr>
-              <td style="padding:20px 36px 8px;">
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#0f1115;border:1px solid #2a2f3a;border-left:4px solid #c2994b;border-radius:12px;">
+              <td style="padding:24px 44px 8px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fbf8f1;border:1px solid #ead9b5;border-left:5px solid #c2994b;border-radius:12px;">
                   <tr>
-                    <td style="padding:20px 24px;">
-                      <div style="font-size:10px;color:#8b95a8;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">Email</div>
-                      <div style="font-size:15px;color:#ffffff;font-family:'SF Mono',Menlo,Consolas,'Courier New',monospace;word-break:break-all;margin-bottom:18px;">{{ .Email }}</div>
+                    <td style="padding:24px 28px;">
+                      <div style="font-size:11px;color:#9a7a3a;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;margin-bottom:8px;">Email</div>
+                      <div style="font-size:17px;color:#1a1a1a;font-family:'SF Mono',Menlo,Consolas,'Courier New',monospace;word-break:break-all;margin-bottom:22px;font-weight:600;">{{ .Email }}</div>
 
-                      <div style="font-size:10px;color:#8b95a8;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">Contraseña temporal · Temporary password</div>
-                      <div style="font-size:20px;color:#c2994b;font-family:'SF Mono',Menlo,Consolas,'Courier New',monospace;font-weight:700;letter-spacing:2px;">{{ .Data.temp_password }}</div>
+                      <div style="font-size:11px;color:#9a7a3a;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;margin-bottom:8px;">Contraseña temporal · Temporary password</div>
+                      <div style="font-size:24px;color:#1a1a1a;font-family:'SF Mono',Menlo,Consolas,'Courier New',monospace;font-weight:800;letter-spacing:2px;background:#ffffff;border:1px dashed #c2994b;border-radius:8px;padding:12px 16px;display:inline-block;">{{ .Data.temp_password }}</div>
                     </td>
                   </tr>
                 </table>
@@ -75,11 +86,11 @@
 
             <!-- Activation copy -->
             <tr>
-              <td style="padding:22px 36px 0;">
-                <p style="margin:0;font-size:14px;color:#cbd1dc;line-height:1.6;">
+              <td style="padding:28px 44px 0;">
+                <p style="margin:0;font-size:16px;color:#1f2937;line-height:1.6;">
                   Para activar tu cuenta haz clic en el siguiente botón:
                 </p>
-                <p style="margin:4px 0 0;font-size:13px;color:#8b95a8;line-height:1.5;">
+                <p style="margin:4px 0 0;font-size:14px;color:#6b7280;line-height:1.5;">
                   To activate your account, click the button below:
                 </p>
               </td>
@@ -87,11 +98,11 @@
 
             <!-- Activation button -->
             <tr>
-              <td align="center" style="padding:24px 36px 8px;">
+              <td align="center" style="padding:24px 44px 8px;">
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                   <tr>
-                    <td align="center" style="background:#c2994b;border-radius:12px;">
-                      <a href="{{ .ConfirmationURL }}" target="_blank" style="display:inline-block;padding:14px 38px;font-size:15px;font-weight:700;color:#1a1d24;text-decoration:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                    <td align="center" style="background:#c2994b;border-radius:12px;box-shadow:0 4px 12px rgba(194,153,75,0.3);">
+                      <a href="{{ .ConfirmationURL }}" target="_blank" style="display:inline-block;padding:16px 44px;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;letter-spacing:0.3px;">
                         Activar cuenta · Activate account
                       </a>
                     </td>
@@ -102,37 +113,42 @@
 
             <!-- Fallback link -->
             <tr>
-              <td style="padding:8px 36px 0;" align="center">
-                <p style="margin:0;font-size:11px;color:#6b7280;line-height:1.5;">
+              <td style="padding:12px 44px 0;" align="center">
+                <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">
                   ¿No funciona el botón? · Button not working?<br />
-                  <a href="{{ .ConfirmationURL }}" style="color:#c2994b;text-decoration:underline;word-break:break-all;">{{ .ConfirmationURL }}</a>
+                  <a href="{{ .ConfirmationURL }}" style="color:#c2994b;text-decoration:underline;word-break:break-all;font-weight:600;">{{ .ConfirmationURL }}</a>
                 </p>
               </td>
             </tr>
 
             <!-- Security note -->
             <tr>
-              <td style="padding:28px 36px 0;">
-                <div style="border-top:1px solid #2a2f3a;padding-top:20px;">
-                  <p style="margin:0;font-size:13px;color:#8b95a8;line-height:1.6;">
-                    Por seguridad, deberás cambiar tu contraseña al iniciar sesión por primera vez.
+              <td style="padding:32px 44px 0;">
+                <div style="border-top:1px solid #e5e1d6;padding-top:24px;">
+                  <p style="margin:0;font-size:14px;color:#4b5563;line-height:1.6;">
+                    <strong style="color:#1a1a1a;">Importante:</strong> por seguridad, deberás cambiar tu contraseña al iniciar sesión por primera vez.
                   </p>
-                  <p style="margin:4px 0 0;font-size:12px;color:#6b7280;line-height:1.5;">
-                    For security reasons, you must change your password on your first login.
+                  <p style="margin:6px 0 0;font-size:13px;color:#6b7280;line-height:1.5;">
+                    <strong>Important:</strong> for security reasons, you must change your password on your first login.
                   </p>
                 </div>
               </td>
             </tr>
 
+            <!-- Spacer -->
+            <tr>
+              <td style="padding:0;line-height:32px;font-size:0;">&nbsp;</td>
+            </tr>
+
             <!-- Footer -->
             <tr>
-              <td style="padding:32px 36px 40px;" align="center">
-                <div style="font-family:Georgia,'Times New Roman',serif;font-size:13px;color:#c2994b;font-weight:700;letter-spacing:3px;">
+              <td style="padding:36px 44px 40px;background:#fbf8f1;margin-top:32px;" align="center">
+                <div style="font-family:Georgia,'Times New Roman',serif;font-size:15px;color:#c2994b;font-weight:800;letter-spacing:3px;">
                   WATT DISTRIBUTORS
                 </div>
-                <p style="margin:10px 0 0;font-size:11px;color:#6b7280;line-height:1.5;">
-                  Si no esperabas este correo, puedes ignorarlo.<br />
-                  If you didn't expect this email, you can ignore it.
+                <p style="margin:12px 0 0;font-size:11px;color:#9ca3af;line-height:1.6;">
+                  Si no esperabas este correo, puedes ignorarlo de forma segura.<br />
+                  If you didn't expect this email, you can safely ignore it.
                 </p>
               </td>
             </tr>

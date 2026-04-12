@@ -3,10 +3,12 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { Session } from 'next-auth';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLanguage } from './LanguageContext';
 import { useTheme } from './ThemeContext';
 import { usePreviewRole, Role } from './PreviewRoleContext';
 import WattLogo from './WattLogo';
+import { getSupabaseBrowser } from '@/lib/supabase-browser';
 
 interface Props {
   session: Session;
@@ -20,6 +22,7 @@ const BASE_NAV = [
 ];
 const TEAM_NAV = { href: '/team', icon: TeamIcon, key: 'nav.team' };
 const ADMIN_NAV = { href: '/admin', icon: AdminIcon, key: 'nav.admin' };
+const ROSTER_NAV = { href: '/roster', icon: RosterIcon, key: 'nav.roster' };
 
 export default function AppLayout({ session, children }: Props) {
   const pathname = usePathname();
@@ -50,8 +53,49 @@ export default function AppLayout({ session, children }: Props) {
   const allNav = [
     ...BASE_NAV.filter((item) => !(item.hideForAdmin && isAdminReal && !previewRole)),
     ...(canSeeTeam ? [TEAM_NAV] : []),
+    ...(canSeeAdmin ? [ROSTER_NAV] : []),
     ...(canSeeAdmin ? [ADMIN_NAV] : []),
   ];
+
+  // ── Notification bell (admin only) ──
+  interface NotifItem { id: string; type: string; user_name?: string; user_username?: string; status: string; created_at: string; }
+  const [notifItems, setNotifItems] = useState<NotifItem[]>([]);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const bellRef = useRef<HTMLDivElement>(null);
+  const pendingCount = notifItems.filter((n) => n.status === 'pending').length;
+
+  const fetchNotifs = useCallback(async () => {
+    if (!isAdminReal || previewRole) return;
+    try {
+      const res = await fetch('/api/notifications');
+      if (res.ok) {
+        const data = await res.json();
+        setNotifItems(data.resetRequests ?? []);
+      }
+    } catch {}
+  }, [isAdminReal, previewRole]);
+
+  useEffect(() => {
+    fetchNotifs();
+    if (!isAdminReal || previewRole) return;
+    // Supabase Realtime subscription
+    const sb = getSupabaseBrowser();
+    const channel = sb.channel('admin-notifs').on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'admin_notifications' },
+      () => { fetchNotifs(); },
+    ).subscribe();
+    return () => { sb.removeChannel(channel); };
+  }, [fetchNotifs, isAdminReal, previewRole]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function onClickOut(e: MouseEvent) {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) setNotifOpen(false);
+    }
+    document.addEventListener('mousedown', onClickOut);
+    return () => document.removeEventListener('mousedown', onClickOut);
+  }, []);
 
   const roleLabel =
     role === 'admin' ? t('nav.administrator')
@@ -130,6 +174,54 @@ export default function AppLayout({ session, children }: Props) {
                 <option value="ceo" className="text-gray-900">{t('admin.roleCeo')}</option>
               </select>
             )}
+            {/* Notification bell (admin only) */}
+            {isAdminReal && !previewRole && (
+              <div ref={bellRef} className="relative">
+                <button
+                  onClick={() => setNotifOpen(!notifOpen)}
+                  title={t('admin.notifBellTitle')}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors relative"
+                >
+                  <BellIcon className="w-4 h-4" />
+                  {pendingCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-[9px] font-bold text-white flex items-center justify-center leading-none">
+                      {pendingCount > 9 ? '9+' : pendingCount}
+                    </span>
+                  )}
+                </button>
+                {notifOpen && (
+                  <div className="absolute right-0 top-10 w-80 bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-gray-800 dark:text-gray-100">{t('admin.notifBellTitle')}</h4>
+                      {pendingCount > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300">{pendingCount}</span>}
+                    </div>
+                    <div className="max-h-64 overflow-y-auto divide-y divide-gray-50 dark:divide-gray-800">
+                      {notifItems.length === 0 ? (
+                        <p className="text-xs text-gray-400 px-4 py-4 text-center">{t('admin.notifEmpty')}</p>
+                      ) : notifItems.slice(0, 3).map((n) => (
+                        <div key={n.id} className={`px-4 py-2.5 ${n.status === 'pending' ? 'bg-amber-50/50 dark:bg-amber-900/10' : ''}`}>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">{n.user_name ?? '—'}</p>
+                              <p className="text-[10px] text-gray-400">@{n.user_username} · {fmtDateShort(n.created_at)}</p>
+                            </div>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${n.status === 'pending' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'}`}>
+                              {n.status === 'pending' ? '🔔' : '✓'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <Link href="/admin" onClick={() => setNotifOpen(false)}
+                      className="block px-4 py-2 text-center text-[11px] font-semibold border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                      style={{ color: 'var(--primary)' }}>
+                      {t('admin.notifViewAll')}
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Dark mode toggle */}
             <button
               onClick={toggleTheme}
@@ -220,4 +312,19 @@ function MoonIcon({ className }: { className: string }) {
 }
 function LogoutIcon({ className }: { className: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>;
+}
+function BellIcon({ className }: { className: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>;
+}
+function RosterIcon({ className }: { className: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>;
+}
+
+const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+function fmtDateShort(isoStr: string): string {
+  const d = new Date(isoStr);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mmm = MONTHS_SHORT[d.getMonth()];
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}/${mmm}/${yy}`;
 }
