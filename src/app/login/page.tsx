@@ -19,7 +19,6 @@ export default function LoginPage() {
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSending, setForgotSending] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
-  const [forgotError, setForgotError] = useState('');
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -123,7 +122,7 @@ export default function LoginPage() {
             </form>
 
             <div className="mt-4 text-center">
-              <button type="button" onClick={() => { setShowForgot(true); setForgotEmail(''); setForgotSent(false); setForgotError(''); }}
+              <button type="button" onClick={() => { setShowForgot(true); setForgotEmail(''); setForgotSent(false); }}
                 className="text-sm text-[var(--primary)] hover:underline font-medium">
                 {t('auth.forgotPassword')}
               </button>
@@ -147,18 +146,13 @@ export default function LoginPage() {
               <form onSubmit={async (e) => {
                 e.preventDefault();
                 setForgotSending(true);
-                setForgotError('');
-                const res = await fetch('/api/auth/forgot-password', {
+                await fetch('/api/auth/forgot-password', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ email: forgotEmail }),
                 });
                 setForgotSending(false);
-                if (res.ok) {
-                  setForgotSent(true);
-                } else {
-                  setForgotError(t('auth.forgotPasswordNotFound'));
-                }
+                setForgotSent(true);
               }} className="space-y-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Email</label>
@@ -166,9 +160,6 @@ export default function LoginPage() {
                     placeholder={lang === 'es' ? 'tu@correo.com' : 'your@email.com'}
                     className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm" />
                 </div>
-                {forgotError && (
-                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 rounded-xl px-3 py-2 text-sm">{forgotError}</div>
-                )}
                 <button type="submit" disabled={forgotSending}
                   className="w-full py-2.5 rounded-xl text-white font-bold text-sm disabled:opacity-60"
                   style={{ backgroundColor: 'var(--primary)' }}>
