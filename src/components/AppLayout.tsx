@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { Session } from 'next-auth';
 import { useLanguage } from './LanguageContext';
@@ -23,9 +23,25 @@ const ADMIN_NAV = { href: '/admin', icon: AdminIcon, key: 'nav.admin' };
 
 export default function AppLayout({ session, children }: Props) {
   const pathname = usePathname();
+  const router = useRouter();
   const { t, lang, setLang } = useLanguage();
   const { theme, toggleTheme } = useTheme();
   const { realRole, previewRole, effectiveRole, setPreviewRole } = usePreviewRole();
+
+  // Navigate to appropriate page when preview role changes
+  const handlePreviewChange = (newRole: Role | null) => {
+    setPreviewRole(newRole);
+    if (newRole === null) {
+      // Exiting preview → go back to admin panel
+      router.push('/admin');
+    } else if (newRole === 'agent') {
+      router.push('/activity');
+    } else if (newRole === 'jr_manager' || newRole === 'sr_manager') {
+      router.push('/activity');
+    } else if (newRole === 'ceo') {
+      router.push('/dashboard');
+    }
+  };
   const realIsAdmin = (realRole ?? session.user.role) === 'admin';
   const role = (effectiveRole ?? session.user.role) as Role;
   const canSeeAdmin = role === 'admin' || role === 'ceo';
@@ -57,7 +73,7 @@ export default function AppLayout({ session, children }: Props) {
             </span>
           </span>
           <button
-            onClick={() => setPreviewRole(null)}
+            onClick={() => handlePreviewChange(null)}
             className="px-2.5 py-1 rounded-md bg-amber-950 text-amber-50 hover:bg-amber-900 transition-colors flex-shrink-0"
           >
             {lang === 'es' ? 'Salir de vista previa' : 'Exit preview'}
@@ -101,7 +117,7 @@ export default function AppLayout({ session, children }: Props) {
             {realIsAdmin && (
               <select
                 value={previewRole ?? ''}
-                onChange={(e) => setPreviewRole((e.target.value || null) as Role | null)}
+                onChange={(e) => handlePreviewChange((e.target.value || null) as Role | null)}
                 title={lang === 'es' ? 'Vista previa como rol' : 'Preview as role'}
                 className="h-8 px-1 sm:px-2 rounded-lg text-[10px] sm:text-[11px] font-bold bg-white/10 text-white hover:bg-white/20 border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 max-w-[110px] sm:max-w-[140px]"
               >

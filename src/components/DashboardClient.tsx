@@ -240,7 +240,7 @@ export default function DashboardClient({ session }: { session: Session }) {
                         <XAxis dataKey="date" tick={{ fontSize: 10, fill: axisColor }} />
                         <YAxis yAxisId="left" tick={{ fontSize: 10, fill: axisColor }} />
                         <YAxis yAxisId="right" orientation="right" tickFormatter={(v: number) => `${v}%`} tick={{ fontSize: 10, fill: axisColor }} domain={[0, 100]} />
-                        <Tooltip contentStyle={{ backgroundColor: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11 }} labelStyle={{ fontWeight: 700 }} />
+                        <Tooltip contentStyle={{ backgroundColor: isDark ? 'rgba(31,41,55,0.7)' : 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)', border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: isDark ? '#f3f4f6' : '#1f2937' }} labelStyle={{ fontWeight: 700, color: isDark ? '#f3f4f6' : '#111827' }} formatter={(v: unknown) => typeof v === 'number' ? [Number(v.toFixed(1))] : String(v ?? '')} />
                         <Legend wrapperStyle={{ fontSize: 11 }} />
                         <Bar yAxisId="left" dataKey="primary" name="Interacciones" fill="#0284c7" radius={[4, 4, 0, 0]} />
                         <Bar yAxisId="left" dataKey="secondary" name="Contactos/Zipcodes" fill="#f97316" radius={[4, 4, 0, 0]} />

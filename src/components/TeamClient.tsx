@@ -26,6 +26,14 @@ function fmtTime(iso: string | null | undefined): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
 }
+const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+function fmtDate(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mmm = MONTHS_SHORT[d.getMonth()];
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}/${mmm}/${yy}`;
+}
 function daysSince(date: string): number {
   const ms = Date.now() - new Date(date).getTime();
   return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
@@ -196,102 +204,109 @@ export default function TeamClient({ session }: { session: Session }) {
           </div>
         ) : (
           <>
-            {/* ── Roster ── */}
-            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between">
-                <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">{t('team.rosterTitle')}</h3>
-                <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full px-2.5 py-0.5 font-semibold">{members.length}</span>
-              </div>
-              <div className="divide-y divide-gray-50 dark:divide-gray-800">
-                {members.map((m) => {
-                  const days = daysSince(m.hire_date);
-                  const isNewest = newest?.id === m.id;
-                  const isOldest = oldest?.id === m.id;
-                  return (
-                    <div key={m.id} className="px-5 py-3 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0"
-                          style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary)' }}>
-                          {m.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm truncate">{m.name}</p>
-                          <p className="text-xs text-gray-400">@{m.username} · {roleLabel(m.role, t)}</p>
-                        </div>
+            {/* ── Rankings + Top Rep — same row ── */}
+            <div className="grid lg:grid-cols-2 gap-5">
+              {/* Rankings */}
+              {ranking && (
+                <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
+                  <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-4">{t('team.rankingsTitle')}</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <RankCard
+                      label={`${t('team.bestAgent')} · ${t('team.metricSales')}`}
+                      name={ranking.bestSales.agent?.name ?? '—'}
+                      value={ranking.bestSales.sales}
+                      accent="emerald"
+                      icon="🥇"
+                    />
+                    <RankCard
+                      label={`${t('team.worstAgent')} · ${t('team.metricSales')}`}
+                      sub="Menor total de ventas en el período"
+                      name={ranking.worstSales.agent?.name ?? '—'}
+                      value={ranking.worstSales.sales}
+                      accent="rose"
+                      icon="📉"
+                    />
+                    <RankCard
+                      label={`${t('team.bestAgent')} · ${t('team.metricInteractions')}`}
+                      name={ranking.bestInteractions.agent?.name ?? '—'}
+                      value={ranking.bestInteractions.interactions}
+                      accent="sky"
+                      icon="🚪"
+                    />
+                    <RankCard
+                      label={`${t('team.bestAgent')} · ${t('team.metricEffectiveness')}`}
+                      sub="Mayor % promedio de conversión"
+                      name={ranking.bestEffectiveness.agent?.name ?? '—'}
+                      value={`${ranking.bestEffectiveness.effectiveness.toFixed(1)}%`}
+                      accent="violet"
+                      icon="🎯"
+                    />
+                  </div>
+
+                  {todaysSales && (
+                    <div className="mt-4 grid sm:grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/40 px-4 py-3">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">{t('team.firstSale')}</p>
+                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5">{todaysSales.first.entry.agent_name}</p>
+                        <p className="text-xs text-gray-500">🕐 {fmtTime(todaysSales.first.time)}</p>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0 text-right">
-                        <div className="text-xs text-gray-500">
-                          <p>{t('team.hireDate')}: <strong className="text-gray-700 dark:text-gray-200">{m.hire_date}</strong></p>
-                          <p className="text-[10px]">{tenureLabel(days, t)}</p>
-                        </div>
-                        {isNewest && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">★ {t('team.newest')}</span>}
-                        {isOldest && !isNewest && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">{t('team.oldest')}</span>}
+                      <div className="rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/40 px-4 py-3">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">{t('team.lastSale')}</p>
+                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5">{todaysSales.last.entry.agent_name}</p>
+                        <p className="text-xs text-gray-500">🕐 {fmtTime(todaysSales.last.time)}</p>
                       </div>
                     </div>
-                  );
-                })}
+                  )}
+                </div>
+              )}
+
+              {/* Top Rep */}
+              <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
+                <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-4">🏆 {t('team.topRepTitle')}</h3>
+                <div className="grid grid-cols-1 gap-3">
+                  <TopRepCard label={t('team.topWeek')} entry={topRep.week} />
+                  <TopRepCard label={t('team.topMonth')} entry={topRep.month} />
+                  <TopRepCard label={t('team.topYear')} entry={topRep.year} />
+                </div>
               </div>
             </div>
 
-            {/* ── Rankings ── */}
-            {ranking && (
-              <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
-                <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-4">{t('team.rankingsTitle')}</h3>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  <RankCard
-                    label={`${t('team.bestAgent')} · ${t('team.metricSales')}`}
-                    name={ranking.bestSales.agent?.name ?? '—'}
-                    value={ranking.bestSales.sales}
-                    accent="emerald"
-                    icon="🥇"
-                  />
-                  <RankCard
-                    label={`${t('team.worstAgent')} · ${t('team.metricSales')}`}
-                    name={ranking.worstSales.agent?.name ?? '—'}
-                    value={ranking.worstSales.sales}
-                    accent="rose"
-                    icon="📉"
-                  />
-                  <RankCard
-                    label={`${t('team.bestAgent')} · ${t('team.metricInteractions')}`}
-                    name={ranking.bestInteractions.agent?.name ?? '—'}
-                    value={ranking.bestInteractions.interactions}
-                    accent="sky"
-                    icon="🚪"
-                  />
-                  <RankCard
-                    label={`${t('team.bestAgent')} · ${t('team.metricEffectiveness')}`}
-                    name={ranking.bestEffectiveness.agent?.name ?? '—'}
-                    value={`${ranking.bestEffectiveness.effectiveness.toFixed(1)}%`}
-                    accent="violet"
-                    icon="🎯"
-                  />
+            {/* ── Roster — after Rankings+TopRep, narrower ── */}
+            <div className="max-w-3xl">
+              <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between">
+                  <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">{t('team.rosterTitle')}</h3>
+                  <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full px-2.5 py-0.5 font-semibold">{members.length}</span>
                 </div>
-
-                {todaysSales && (
-                  <div className="mt-4 grid sm:grid-cols-2 gap-3">
-                    <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/40 px-4 py-3">
-                      <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">{t('team.firstSale')}</p>
-                      <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5">{todaysSales.first.entry.agent_name}</p>
-                      <p className="text-xs text-gray-500">🕐 {fmtTime(todaysSales.first.time)}</p>
-                    </div>
-                    <div className="rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/40 px-4 py-3">
-                      <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">{t('team.lastSale')}</p>
-                      <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5">{todaysSales.last.entry.agent_name}</p>
-                      <p className="text-xs text-gray-500">🕐 {fmtTime(todaysSales.last.time)}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ── Top Rep ── */}
-            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
-              <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-4">🏆 {t('team.topRepTitle')}</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <TopRepCard label={t('team.topWeek')} entry={topRep.week} />
-                <TopRepCard label={t('team.topMonth')} entry={topRep.month} />
-                <TopRepCard label={t('team.topYear')} entry={topRep.year} />
+                <div className="divide-y divide-gray-50 dark:divide-gray-800">
+                  {members.map((m) => {
+                    const days = daysSince(m.hire_date);
+                    const isNewest = newest?.id === m.id;
+                    const isOldest = oldest?.id === m.id;
+                    return (
+                      <div key={m.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0"
+                            style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary)' }}>
+                            {m.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm truncate">{m.name}</p>
+                            <p className="text-xs text-gray-400">@{m.username} · {roleLabel(m.role, t)}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0 text-right">
+                          {isNewest && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">★ {t('team.newest')}</span>}
+                          {isOldest && !isNewest && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">{t('team.oldest')}</span>}
+                          <div className="text-xs text-gray-500">
+                            <p>{t('team.hireDate')}: <strong className="text-gray-700 dark:text-gray-200">{fmtDate(m.hire_date)}</strong></p>
+                            <p className="text-[10px]">{tenureLabel(days, t)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
@@ -316,7 +331,7 @@ export default function TeamClient({ session }: { session: Session }) {
                             <LineChart data={series}>
                               <XAxis dataKey="date" hide />
                               <YAxis hide />
-                              <Tooltip contentStyle={{ fontSize: 10, padding: 4, borderRadius: 8 }} />
+                              <Tooltip contentStyle={{ fontSize: 10, padding: 4, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)', color: '#1f2937' }} formatter={(v: unknown) => typeof v === 'number' ? [Number(v.toFixed(1))] : String(v ?? '')} />
                               <Line type="monotone" dataKey="sales" stroke="var(--primary)" strokeWidth={2} dot={false} />
                             </LineChart>
                           </ResponsiveContainer>
@@ -336,8 +351,8 @@ export default function TeamClient({ session }: { session: Session }) {
 
 // ── Subcomponents ──────────────────────────────────────────────────────────
 
-function RankCard({ label, name, value, accent, icon }: {
-  label: string; name: string; value: string | number; accent: 'emerald' | 'rose' | 'sky' | 'violet'; icon: string;
+function RankCard({ label, sub, name, value, accent, icon }: {
+  label: string; sub?: string; name: string; value: string | number; accent: 'emerald' | 'rose' | 'sky' | 'violet'; icon: string;
 }) {
   const colors: Record<string, string> = {
     emerald: 'from-emerald-500 to-teal-700',
@@ -348,8 +363,11 @@ function RankCard({ label, name, value, accent, icon }: {
   return (
     <div className={`bg-gradient-to-br ${colors[accent]} rounded-xl p-3 text-white shadow-sm`}>
       <div className="flex items-start justify-between">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-white/80">{label}</p>
-        <span className="text-lg">{icon}</span>
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-white/80">{label}</p>
+          {sub && <p className="text-[9px] text-white/60 mt-0.5 leading-tight">{sub}</p>}
+        </div>
+        <span className="text-4xl">{icon}</span>
       </div>
       <p className="text-sm font-semibold mt-1 truncate">{name}</p>
       <p className="text-xl font-extrabold leading-tight">{value}</p>

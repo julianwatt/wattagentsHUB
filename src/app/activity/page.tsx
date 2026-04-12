@@ -6,7 +6,7 @@ import ActivityClient from '@/components/ActivityClient';
 export default async function ActivityPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/login');
-  // Admin is not a sales agent — redirect to admin panel
-  if (session.user.role === 'admin') redirect('/admin');
+  // Admin can access activity when using "Ver como" (preview role stored client-side)
+  // So we allow access — the client will handle showing the right content
   return <ActivityClient session={session} />;
 }

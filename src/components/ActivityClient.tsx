@@ -52,6 +52,18 @@ function fmtDate(dateStr: string): string {
 
 export default function ActivityClient({ session }: { session: Session }) {
   const { t } = useLanguage();
+  // If admin visits /activity without preview mode, redirect to /admin
+  const isRealAdmin = session.user.role === 'admin';
+  // Check localStorage for preview role (same key as PreviewRoleContext)
+  const [adminAllowed, setAdminAllowed] = useState(!isRealAdmin);
+  useEffect(() => {
+    if (!isRealAdmin) return;
+    try {
+      const saved = localStorage.getItem('wattPreviewRole');
+      if (saved) setAdminAllowed(true);
+      else window.location.href = '/admin';
+    } catch { window.location.href = '/admin'; }
+  }, [isRealAdmin]);
   const [date, setDate] = useState(today());
   const [campaignType, setCampaignType] = useState<CampaignType>('D2D');
   const [zipCode, setZipCode] = useState('');

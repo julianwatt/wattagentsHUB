@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { getUsers, getUserById, createUser, updateUser, deleteUser, generateTempPassword } from '@/lib/users';
 import { UserRole } from '@/lib/supabase';
-import { sendTempPasswordEmail, sendTempPasswordEmailDetailed } from '@/lib/email';
+import { sendTempPasswordEmail, sendTempPasswordEmailDetailed, sendPasswordResetEmail } from '@/lib/email';
 
 async function requireAdminOrCeo() {
   const session = await getServerSession(authOptions);
@@ -102,11 +102,15 @@ export async function PATCH(req: NextRequest) {
     // If admin requests a password reset, generate a new temp password and force change on next login
     if (resetPassword) {
       const tempPassword = generateTempPassword();
+      const target = await getUserById(id);
       await updateUser(id, { ...updates, password: tempPassword, must_change_password: true });
-      // Try to email if email is provided in the updates or already in DB
+      // Send branded reset email with temp password and login link
       let emailSent = false;
-      if (updates.email) {
-        emailSent = await sendTempPasswordEmail(updates.email, updates.name || '', '', tempPassword);
+      const emailAddr = updates.email || target?.email;
+      const userName = updates.name || target?.name || '';
+      const userUsername = target?.username || '';
+      if (emailAddr) {
+        emailSent = await sendPasswordResetEmail(emailAddr, userName, userUsername, tempPassword);
       }
       return NextResponse.json({ success: true, tempPassword, emailSent });
     }
