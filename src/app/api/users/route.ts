@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { getUsers, getUserById, createUser, updateUser, deleteUser, generateTempPassword } from '@/lib/users';
 import { UserRole } from '@/lib/supabase';
-import { sendTempPasswordEmail } from '@/lib/email';
+import { sendTempPasswordEmail, sendTempPasswordEmailDetailed } from '@/lib/email';
 
 async function requireAdminOrCeo() {
   const session = await getServerSession(authOptions);
@@ -51,11 +51,23 @@ export async function POST(req: NextRequest) {
 
     // Try to email the temp password if email was provided
     let emailSent = false;
+    let emailDebug: { stage: string; path: string; detail?: string } | null = null;
     if (email) {
-      emailSent = await sendTempPasswordEmail(email, name, username, tempPassword);
+      console.log('[users POST] about to sendTempPasswordEmail', { to: email, username });
+      try {
+        const result = await sendTempPasswordEmailDetailed(email, name, username, tempPassword);
+        emailSent = result.ok;
+        emailDebug = { stage: result.stage, path: result.path, detail: result.detail };
+        console.log('[users POST] sendTempPasswordEmail returned', { to: email, emailSent, emailDebug });
+      } catch (err) {
+        console.error('[users POST] sendTempPasswordEmail threw:', err);
+        emailDebug = { stage: 'route_threw', path: 'none', detail: err instanceof Error ? err.message : String(err) };
+      }
+    } else {
+      console.log('[users POST] no email provided, skipping send');
     }
 
-    return NextResponse.json({ ...user, tempPassword, emailSent }, { status: 201 });
+    return NextResponse.json({ ...user, tempPassword, emailSent, emailDebug }, { status: 201 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Error creating user';
     return NextResponse.json({ error: message }, { status: 409 });

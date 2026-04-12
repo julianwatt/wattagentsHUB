@@ -14,12 +14,29 @@ import { getSupabaseAdmin } from './supabase';
  * Returns true if any path successfully sent the email.
  * All Supabase errors are logged to console.error so they can be diagnosed.
  */
+export interface EmailSendResult {
+  ok: boolean;
+  path: 'supabase' | 'resend' | 'none';
+  stage: string;
+  detail?: string;
+}
+
 export async function sendTempPasswordEmail(
   to: string,
   name: string,
   username: string,
   tempPassword: string,
 ): Promise<boolean> {
+  const r = await sendTempPasswordEmailDetailed(to, name, username, tempPassword);
+  return r.ok;
+}
+
+export async function sendTempPasswordEmailDetailed(
+  to: string,
+  name: string,
+  username: string,
+  tempPassword: string,
+): Promise<EmailSendResult> {
   // ── 1. Primary: Supabase Auth invite ──────────────────────────────
   const admin = getSupabaseAdmin();
   if (admin) {
@@ -34,22 +51,34 @@ export async function sendTempPasswordEmail(
       });
       if (error) {
         console.error('[email] Supabase inviteUserByEmail error:', error.message, error);
-        // If the user already exists in auth.users, fall back to createUser flow
-        // (which will at least create / overwrite metadata) — but more importantly,
-        // try Resend as the secondary path below.
-      } else {
-        console.log('[email] Supabase invite sent to', to, 'user id:', data?.user?.id);
-        return true;
+        // fall through to Resend
+        const fallback = await sendViaResendDetailed(to, name, username, tempPassword);
+        return {
+          ...fallback,
+          stage: `supabase_invite_error -> ${fallback.stage}`,
+          detail: `${error.message}${fallback.detail ? ' | ' + fallback.detail : ''}`,
+        };
       }
+      console.log('[email] Supabase invite sent to', to, 'user id:', data?.user?.id);
+      return { ok: true, path: 'supabase', stage: 'supabase_invite_sent', detail: data?.user?.id };
     } catch (err) {
       console.error('[email] Supabase invite threw:', err);
+      const fallback = await sendViaResendDetailed(to, name, username, tempPassword);
+      return {
+        ...fallback,
+        stage: `supabase_invite_threw -> ${fallback.stage}`,
+        detail: `${err instanceof Error ? err.message : String(err)}${fallback.detail ? ' | ' + fallback.detail : ''}`,
+      };
     }
-  } else {
-    console.warn('[email] SUPABASE_SERVICE_ROLE_KEY not set — skipping Supabase invite path');
   }
+  console.warn('[email] SUPABASE_SERVICE_ROLE_KEY not set — skipping Supabase invite path');
 
   // ── 2. Fallback: Resend HTTP API ─────────────────────────────────
-  return sendViaResend(to, name, username, tempPassword);
+  const fallback = await sendViaResendDetailed(to, name, username, tempPassword);
+  return {
+    ...fallback,
+    stage: `no_supabase_admin -> ${fallback.stage}`,
+  };
 }
 
 async function sendViaResend(
@@ -58,10 +87,20 @@ async function sendViaResend(
   username: string,
   tempPassword: string,
 ): Promise<boolean> {
+  const r = await sendViaResendDetailed(to, name, username, tempPassword);
+  return r.ok;
+}
+
+async function sendViaResendDetailed(
+  to: string,
+  name: string,
+  username: string,
+  tempPassword: string,
+): Promise<EmailSendResult> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.warn('[email] RESEND_API_KEY not set — no fallback email path available');
-    return false;
+    return { ok: false, path: 'none', stage: 'resend_no_key' };
   }
 
   const from = process.env.RESEND_FROM || 'Watt Distributors <onboarding@resend.dev>';
@@ -100,13 +139,14 @@ async function sendViaResend(
       }),
     });
     if (!res.ok) {
-      console.error('[email] Resend HTTP error:', res.status, await res.text());
-      return false;
+      const body = await res.text();
+      console.error('[email] Resend HTTP error:', res.status, body);
+      return { ok: false, path: 'resend', stage: 'resend_http_error', detail: `${res.status}: ${body}` };
     }
-    return true;
+    return { ok: true, path: 'resend', stage: 'resend_sent' };
   } catch (err) {
     console.error('[email] Resend threw:', err);
-    return false;
+    return { ok: false, path: 'resend', stage: 'resend_threw', detail: err instanceof Error ? err.message : String(err) };
   }
 }
 

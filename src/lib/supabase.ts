@@ -24,8 +24,13 @@ export const supabase = new Proxy({} as SupabaseClient, {
 let _admin: SupabaseClient | null = null;
 export function getSupabaseAdmin(): SupabaseClient | null {
   if (_admin) return _admin;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  console.log('[supabaseAdmin] init', {
+    hasUrl: !!url,
+    hasServiceKey: !!serviceKey,
+    urlHost: url ? new URL(url).host : null,
+  });
   if (!url || !serviceKey) return null;
   _admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
   return _admin;
