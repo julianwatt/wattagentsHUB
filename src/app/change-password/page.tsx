@@ -2,6 +2,7 @@
 import { useState, FormEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
+import { useLanguage } from '@/components/LanguageContext';
 import WattLogo from '@/components/WattLogo';
 
 function EyeIcon({ className }: { className: string }) {
@@ -13,7 +14,8 @@ function EyeOffIcon({ className }: { className: string }) {
 
 export default function ChangePasswordPage() {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { data: session, status, update } = useSession();
+  const { t } = useLanguage();
   const [newPassword, setNewPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
@@ -33,11 +35,11 @@ export default function ChangePasswordPage() {
     e.preventDefault();
     setError('');
     if (newPassword.length < 6) {
-      setError('La nueva contraseña debe tener al menos 6 caracteres');
+      setError(t('auth.errorMinLength'));
       return;
     }
     if (newPassword !== confirm) {
-      setError('Las contraseñas no coinciden');
+      setError(t('auth.errorMismatch'));
       return;
     }
     setLoading(true);
@@ -49,9 +51,11 @@ export default function ChangePasswordPage() {
     setLoading(false);
     if (res.ok) {
       setSuccess(true);
-      setTimeout(async () => {
-        await signOut({ callbackUrl: '/login' });
-      }, 3000);
+      // Update session to clear must_change_password, then redirect by role
+      await update({ must_change_password: false });
+      const role = session?.user?.role;
+      const dest = role === 'admin' ? '/admin' : role === 'ceo' ? '/dashboard' : '/activity';
+      setTimeout(() => { router.replace(dest); }, 2000);
     } else {
       const d = await res.json().catch(() => ({}));
       setError(d.error || 'Error al cambiar la contraseña');
@@ -70,13 +74,13 @@ export default function ChangePasswordPage() {
             <WattLogo className="h-12 w-auto" />
           </div>
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1 text-center">Cambia tu contraseña</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1 text-center">{t('auth.changePasswordTitle')}</h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 text-center">
-          Por seguridad, debes establecer una nueva contraseña antes de continuar.
+          {t('auth.changePasswordDesc')}
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Nueva contraseña</label>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">{t('auth.newPassword')}</label>
             <div className="relative">
               <input type={showNew ? 'text' : 'password'} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={6} autoComplete="new-password"
                 className="w-full px-4 py-3 pr-11 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
@@ -87,7 +91,7 @@ export default function ChangePasswordPage() {
             </div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Confirmar nueva contraseña</label>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">{t('auth.confirmPassword')}</label>
             <div className="relative">
               <input type={showConfirm ? 'text' : 'password'} value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={6} autoComplete="new-password"
                 className="w-full px-4 py-3 pr-11 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
@@ -99,7 +103,7 @@ export default function ChangePasswordPage() {
           </div>
           {success && (
             <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 rounded-xl px-4 py-3 text-sm font-medium text-center">
-              ✓ Contraseña cambiada exitosamente. Redirigiendo al login...
+              ✓ {t('auth.resetSuccess')}
             </div>
           )}
           {error && (
@@ -108,11 +112,11 @@ export default function ChangePasswordPage() {
           <button type="submit" disabled={loading || success}
             className="w-full py-3.5 rounded-xl text-white font-bold transition-colors disabled:opacity-60"
             style={{ backgroundColor: 'var(--primary)' }}>
-            {loading ? 'Guardando...' : 'Cambiar contraseña'}
+            {loading ? '...' : t('auth.changePasswordBtn')}
           </button>
           <button type="button" onClick={() => signOut({ callbackUrl: '/login' })}
             className="w-full text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-            Cerrar sesión
+            {t('nav.logout')}
           </button>
         </form>
       </div>

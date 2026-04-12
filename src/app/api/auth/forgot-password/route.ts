@@ -4,22 +4,21 @@ import { generateTempPassword, updateUser } from '@/lib/users';
 import { sendPasswordResetEmail } from '@/lib/email';
 
 export async function POST(req: NextRequest) {
-  const { username } = await req.json();
-  if (!username) {
-    return NextResponse.json({ error: 'username required' }, { status: 400 });
+  const { email } = await req.json();
+  if (!email) {
+    return NextResponse.json({ error: 'email required' }, { status: 400 });
   }
 
-  // Look up user
+  // Look up user by email
   const { data: user } = await supabase
     .from('users')
     .select('id, name, username, email')
-    .ilike('username', username)
+    .ilike('email', email)
     .eq('is_active', true)
     .single();
 
   if (!user || !user.email) {
-    // Don't reveal whether user exists — always return success
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
 
   // Generate temp password
