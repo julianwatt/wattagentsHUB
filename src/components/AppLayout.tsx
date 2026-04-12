@@ -30,21 +30,55 @@ export default function AppLayout({ session, children }: Props) {
   const router = useRouter();
   const { t, lang, setLang } = useLanguage();
   const { theme, toggleTheme } = useTheme();
-  const { realRole, previewRole, effectiveRole, setPreviewRole } = usePreviewRole();
+  const { realRole, previewRole, previewUserId, previewUserName, effectiveRole, setPreviewRole, setPreviewUser } = usePreviewRole();
+
+  // Fetch active users for "Ver como" individual selection
+  interface PreviewUser { id: string; name: string; role: string; }
+  const [previewUsers, setPreviewUsers] = useState<PreviewUser[]>([]);
+  useEffect(() => {
+    if (realRole !== 'admin' && (realRole ?? session.user.role) !== 'admin') return;
+    (async () => {
+      try {
+        const res = await fetch('/api/users');
+        if (res.ok) {
+          const data = await res.json();
+          setPreviewUsers(
+            (data as PreviewUser[])
+              .filter((u: PreviewUser & { is_active?: boolean }) => u.is_active !== false && u.role !== 'admin')
+              .sort((a: PreviewUser, b: PreviewUser) => a.name.localeCompare(b.name)),
+          );
+        }
+      } catch {}
+    })();
+  }, [realRole, session.user.role]);
 
   // Navigate to appropriate page when preview role changes
-  const handlePreviewChange = (newRole: Role | null) => {
-    setPreviewRole(newRole);
-    if (newRole === null) {
-      // Exiting preview → go back to admin panel
+  const handlePreviewChange = (value: string) => {
+    if (!value) {
+      // Exiting preview
+      setPreviewUser(null, null, null);
+      setPreviewRole(null);
       router.push('/admin');
-    } else if (newRole === 'agent') {
-      router.push('/activity');
-    } else if (newRole === 'jr_manager' || newRole === 'sr_manager') {
-      router.push('/activity');
-    } else if (newRole === 'ceo') {
-      router.push('/dashboard');
+      return;
     }
+    // Check if it's a user ID (starts with "user:")
+    if (value.startsWith('user:')) {
+      const userId = value.slice(5);
+      const u = previewUsers.find((p) => p.id === userId);
+      if (u) {
+        setPreviewUser(u.id, u.role as Role, u.name);
+        if (u.role === 'agent') router.push('/activity');
+        else if (u.role === 'ceo') router.push('/dashboard');
+        else router.push('/activity');
+      }
+      return;
+    }
+    // It's a role
+    const newRole = value as Role;
+    setPreviewRole(newRole);
+    if (newRole === 'agent') router.push('/activity');
+    else if (newRole === 'jr_manager' || newRole === 'sr_manager') router.push('/activity');
+    else if (newRole === 'ceo') router.push('/dashboard');
   };
   const realIsAdmin = (realRole ?? session.user.role) === 'admin';
   const role = (effectiveRole ?? session.user.role) as Role;
@@ -62,7 +96,19 @@ export default function AppLayout({ session, children }: Props) {
   interface NotifItem { id: string; type: string; user_name?: string; user_username?: string; status: string; created_at: string; }
   const notifTypeLabel = (type: string) => {
     if (type === 'password_reset') return lang === 'es' ? 'Reseteo de contraseña' : 'Password reset';
+    if (type === 'new_user') return lang === 'es' ? 'Nuevo usuario' : 'New user';
+    if (type === 'activity') return lang === 'es' ? 'Actividad' : 'Activity';
     return type;
+  };
+  const notifBadgeColor = (type: string) => {
+    if (type === 'password_reset') return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300';
+    if (type === 'new_user') return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300';
+    if (type === 'activity') return 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300';
+    return 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300';
+  };
+  const notifPreviewText = (n: NotifItem) => {
+    if (n.type === 'password_reset') return `${n.user_name ?? '—'} ${t('admin.notifPreviewReset')}`;
+    return n.user_name ?? '—';
   };
   const [notifItems, setNotifItems] = useState<NotifItem[]>([]);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -117,15 +163,15 @@ export default function AppLayout({ session, children }: Props) {
           <span className="flex items-center gap-2 truncate">
             <span aria-hidden>👁️</span>
             <span className="truncate">
-              {lang === 'es' ? 'Modo vista previa como' : 'Previewing as'}{' '}
-              <span className="uppercase">{roleLabel}</span>
+              {t('admin.previewingAs')}{' '}
+              <span className="uppercase">{previewUserName ? `${previewUserName} (${roleLabel})` : roleLabel}</span>
             </span>
           </span>
           <button
-            onClick={() => handlePreviewChange(null)}
+            onClick={() => handlePreviewChange('')}
             className="px-2.5 py-1 rounded-md bg-amber-950 text-amber-50 hover:bg-amber-900 transition-colors flex-shrink-0"
           >
-            {lang === 'es' ? 'Salir de vista previa' : 'Exit preview'}
+            {t('admin.exitPreview')}
           </button>
         </div>
       )}
@@ -165,18 +211,29 @@ export default function AppLayout({ session, children }: Props) {
             {/* Preview-as selector — admin only, visible on all screens */}
             {realIsAdmin && (
               <select
-                value={previewRole ?? ''}
-                onChange={(e) => handlePreviewChange((e.target.value || null) as Role | null)}
-                title={lang === 'es' ? 'Vista previa como rol' : 'Preview as role'}
-                className="h-8 px-1 sm:px-2 rounded-lg text-[10px] sm:text-[11px] font-bold bg-white/10 text-white hover:bg-white/20 border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 max-w-[110px] sm:max-w-[140px]"
+                value={previewUserId ? `user:${previewUserId}` : (previewRole ?? '')}
+                onChange={(e) => handlePreviewChange(e.target.value)}
+                title={t('admin.viewAs')}
+                className="h-8 px-1 sm:px-2 rounded-lg text-[10px] sm:text-[11px] font-bold bg-white/10 text-white hover:bg-white/20 border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 max-w-[130px] sm:max-w-[180px]"
               >
                 <option value="" className="text-gray-900">
-                  {lang === 'es' ? '👁️ Ver como…' : '👁️ View as…'}
+                  👁️ {t('admin.viewAs')}
                 </option>
-                <option value="agent" className="text-gray-900">{t('admin.roleAgent')}</option>
-                <option value="jr_manager" className="text-gray-900">{t('admin.roleJrManager')}</option>
-                <option value="sr_manager" className="text-gray-900">{t('admin.roleSrManager')}</option>
-                <option value="ceo" className="text-gray-900">{t('admin.roleCeo')}</option>
+                <optgroup label={lang === 'es' ? '— Roles —' : '— Roles —'} className="text-gray-900">
+                  <option value="agent" className="text-gray-900">{t('admin.roleAgent')}</option>
+                  <option value="jr_manager" className="text-gray-900">{t('admin.roleJrManager')}</option>
+                  <option value="sr_manager" className="text-gray-900">{t('admin.roleSrManager')}</option>
+                  <option value="ceo" className="text-gray-900">{t('admin.roleCeo')}</option>
+                </optgroup>
+                {previewUsers.length > 0 && (
+                  <optgroup label={lang === 'es' ? '— Usuarios —' : '— Users —'} className="text-gray-900">
+                    {previewUsers.map((u) => (
+                      <option key={u.id} value={`user:${u.id}`} className="text-gray-900">
+                        {u.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             )}
             {/* Notification bell (admin only) */}
@@ -195,7 +252,7 @@ export default function AppLayout({ session, children }: Props) {
                   )}
                 </button>
                 {notifOpen && (
-                  <div className="absolute right-0 top-10 w-80 bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
+                  <div className="absolute right-0 top-10 w-72 sm:w-80 bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
                     <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
                       <h4 className="text-xs font-bold text-gray-800 dark:text-gray-100">{t('admin.notifBellTitle')}</h4>
                       {pendingCount > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300">{pendingCount}</span>}
@@ -203,16 +260,21 @@ export default function AppLayout({ session, children }: Props) {
                     <div className="max-h-64 overflow-y-auto divide-y divide-gray-50 dark:divide-gray-800">
                       {notifItems.length === 0 ? (
                         <p className="text-xs text-gray-400 px-4 py-4 text-center">{t('admin.notifEmpty')}</p>
-                      ) : notifItems.slice(0, 3).map((n) => (
+                      ) : notifItems.slice(0, 5).map((n) => (
                         <div key={n.id} className={`px-4 py-2.5 ${n.status === 'pending' ? 'bg-amber-50/50 dark:bg-amber-900/10' : ''}`}>
-                          <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{notifTypeLabel(n.type)}</p>
-                              <p className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">{n.user_name ?? '—'}</p>
-                              <p className="text-[10px] text-gray-400">@{n.user_username} · {fmtDate(n.created_at, lang)}</p>
+                              <div className="flex items-center gap-1.5 mb-0.5">
+                                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${notifBadgeColor(n.type)}`}>
+                                  {notifTypeLabel(n.type)}
+                                </span>
+                                <span className="text-[10px] text-gray-400">{fmtDate(n.created_at, lang)}</span>
+                              </div>
+                              <p className="text-xs text-gray-600 dark:text-gray-300 truncate leading-snug">{notifPreviewText(n)}</p>
+                              <p className="text-[10px] text-gray-400">@{n.user_username}</p>
                             </div>
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${n.status === 'pending' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'}`}>
-                              {n.status === 'pending' ? '🔔' : '✓'}
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 mt-0.5 ${n.status === 'pending' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300' : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'}`}>
+                              {n.status === 'pending' ? '!' : '✓'}
                             </span>
                           </div>
                         </div>

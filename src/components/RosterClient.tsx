@@ -4,6 +4,7 @@ import { Session } from 'next-auth';
 import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
+import ToggleSwitch from './ToggleSwitch';
 
 interface RosterUser {
   id: string;
@@ -101,7 +102,7 @@ export default function RosterClient({ session }: { session: Session }) {
         </div>
 
         {loading ? (
-          <div className="text-center py-20 text-gray-400">Cargando...</div>
+          <div className="text-center py-20 text-gray-400">{t('common.loading')}</div>
         ) : agents.length === 0 && unassignedAgents.length === 0 ? (
           <div className="text-center py-20">
             <p className="text-4xl mb-3">📋</p>
@@ -224,17 +225,12 @@ function AgentRow({ agent, toggling, onToggle, t }: {
         </div>
         <p className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">{agent.name}</p>
       </div>
-      <button
-        onClick={() => onToggle(agent.id, !agent.is_active)}
-        disabled={isToggling}
-        className={`text-[10px] font-bold px-2 py-1 rounded-full transition-colors flex-shrink-0 ${
-          agent.is_active
-            ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400'
-            : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-emerald-100 hover:text-emerald-700 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-300'
-        } disabled:opacity-50`}
-      >
-        {isToggling ? '...' : agent.is_active ? t('roster.active') : t('roster.inactive')}
-      </button>
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <ToggleSwitch checked={agent.is_active} onChange={(v) => onToggle(agent.id, v)} disabled={isToggling} />
+        <span className={`text-[9px] font-bold ${agent.is_active ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+          {isToggling ? '...' : agent.is_active ? t('roster.active') : t('roster.inactive')}
+        </span>
+      </div>
     </div>
   );
 }

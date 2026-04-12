@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Session } from 'next-auth';
 import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
+import { usePreviewRole } from './PreviewRoleContext';
 import { fmtDate } from '@/lib/i18n';
 import { ActivityEntryWithAgent, effectivenessRate } from '@/lib/activity';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
@@ -35,7 +36,7 @@ function tenureLabel(days: number, t: (k: string) => string): string {
   if (days < 14) return `${days} ${t('team.days')}`;
   if (days < 60) return `${Math.floor(days / 7)} ${t('team.weeks')}`;
   const months = Math.floor(days / 30);
-  return `${months} ${months === 1 ? 'mes' : 'meses'}`;
+  return `${months} ${t('team.months')}`;
 }
 
 function roleLabel(role: string, t: (k: string) => string): string {
@@ -51,17 +52,19 @@ function roleLabel(role: string, t: (k: string) => string): string {
 
 export default function TeamClient({ session }: { session: Session }) {
   const { t, lang } = useLanguage();
+  const { previewUserId } = usePreviewRole();
   const [data, setData] = useState<TeamData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const res = await fetch('/api/team');
+      const url = previewUserId ? `/api/team?asUser=${previewUserId}` : '/api/team';
+      const res = await fetch(url);
       if (res.ok) setData(await res.json());
       setLoading(false);
     })();
-  }, []);
+  }, [previewUserId]);
 
   // ── Derived data ─────────────────────────────────────────────────────────
   const members = data?.members ?? [];
@@ -189,7 +192,7 @@ export default function TeamClient({ session }: { session: Session }) {
         </div>
 
         {loading ? (
-          <div className="text-center py-20 text-gray-400">Cargando...</div>
+          <div className="text-center py-20 text-gray-400">{t('common.loading')}</div>
         ) : members.length === 0 ? (
           <div className="text-center py-20">
             <p className="text-4xl mb-3">👥</p>
@@ -306,11 +309,11 @@ export default function TeamClient({ session }: { session: Session }) {
                     <div key={m.id} className="rounded-xl border border-gray-100 dark:border-gray-800 p-3">
                       <div className="flex items-center justify-between mb-1">
                         <p className="text-xs font-semibold text-gray-700 dark:text-gray-200 truncate">{m.name}</p>
-                        <p className="text-[10px] text-gray-400">{agg?.sales ?? 0} ventas</p>
+                        <p className="text-[10px] text-gray-400">{agg?.sales ?? 0} {t('common.sales')}</p>
                       </div>
                       <div className="h-16">
                         {series.length === 0 ? (
-                          <p className="text-[10px] text-gray-400 text-center pt-5">Sin datos</p>
+                          <p className="text-[10px] text-gray-400 text-center pt-5">{t('common.noData')}</p>
                         ) : (
                           <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={series}>
@@ -368,7 +371,7 @@ function TopRepCard({ label, entry }: { label: string; entry: { agent: Member; s
       {entry ? (
         <>
           <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-1 truncate">{entry.agent.name}</p>
-          <p className="text-xl font-extrabold leading-tight" style={{ color: 'var(--primary)' }}>{entry.sales} <span className="text-xs font-medium text-gray-400">ventas</span></p>
+          <p className="text-xl font-extrabold leading-tight" style={{ color: 'var(--primary)' }}>{entry.sales}</p>
         </>
       ) : (
         <p className="text-sm text-gray-400 mt-2">—</p>

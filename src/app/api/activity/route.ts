@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { upsertActivity, getEntry, getAgentEntries, getEntriesForUsers, deleteEntry, CampaignType } from '@/lib/activity';
-import { getVisibleUserIds } from '@/lib/users';
+import { getVisibleUserIds, getUserById, type UserRole } from '@/lib/users';
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -20,8 +20,20 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(entry);
   }
 
+  // Support "Ver como" individual user preview for admin
+  const asUser = searchParams.get('asUser');
+  let viewerId = session.user.id;
+  let viewerRole: UserRole = session.user.role as UserRole;
+  if (asUser && session.user.role === 'admin') {
+    const targetUser = await getUserById(asUser);
+    if (targetUser) {
+      viewerId = targetUser.id;
+      viewerRole = targetUser.role;
+    }
+  }
+
   // List by visibility role
-  const visibleIds = await getVisibleUserIds(session.user.id, session.user.role);
+  const visibleIds = await getVisibleUserIds(viewerId, viewerRole);
   const targetId = agentId && visibleIds.includes(agentId) ? agentId : null;
 
   const entries = targetId

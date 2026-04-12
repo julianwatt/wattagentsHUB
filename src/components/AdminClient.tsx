@@ -5,6 +5,7 @@ import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
 import { fmtDate } from '@/lib/i18n';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
+import ToggleSwitch from './ToggleSwitch';
 // Theme picker removed — Watt Gold only
 
 
@@ -56,6 +57,19 @@ export default function AdminClient({ session }: { session: Session }) {
   const [submitting, setSubmitting] = useState(false);
   // Theme state removed
   const [editing, setEditing] = useState<User | null>(null);
+  const [toggling, setToggling] = useState<string | null>(null);
+  const handleToggleActive = async (userId: string, newActive: boolean) => {
+    setToggling(userId);
+    const res = await fetch('/api/roster', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: userId, is_active: newActive }),
+    });
+    if (res.ok) {
+      setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, is_active: newActive } : u));
+    }
+    setToggling(null);
+  };
 
   // Notifications state
   interface ResetRequest { id: string; user_name: string; user_username: string; created_at: string; status: string; }
@@ -228,7 +242,7 @@ export default function AdminClient({ session }: { session: Session }) {
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.fullName')}</label>
                   <input type="text" value={form.name} required onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder="Ej. María López"
+                    placeholder={lang === 'es' ? 'Ej. María López' : 'e.g. Jane Doe'}
                     className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm placeholder-gray-400" />
                 </div>
                 <div>
@@ -242,7 +256,7 @@ export default function AdminClient({ session }: { session: Session }) {
                   <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
                     placeholder="maria@watt.com"
                     className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm placeholder-gray-400" />
-                  <p className="text-[10px] text-gray-400 mt-1">Si se ingresa, se enviará una contraseña temporal por correo.</p>
+                  <p className="text-[10px] text-gray-400 mt-1">{t('admin.tempPasswordHint')}</p>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.hireDate')}</label>
@@ -256,26 +270,26 @@ export default function AdminClient({ session }: { session: Session }) {
                     <option value="agent">{t('admin.roleAgent')}</option>
                     <option value="jr_manager">{t('admin.roleJrManager')}</option>
                     <option value="sr_manager">{t('admin.roleSrManager')}</option>
-                    <option value="ceo" disabled={ceoExists}>{t('admin.roleCeo')}{ceoExists ? ' (ya existe)' : ''}</option>
+                    <option value="ceo" disabled={ceoExists}>{t('admin.roleCeo')}{ceoExists ? ` (${t('common.alreadyExists')})` : ''}</option>
                   </select>
                 </div>
                 {form.role === 'agent' && (
                   <>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Sr Manager (opcional)</label>
+                      <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.srManagerFilter')}</label>
                       <select value={form.sr_manager_filter} onChange={(e) => setForm({ ...form, sr_manager_filter: e.target.value, manager_id: '' })}
                         className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm">
-                        <option value="">Sin Sr Manager</option>
+                        <option value="">{t('admin.noSrManager')}</option>
                         {users.filter((u) => u.role === 'sr_manager').map((u) => (
                           <option key={u.id} value={u.id}>{u.name}</option>
                         ))}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Jr Manager (opcional)</label>
+                      <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.roleJrManager')}</label>
                       <select value={form.manager_id} onChange={(e) => setForm({ ...form, manager_id: e.target.value })}
                         className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm">
-                        <option value="">Sin Jr Manager</option>
+                        <option value="">{t('admin.noJrManager')}</option>
                         {users
                           .filter((u) => u.role === 'jr_manager' && (!form.sr_manager_filter || u.manager_id === form.sr_manager_filter))
                           .map((u) => (
@@ -287,10 +301,10 @@ export default function AdminClient({ session }: { session: Session }) {
                 )}
                 {form.role === 'jr_manager' && (
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Sr Manager (opcional)</label>
+                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.roleSrManager')}</label>
                     <select value={form.manager_id} onChange={(e) => setForm({ ...form, manager_id: e.target.value })}
                       className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm">
-                      <option value="">Sin Sr Manager</option>
+                      <option value="">{t('admin.noSrManager')}</option>
                       {users.filter((u) => u.role === 'sr_manager').map((u) => (
                         <option key={u.id} value={u.id}>{u.name}</option>
                       ))}
@@ -301,9 +315,9 @@ export default function AdminClient({ session }: { session: Session }) {
 
                 {created && (
                   <div className="rounded-xl border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 p-3 space-y-1.5">
-                    <p className="text-sm font-bold text-green-700 dark:text-green-300">✓ Usuario {created.name} registrado exitosamente</p>
+                    <p className="text-sm font-bold text-green-700 dark:text-green-300">✓ {t('admin.registerSuccess')}: {created.name}</p>
                     <div className="text-xs">
-                      <p className="text-gray-600 dark:text-gray-300">Contraseña temporal:</p>
+                      <p className="text-gray-600 dark:text-gray-300">{lang === 'es' ? 'Contraseña temporal:' : 'Temporary password:'}</p>
                       <code className="block mt-1 bg-white dark:bg-gray-800 px-2 py-1.5 rounded text-sm font-mono font-bold text-gray-800 dark:text-gray-100 select-all">{created.tempPassword}</code>
                     </div>
                     {created.email && (
@@ -313,7 +327,7 @@ export default function AdminClient({ session }: { session: Session }) {
                           : `⚠ No se pudo enviar el correo a ${created.email}. Comparte la contraseña manualmente.`}
                       </p>
                     )}
-                    <button type="button" onClick={() => setCreated(null)} className="text-[11px] text-gray-400 hover:text-gray-600 underline mt-1">Cerrar</button>
+                    <button type="button" onClick={() => setCreated(null)} className="text-[11px] text-gray-400 hover:text-gray-600 underline mt-1">{t('common.close')}</button>
                   </div>
                 )}
 
@@ -331,14 +345,14 @@ export default function AdminClient({ session }: { session: Session }) {
             <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between">
                 <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">{t('admin.usersTable')}</h3>
-                <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full px-2.5 py-0.5 font-semibold">{users.length} {t('admin.usersCount')}</span>
+                <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full px-2.5 py-0.5 font-semibold flex-shrink-0">{users.length}</span>
               </div>
               {loading ? (
-                <div className="p-12 text-center text-gray-400 text-sm">...</div>
+                <div className="p-12 text-center text-gray-400 text-sm">{t('common.loading')}</div>
               ) : (
                 <div className="divide-y divide-gray-50 dark:divide-gray-800">
                   {users.map((u) => (
-                    <div key={u.id} className="flex items-center justify-between px-5 py-4 hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
+                    <div key={u.id} className={`flex items-center justify-between px-5 py-4 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 ${!u.is_active ? 'opacity-50' : ''}`}>
                       <div className="flex items-center gap-3 min-w-0">
                         <div
                           className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0"
@@ -354,7 +368,13 @@ export default function AdminClient({ session }: { session: Session }) {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        {/* temp tag removed */}
+                        {u.role !== 'admin' && u.id !== session.user.id && (
+                          <ToggleSwitch
+                            checked={u.is_active}
+                            onChange={(v) => handleToggleActive(u.id, v)}
+                            disabled={toggling === u.id}
+                          />
+                        )}
                         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${roleBadgeClass(u.role)}`}>
                           {u.role === 'ceo' ? t('admin.roleCeo')
                             : u.role === 'admin' ? t('admin.roleAdmin')
@@ -364,14 +384,14 @@ export default function AdminClient({ session }: { session: Session }) {
                         </span>
                         {!(isCeoViewer && u.role === 'admin') && (
                           <button onClick={() => setEditing(u)}
-                            title="Editar"
+                            title={t('common.edit')}
                             className="p-1.5 rounded-lg text-gray-400 hover:text-[var(--primary)] hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                           </button>
                         )}
                         {u.id !== session.user.id && !(isCeoViewer && u.role === 'admin') && (
                           <button onClick={() => handleDelete(u.id, u.name)}
-                            title="Eliminar"
+                            title={t('common.delete')}
                             className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                           </button>
@@ -396,6 +416,8 @@ export default function AdminClient({ session }: { session: Session }) {
           ceoExists={ceoExists}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); fetchUsers(); }}
+          t={t}
+          lang={lang}
         />
       )}
     </AppLayout>
@@ -405,13 +427,15 @@ export default function AdminClient({ session }: { session: Session }) {
 // ────────────────────────────────────────────────────────
 // Edit user modal
 // ────────────────────────────────────────────────────────
-function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved }: {
+function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t, lang }: {
   user: User;
   users: User[];
   viewerRole: UserRole;
   ceoExists: boolean;
   onClose: () => void;
   onSaved: () => void;
+  t: (k: string) => string;
+  lang: string;
 }) {
   const isCeoViewer = viewerRole === 'ceo';
   const initialSr = (() => {
@@ -456,7 +480,7 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved }:
   }
 
   async function handleReset() {
-    if (!confirm('¿Generar una nueva contraseña temporal? El usuario deberá cambiarla al iniciar sesión.')) return;
+    if (!confirm(t('admin.resetPasswordConfirm'))) return;
     setSaving(true); setError('');
     const res = await fetch('/api/users', {
       method: 'PATCH',
@@ -468,7 +492,7 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved }:
       const d = await res.json();
       setResetResult({ tempPassword: d.tempPassword, emailSent: d.emailSent });
     } else {
-      setError('Error al restablecer contraseña');
+      setError(t('admin.resetPasswordError'));
     }
   }
 
@@ -476,16 +500,16 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved }:
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-          <h3 className="font-bold text-gray-800 dark:text-gray-100">Editar usuario</h3>
+          <h3 className="font-bold text-gray-800 dark:text-gray-100">{t('admin.editUser')}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
         </div>
         <form onSubmit={handleSave} className="p-5 space-y-3">
           <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Usuario</label>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.username')}</label>
             <p className="text-sm text-gray-500 dark:text-gray-400">@{user.username}</p>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Nombre completo</label>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.fullName')}</label>
             <input type="text" value={name} required onChange={(e) => setName(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm" />
           </div>
@@ -496,39 +520,39 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved }:
               className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm" />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Fecha de contratación</label>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.hireDate')}</label>
             <input type="date" value={hireDate} required onChange={(e) => setHireDate(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm" />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Rol</label>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.role')}</label>
             <select value={role} onChange={(e) => { setRole(e.target.value as UserRole); setManagerId(''); setSrManager(''); }}
               disabled={isCeoViewer && user.role === 'admin'}
               className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm disabled:opacity-60">
-              <option value="agent">Agente</option>
-              <option value="jr_manager">Jr Manager</option>
-              <option value="sr_manager">Sr Manager</option>
-              <option value="ceo" disabled={ceoExists && user.role !== 'ceo'}>CEO{ceoExists && user.role !== 'ceo' ? ' (ya existe)' : ''}</option>
-              {user.role === 'admin' && <option value="admin">Admin</option>}
+              <option value="agent">{t('admin.roleAgent')}</option>
+              <option value="jr_manager">{t('admin.roleJrManager')}</option>
+              <option value="sr_manager">{t('admin.roleSrManager')}</option>
+              <option value="ceo" disabled={ceoExists && user.role !== 'ceo'}>{t('admin.roleCeo')}{ceoExists && user.role !== 'ceo' ? ` (${t('common.alreadyExists')})` : ''}</option>
+              {user.role === 'admin' && <option value="admin">{t('admin.roleAdmin')}</option>}
             </select>
           </div>
           {role === 'agent' && (
             <>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Sr Manager (filtro)</label>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.srManagerFilter')}</label>
                 <select value={srManager} onChange={(e) => { setSrManager(e.target.value); setManagerId(''); }}
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm">
-                  <option value="">Sin Sr Manager</option>
+                  <option value="">{t('admin.noSrManager')}</option>
                   {users.filter((u) => u.role === 'sr_manager').map((u) => (
                     <option key={u.id} value={u.id}>{u.name}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Jr Manager</label>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.roleJrManager')}</label>
                 <select value={managerId} onChange={(e) => setManagerId(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm">
-                  <option value="">Sin Jr Manager</option>
+                  <option value="">{t('admin.noJrManager')}</option>
                   {users.filter((u) => u.role === 'jr_manager' && (!srManager || u.manager_id === srManager)).map((u) => (
                     <option key={u.id} value={u.id}>{u.name}</option>
                   ))}
@@ -538,10 +562,10 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved }:
           )}
           {role === 'jr_manager' && (
             <div>
-              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Sr Manager</label>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.roleSrManager')}</label>
               <select value={srManager} onChange={(e) => setSrManager(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm">
-                <option value="">Sin Sr Manager</option>
+                <option value="">{t('admin.noSrManager')}</option>
                 {users.filter((u) => u.role === 'sr_manager').map((u) => (
                   <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
@@ -553,10 +577,10 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved }:
 
           {resetResult && (
             <div className="rounded-xl border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 p-3 space-y-1">
-              <p className="text-xs font-bold text-green-700 dark:text-green-300">✓ Contraseña restablecida</p>
+              <p className="text-xs font-bold text-green-700 dark:text-green-300">✓ {t('admin.resetPasswordSuccess')}</p>
               <code className="block bg-white dark:bg-gray-800 px-2 py-1.5 rounded text-sm font-mono font-bold text-gray-800 dark:text-gray-100 select-all">{resetResult.tempPassword}</code>
               <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                {resetResult.emailSent ? '📧 Enviada por correo.' : '⚠ Comparte esta contraseña con el usuario manualmente.'}
+                {resetResult.emailSent ? `📧 ${t('admin.tempPasswordSent')}` : `⚠ ${t('admin.tempPasswordManual')}`}
               </p>
             </div>
           )}
@@ -564,12 +588,12 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved }:
           <div className="flex gap-2 pt-2">
             <button type="button" onClick={handleReset} disabled={saving}
               className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 font-semibold text-xs hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60">
-              🔑 Restablecer contraseña
+              🔑 {t('admin.resetPasswordBtn')}
             </button>
             <button type="submit" disabled={saving}
               className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm disabled:opacity-60"
               style={{ backgroundColor: 'var(--primary)' }}>
-              {saving ? 'Guardando...' : 'Guardar'}
+              {saving ? t('common.saving') : t('common.save')}
             </button>
           </div>
         </form>

@@ -88,7 +88,7 @@ function StatCard({ label, value, sub, color = 'orange', icon }: StatCardProps) 
 export default function DashboardClient({ session }: { session: Session }) {
   const { t, lang } = useLanguage();
   const { theme } = useTheme();
-  const { effectiveRole } = usePreviewRole();
+  const { effectiveRole, previewUserId } = usePreviewRole();
   const viewerRole = effectiveRole ?? session.user.role;
   const canSeeTeam = viewerRole !== 'agent';
   const isManager = viewerRole === 'jr_manager' || viewerRole === 'sr_manager' || viewerRole === 'ceo' || viewerRole === 'admin';
@@ -103,7 +103,8 @@ export default function DashboardClient({ session }: { session: Session }) {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const res = await fetch('/api/activity');
+      const url = previewUserId ? `/api/activity?asUser=${previewUserId}` : '/api/activity';
+      const res = await fetch(url);
       if (res.ok) {
         const data: ActivityEntryWithAgent[] = await res.json();
         setAllEntries(data);
@@ -115,7 +116,7 @@ export default function DashboardClient({ session }: { session: Session }) {
       }
       setLoading(false);
     })();
-  }, [canSeeTeam]);
+  }, [canSeeTeam, previewUserId]);
 
   const filtered = useMemo(() => {
     let entries = allEntries;
@@ -195,7 +196,7 @@ export default function DashboardClient({ session }: { session: Session }) {
         </div>
 
         {loading ? (
-          <div className="text-center py-20 text-gray-400">Cargando...</div>
+          <div className="text-center py-20 text-gray-400">{t('common.loading')}</div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-20">
             <p className="text-4xl mb-3">📭</p>
@@ -251,7 +252,7 @@ export default function DashboardClient({ session }: { session: Session }) {
                     </div>
                     <div className="divide-y divide-gray-50 dark:divide-gray-800 max-h-[280px] overflow-y-auto">
                       {last7.length === 0 ? (
-                        <p className="text-xs text-gray-400 px-3 py-3">Sin datos.</p>
+                        <p className="text-xs text-gray-400 px-3 py-3">{t('common.noData')}</p>
                       ) : last7.map((e) => {
                         const isD2D = e.campaign_type === 'D2D';
                         return (
@@ -263,7 +264,7 @@ export default function DashboardClient({ session }: { session: Session }) {
                                 </span>
                                 <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200 truncate">{fmtDate(e.date, lang)}</span>
                               </div>
-                              <span className="text-[11px] font-bold flex-shrink-0" style={{ color: 'var(--primary)' }}>{e.sales} cierres</span>
+                              <span className="text-[11px] font-bold flex-shrink-0" style={{ color: 'var(--primary)' }}>{e.sales} {t('common.closings')}</span>
                             </div>
                             <div className="flex gap-2 text-[10px] text-gray-400 mt-0.5">
                               <span>🕐 {fmtTime(e.first_activity_at)}–{fmtTime(e.last_activity_at)}</span>

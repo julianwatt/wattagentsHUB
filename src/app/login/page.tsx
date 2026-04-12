@@ -169,7 +169,7 @@ export default function LoginPage() {
             )}
             <button type="button" onClick={() => setShowForgot(false)}
               className="w-full mt-3 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-              {lang === 'es' ? 'Cerrar' : 'Close'}
+              {t('common.close')}
             </button>
           </div>
         </div>
