@@ -242,10 +242,10 @@ const es = {
     metricInteractions: 'Interacciones',
     metricContacts: 'Contactos',
     metricEffectiveness: 'Efectividad',
-    rankSubBestSales: 'Mayor total de ventas en el período',
-    rankSubWorstSales: 'Menor total de ventas en el período',
-    rankSubBestInteractions: 'Mayor total de interacciones en el período',
-    rankSubBestEffectiveness: 'Mayor % promedio de conversión',
+    rankSubBestSales: 'Basado en total de cierres del período seleccionado',
+    rankSubWorstSales: 'Basado en menor total de cierres del período seleccionado',
+    rankSubBestInteractions: 'Basado en total de interacciones del período seleccionado',
+    rankSubBestEffectiveness: 'Basado en promedio de conversión del período seleccionado',
   },
 };
 
@@ -490,10 +490,10 @@ const en: typeof es = {
     metricInteractions: 'Interactions',
     metricContacts: 'Contacts',
     metricEffectiveness: 'Effectiveness',
-    rankSubBestSales: 'Highest total sales in the period',
-    rankSubWorstSales: 'Lowest total sales in the period',
-    rankSubBestInteractions: 'Highest total interactions in the period',
-    rankSubBestEffectiveness: 'Highest average conversion %',
+    rankSubBestSales: 'Based on total sales in the selected period',
+    rankSubWorstSales: 'Based on lowest total sales in the selected period',
+    rankSubBestInteractions: 'Based on total interactions in the selected period',
+    rankSubBestEffectiveness: 'Based on average conversion in the selected period',
   },
 };
 

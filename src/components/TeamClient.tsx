@@ -276,9 +276,9 @@ export default function TeamClient({ session }: { session: Session }) {
             {/* ── Roster — compact, newest first ── */}
             <div className="max-w-3xl">
               <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between">
-                  <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">{t('team.rosterTitle')}</h3>
-                  <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full px-2.5 py-0.5 font-semibold">{members.length}</span>
+                <div className="px-3 py-2 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between">
+                  <h3 className="font-bold text-gray-800 dark:text-gray-100 text-xs">{t('team.rosterTitle')}</h3>
+                  <span className="text-[10px] bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full px-2 py-0.5 font-semibold">{members.length}</span>
                 </div>
                 <div className="divide-y divide-gray-50 dark:divide-gray-800">
                   {[...members].sort((a, b) => b.hire_date.localeCompare(a.hire_date)).map((m) => {
@@ -286,23 +286,21 @@ export default function TeamClient({ session }: { session: Session }) {
                     const isNewest = newest?.id === m.id;
                     const isOldest = oldest?.id === m.id;
                     return (
-                      <div key={m.id} className="px-4 py-2 flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0"
+                      <div key={m.id} className="px-3 py-1.5 flex items-center justify-between gap-1.5">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] flex-shrink-0"
                             style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary)' }}>
                             {m.name.charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <p className="font-semibold text-gray-800 dark:text-gray-100 text-xs truncate">{m.name}</p>
-                            <p className="text-[10px] text-gray-400">@{m.username} · {roleLabel(m.role, t)}</p>
+                            <p className="font-semibold text-gray-800 dark:text-gray-100 text-[11px] truncate leading-tight">{m.name}</p>
+                            <p className="text-[9px] text-gray-400 leading-tight">@{m.username} · {roleLabel(m.role, t)}</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 flex-shrink-0 text-right">
-                          {isNewest && <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">★ {t('team.newest')}</span>}
-                          {isOldest && !isNewest && <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">{t('team.oldest')}</span>}
-                          <div className="text-[10px] text-gray-500">
-                            <p>{fmtDate(m.hire_date)} · {tenureLabel(days, t)}</p>
-                          </div>
+                        <div className="flex items-center gap-1 flex-shrink-0 text-right">
+                          {isNewest && <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">★ {t('team.newest')}</span>}
+                          {isOldest && !isNewest && <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">{t('team.oldest')}</span>}
+                          <p className="text-[9px] text-gray-500">{fmtDate(m.hire_date)} · {tenureLabel(days, t)}</p>
                         </div>
                       </div>
                     );
