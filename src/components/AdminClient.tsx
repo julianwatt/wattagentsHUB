@@ -366,6 +366,10 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
   async function handleSave(e: FormEvent) {
     e.preventDefault();
     setError(''); setSaveSuccess(false); setSaving(true);
+
+    // Log raw state values BEFORE building payload
+    console.log('[EditUserModal] State before save:', { role, managerId, srManager, name, email, hireDate, isActive });
+
     const payload: Record<string, unknown> = {
       id: user.id,
       name,
@@ -377,13 +381,30 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
     };
     // For an agent, manager_id is the jr_manager's id; for a jr_manager, it's the sr_manager's id.
     if (role === 'jr_manager') payload.manager_id = srManager || null;
-    console.log('[EditUserModal] Saving payload:', JSON.stringify(payload));
+
+    console.log('[EditUserModal] Final payload.manager_id:', payload.manager_id, '| role:', role);
+    console.log('[EditUserModal] Full payload:', JSON.stringify(payload));
+
     try {
       const res = await fetch('/api/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const d = await res.json().catch(() => ({}));
-      console.log('[EditUserModal] Supabase response:', res.status, JSON.stringify(d));
+      console.log('[EditUserModal] API response:', res.status, JSON.stringify(d));
       setSaving(false);
       if (res.ok) {
+        // Verify the change persisted by re-fetching the user
+        try {
+          const verifyRes = await fetch('/api/users');
+          if (verifyRes.ok) {
+            const allUsers = await verifyRes.json();
+            const updated = allUsers.find((u: { id: string }) => u.id === user.id);
+            console.log('[EditUserModal] VERIFY after save — manager_id in DB:', updated?.manager_id, '| expected:', payload.manager_id);
+            if (updated?.manager_id !== payload.manager_id) {
+              console.warn('[EditUserModal] ⚠ manager_id MISMATCH! DB has:', updated?.manager_id, 'but sent:', payload.manager_id);
+            }
+          }
+        } catch (verifyErr) {
+          console.warn('[EditUserModal] Verify fetch failed:', verifyErr);
+        }
         setSaveSuccess(true);
         setTimeout(() => onSaved(), 800);
       } else {

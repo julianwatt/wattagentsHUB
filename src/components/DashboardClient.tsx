@@ -4,7 +4,7 @@ import { Session } from 'next-auth';
 import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
 import { useTheme } from './ThemeContext';
-import { usePreviewRole } from './PreviewRoleContext';
+import { usePreviewRole, useActiveUserId } from './PreviewRoleContext';
 import { fmtDate } from '@/lib/i18n';
 import type { Lang } from '@/lib/i18n';
 import { ActivityEntryWithAgent, effectivenessRate } from '@/lib/activity';
@@ -88,7 +88,8 @@ function StatCard({ label, value, sub, color = 'orange', icon }: StatCardProps) 
 export default function DashboardClient({ session }: { session: Session }) {
   const { t, lang } = useLanguage();
   const { theme } = useTheme();
-  const { effectiveRole, previewUserId } = usePreviewRole();
+  const { effectiveRole } = usePreviewRole();
+  const { activeUserId, isPreviewMode } = useActiveUserId(session.user.id);
   const viewerRole = effectiveRole ?? session.user.role;
   const canSeeTeam = viewerRole !== 'agent';
   const isManager = viewerRole === 'jr_manager' || viewerRole === 'sr_manager' || viewerRole === 'ceo' || viewerRole === 'admin';
@@ -103,7 +104,8 @@ export default function DashboardClient({ session }: { session: Session }) {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const url = previewUserId ? `/api/activity?asUser=${previewUserId}` : '/api/activity';
+      console.log('[Dashboard] fetching data', { activeUserId, isPreviewMode });
+      const url = isPreviewMode ? `/api/activity?asUser=${activeUserId}` : '/api/activity';
       const res = await fetch(url);
       if (res.ok) {
         const data: ActivityEntryWithAgent[] = await res.json();
@@ -116,7 +118,7 @@ export default function DashboardClient({ session }: { session: Session }) {
       }
       setLoading(false);
     })();
-  }, [canSeeTeam, previewUserId]);
+  }, [canSeeTeam, activeUserId, isPreviewMode]);
 
   const filtered = useMemo(() => {
     let entries = allEntries;

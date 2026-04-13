@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Session } from 'next-auth';
 import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
-import { usePreviewRole } from './PreviewRoleContext';
+import { usePreviewRole, useActiveUserId } from './PreviewRoleContext';
 import { fmtDate } from '@/lib/i18n';
 import { ActivityEntry, CampaignType, effectivenessRate } from '@/lib/activity';
 import { createClient } from '@supabase/supabase-js';
@@ -46,11 +46,8 @@ function fmtTime(iso: string | null | undefined): string {
 
 export default function ActivityClient({ session }: { session: Session }) {
   const { t, lang } = useLanguage();
-  const { previewUserId, previewUserName } = usePreviewRole();
-
-  // Effective user: preview target or logged-in user
-  const effectiveUserId = previewUserId ?? session.user.id;
-  const isPreviewMode = !!previewUserId;
+  const { previewUserName } = usePreviewRole();
+  const { activeUserId, isPreviewMode } = useActiveUserId(session.user.id);
 
   // Fetch real user name from DB
   const [dbUserName, setDbUserName] = useState<string>(previewUserName ?? session.user.name ?? '');
@@ -59,11 +56,11 @@ export default function ActivityClient({ session }: { session: Session }) {
     (async () => {
       try {
         const sb = getSupabaseBrowser();
-        const { data } = await sb.from('users').select('name').eq('id', effectiveUserId).single();
+        const { data } = await sb.from('users').select('name').eq('id', activeUserId).single();
         if (data?.name) setDbUserName(data.name);
       } catch {}
     })();
-  }, [effectiveUserId, previewUserName, session.user.name]);
+  }, [activeUserId, previewUserName, session.user.name]);
 
   // If admin visits /activity without preview mode, redirect to /admin
   const isRealAdmin = session.user.role === 'admin';
@@ -72,8 +69,9 @@ export default function ActivityClient({ session }: { session: Session }) {
   useEffect(() => {
     if (!isRealAdmin) return;
     try {
-      const saved = localStorage.getItem('wattPreviewRole');
-      if (saved) setAdminAllowed(true);
+      const hasRole = localStorage.getItem('wattPreviewRole');
+      const hasUser = localStorage.getItem('wattPreviewUser');
+      if (hasRole || hasUser) setAdminAllowed(true);
       else window.location.href = '/admin';
     } catch { window.location.href = '/admin'; }
   }, [isRealAdmin]);
@@ -94,7 +92,8 @@ export default function ActivityClient({ session }: { session: Session }) {
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadEntry = useCallback(async (d: string) => {
-    const res = await fetch(`/api/activity?agentId=${effectiveUserId}&date=${d}`);
+    console.log('[Activity loadEntry]', { activeUserId, date: d, isPreviewMode });
+    const res = await fetch(`/api/activity?agentId=${activeUserId}&date=${d}`);
     if (res.ok) {
       const entry: ActivityEntry | null = await res.json();
       if (entry) {
@@ -106,12 +105,13 @@ export default function ActivityClient({ session }: { session: Session }) {
         if (d === today()) setTodayEntry(null);
       }
     }
-  }, [effectiveUserId]);
+  }, [activeUserId]);
 
   const loadHistory = useCallback(async () => {
     setLoading(true);
-    const url = previewUserId
-      ? `/api/activity?asUser=${previewUserId}`
+    console.log('[Activity loadHistory]', { activeUserId, isPreviewMode });
+    const url = isPreviewMode
+      ? `/api/activity?asUser=${activeUserId}`
       : '/api/activity';
     const res = await fetch(url);
     if (res.ok) {
@@ -121,7 +121,7 @@ export default function ActivityClient({ session }: { session: Session }) {
       if (te) { setTodayEntry(te); applyEntry(te); }
     }
     setLoading(false);
-  }, [previewUserId]);
+  }, [activeUserId, isPreviewMode]);
 
   function applyEntry(entry: ActivityEntry) {
     setD2d({ knocks: entry.knocks, contacts: entry.contacts, bills: entry.bills, sales: entry.sales });
@@ -143,7 +143,7 @@ export default function ActivityClient({ session }: { session: Session }) {
         event: '*',
         schema: 'public',
         table: 'activity_entries',
-        filter: `agent_id=eq.${effectiveUserId}`,
+        filter: `agent_id=eq.${activeUserId}`,
       }, (payload) => {
         const entry = payload.new as ActivityEntry;
         if (!entry?.date) return;
@@ -157,7 +157,7 @@ export default function ActivityClient({ session }: { session: Session }) {
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [effectiveUserId, date]);
+  }, [activeUserId, date]);
 
   // +/- click → immediate API call
   const handleIncrement = async (field: string, delta: 1 | -1) => {

@@ -102,3 +102,16 @@ export function PreviewRoleProvider({ children }: { children: ReactNode }) {
 export function usePreviewRole(): Ctx {
   return useContext(PreviewRoleContext);
 }
+
+/**
+ * Centralized hook: returns the ID that all data queries should use.
+ * - If "Ver como" targets a specific user → that user's ID
+ * - Otherwise → the logged-in session user's ID
+ */
+export function useActiveUserId(sessionUserId: string) {
+  const { previewUserId } = usePreviewRole();
+  return {
+    activeUserId: previewUserId ?? sessionUserId,
+    isPreviewMode: !!previewUserId,
+  };
+}

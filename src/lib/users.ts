@@ -117,7 +117,7 @@ export async function updateUser(
   if (updates.must_change_password !== undefined) patch.must_change_password = updates.must_change_password;
   if (updates.hire_date !== undefined) patch.hire_date = updates.hire_date;
   if (updates.is_active !== undefined) patch.is_active = updates.is_active;
-  console.log('[updateUser] id:', id, 'patch:', JSON.stringify(patch));
+  console.log('[updateUser] id:', id, 'manager_id in patch:', 'manager_id' in patch ? patch.manager_id : '(NOT INCLUDED)', 'full patch:', JSON.stringify(patch));
   const { error } = await supabase.from('users').update(patch).eq('id', id);
   if (error) {
     if (error.code === '23505') {

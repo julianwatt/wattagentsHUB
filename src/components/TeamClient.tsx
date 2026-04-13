@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Session } from 'next-auth';
 import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
-import { usePreviewRole } from './PreviewRoleContext';
+import { usePreviewRole, useActiveUserId } from './PreviewRoleContext';
 import { fmtDate } from '@/lib/i18n';
 import { ActivityEntryWithAgent, effectivenessRate } from '@/lib/activity';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
@@ -54,7 +54,7 @@ function roleLabel(role: string, t: (k: string) => string): string {
 
 export default function TeamClient({ session }: { session: Session }) {
   const { t, lang } = useLanguage();
-  const { previewUserId } = usePreviewRole();
+  const { activeUserId, isPreviewMode } = useActiveUserId(session.user.id);
   const [data, setData] = useState<TeamData | null>(null);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
@@ -78,12 +78,13 @@ export default function TeamClient({ session }: { session: Session }) {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const url = previewUserId ? `/api/team?asUser=${previewUserId}` : '/api/team';
+      console.log('[Team] fetching data', { activeUserId, isPreviewMode });
+      const url = isPreviewMode ? `/api/team?asUser=${activeUserId}` : '/api/team';
       const res = await fetch(url);
       if (res.ok) setData(await res.json());
       setLoading(false);
     })();
-  }, [previewUserId]);
+  }, [activeUserId, isPreviewMode]);
 
   // ── Derived data ─────────────────────────────────────────────────────────
   const members = data?.members ?? [];
