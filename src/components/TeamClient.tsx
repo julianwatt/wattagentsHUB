@@ -154,17 +154,24 @@ export default function TeamClient({ session }: { session: Session }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [byAgent, members]);
 
-  // First/last sale of today
+  // First/last sale of today (fallback to yesterday if no sales today)
   const todaysSales = useMemo(() => {
     const todayStr = today();
-    const todayEntries = memberEntries.filter((e) => e.date === todayStr && e.sales > 0);
-    if (todayEntries.length === 0) return null;
-    const withTime = todayEntries
+    let salesEntries = memberEntries.filter((e) => e.date === todayStr && e.sales > 0);
+    let dateUsed = todayStr;
+    if (salesEntries.length === 0) {
+      const yd = new Date(); yd.setDate(yd.getDate() - 1);
+      const yesterdayStr = yd.toISOString().slice(0, 10);
+      salesEntries = memberEntries.filter((e) => e.date === yesterdayStr && e.sales > 0);
+      dateUsed = yesterdayStr;
+    }
+    if (salesEntries.length === 0) return null;
+    const withTime = salesEntries
       .map((e) => ({ entry: e, time: e.last_activity_at ?? e.first_activity_at ?? null }))
       .filter((x): x is { entry: ActivityEntryWithAgent; time: string } => !!x.time)
       .sort((a, b) => a.time.localeCompare(b.time));
     if (withTime.length === 0) return null;
-    return { first: withTime[0], last: withTime[withTime.length - 1] };
+    return { first: withTime[0], last: withTime[withTime.length - 1], date: dateUsed };
   }, [memberEntries]);
 
   // Top rep: week / month / year (sales)
@@ -189,7 +196,8 @@ export default function TeamClient({ session }: { session: Session }) {
       if (!a) return null;
       return { agent: a, sales: topVal };
     };
-    return { week: sumSalesSince(wk), month: sumSalesSince(mo), year: sumSalesSince(yr) };
+    const todayStr = today();
+    return { week: sumSalesSince(wk), month: sumSalesSince(mo), year: sumSalesSince(yr), day: sumSalesSince(todayStr) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memberEntries, members]);
 
@@ -220,73 +228,88 @@ export default function TeamClient({ session }: { session: Session }) {
           </div>
         ) : (
           <>
-            {/* ── Rankings (includes Top Rep) ── */}
-            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
-              <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-4">{t('team.rankingsTitle')}</h3>
-              {ranking && (
-                <div className="space-y-4">
-                  {/* Top Performers header */}
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">{t('team.topPerformers')}</p>
-                  <div className="flex flex-wrap gap-3">
-                    <RankCard
-                      label={`${t('team.bestAgent')} · ${t('team.metricSales')}`}
-                      sub={t('team.rankSubBestSales')}
-                      name={ranking.bestSales.agent?.name ?? '—'}
-                      value={ranking.bestSales.sales}
-                      accent="emerald"
-                      icon="🥇"
-                    />
-                    <RankCard
-                      label={`${t('team.bestAgent')} · ${t('team.metricInteractions')}`}
-                      sub={t('team.rankSubBestInteractions')}
-                      name={ranking.bestInteractions.agent?.name ?? '—'}
-                      value={ranking.bestInteractions.interactions}
-                      accent="sky"
-                      icon="🚪"
-                    />
-                    <RankCard
-                      label={`${t('team.bestAgent')} · ${t('team.metricEffectiveness')}`}
-                      sub={t('team.rankSubBestEffectiveness')}
-                      name={ranking.bestEffectiveness.agent?.name ?? '—'}
-                      value={`${ranking.bestEffectiveness.effectiveness.toFixed(1)}%`}
-                      accent="violet"
-                      icon="🎯"
-                    />
-                  </div>
-                  {/* Lowest performer — no header */}
-                  <div className="flex flex-wrap gap-3">
-                    <RankCard
-                      label={`${t('team.worstAgent')} · ${t('team.metricSales')}`}
-                      sub={t('team.rankSubWorstSales')}
-                      name={ranking.worstSales.agent?.name ?? '—'}
-                      value={ranking.worstSales.sales}
-                      accent="rose"
-                      icon="📉"
-                    />
-                  </div>
-                  {/* Top Rep cards */}
-                  <div className="flex flex-wrap gap-3">
-                    <TopRepCard label={`🏆 ${t('team.topWeek')}`} entry={topRep.week} />
-                    <TopRepCard label={`🏆 ${t('team.topMonth')}`} entry={topRep.month} />
-                    <TopRepCard label={`🏆 ${t('team.topYear')}`} entry={topRep.year} />
-                  </div>
+            {/* ── Rankings + First/Last sale ── */}
+            <div className="flex flex-col lg:flex-row gap-5">
+              {/* Rankings card — 80% desktop */}
+              <div className="w-full lg:w-4/5">
+                <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5 h-full">
+                  <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-4">{t('team.rankingsTitle')}</h3>
+                  {ranking && (
+                    <div className="space-y-4">
+                      {/* Row 1: 4 rank cards */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <RankCard
+                          label={`${t('team.bestAgent')} · ${t('team.metricSales')}`}
+                          sub={t('team.rankSubBestSales')}
+                          name={ranking.bestSales.agent?.name ?? '—'}
+                          value={ranking.bestSales.sales}
+                          accent="emerald"
+                          icon="🥇"
+                        />
+                        <RankCard
+                          label={`${t('team.bestAgent')} · ${t('team.metricInteractions')}`}
+                          sub={t('team.rankSubBestInteractions')}
+                          name={ranking.bestInteractions.agent?.name ?? '—'}
+                          value={ranking.bestInteractions.interactions}
+                          accent="sky"
+                          icon="🚪"
+                        />
+                        <RankCard
+                          label={`${t('team.bestAgent')} · ${t('team.metricEffectiveness')}`}
+                          sub={t('team.rankSubBestEffectiveness')}
+                          name={ranking.bestEffectiveness.agent?.name ?? '—'}
+                          value={`${ranking.bestEffectiveness.effectiveness.toFixed(1)}%`}
+                          accent="violet"
+                          icon="🎯"
+                        />
+                        <RankCard
+                          label={`${t('team.worstAgent')} · ${t('team.metricSales')}`}
+                          sub={t('team.rankSubWorstSales')}
+                          name={ranking.worstSales.agent?.name ?? '—'}
+                          value={ranking.worstSales.sales}
+                          accent="rose"
+                          icon="📉"
+                        />
+                      </div>
+                      {/* Separator */}
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">{t('team.topPerformers')}</p>
+                        <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                      </div>
+                      {/* Row 2: Top month, day, year */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <TopRepCard label={`🏆 ${t('team.topMonth')}`} entry={topRep.month} />
+                        <TopRepCard label={`🏆 ${t('team.topDay')}`} entry={topRep.day} />
+                        <TopRepCard label={`🏆 ${t('team.topYear')}`} entry={topRep.year} />
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-
-              {todaysSales && (
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <div className="flex-1 min-w-[180px] rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/40 px-4 py-3">
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">{t('team.firstSale')}</p>
-                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5">{todaysSales.first.entry.agent_name}</p>
-                    <p className="text-xs text-gray-500">🕐 {fmtTime(todaysSales.first.time)}</p>
-                  </div>
-                  <div className="flex-1 min-w-[180px] rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/40 px-4 py-3">
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">{t('team.lastSale')}</p>
-                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5">{todaysSales.last.entry.agent_name}</p>
-                    <p className="text-xs text-gray-500">🕐 {fmtTime(todaysSales.last.time)}</p>
-                  </div>
+              </div>
+              {/* First/Last sale card — 20% desktop */}
+              <div className="w-full lg:w-1/5">
+                <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5 h-full">
+                  {todaysSales ? (
+                    <div className="space-y-4">
+                      <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/40 px-4 py-3">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">{t('team.firstSale')}</p>
+                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5">{findAgent(todaysSales.first.entry.agent_id)?.name ?? todaysSales.first.entry.agent_name}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">🕐 {fmtTime(todaysSales.first.time)}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{fmtDate(todaysSales.date, lang)}</p>
+                      </div>
+                      <div className="rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/40 px-4 py-3">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">{t('team.lastSale')}</p>
+                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5">{findAgent(todaysSales.last.entry.agent_id)?.name ?? todaysSales.last.entry.agent_name}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">🕐 {fmtTime(todaysSales.last.time)}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{fmtDate(todaysSales.date, lang)}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-400 text-center py-4">—</p>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
 
             {/* ── Roster + Mini Charts — same row ── */}

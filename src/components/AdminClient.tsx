@@ -136,7 +136,7 @@ export default function AdminClient({ session }: { session: Session }) {
 
         <div className="grid md:grid-cols-3 gap-5">
           {/* Add user form */}
-          <div className="md:col-span-1 max-w-sm mx-auto md:max-w-none md:mx-0">
+          <div className="md:col-span-1">
             <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
               <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-5 flex items-center gap-2 text-sm">
                 <svg className="w-4 h-4" style={{ color: 'var(--primary)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
@@ -314,6 +314,7 @@ export default function AdminClient({ session }: { session: Session }) {
 
       {editing && (
         <EditUserModal
+          key={editing.id}
           user={editing}
           users={users}
           viewerRole={viewerRole}
