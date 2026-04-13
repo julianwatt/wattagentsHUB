@@ -67,6 +67,16 @@ export async function POST(req: NextRequest) {
       console.log('[users POST] no email provided, skipping send');
     }
 
+    // Notify admin when a new user is created
+    await supabase.from('admin_notifications').insert({
+      type: 'user_activated',
+      user_id: user.id,
+      user_name: user.name,
+      user_username: user.username,
+      data: { actor_name: session.user.name },
+      status: 'pending',
+    });
+
     return NextResponse.json({ ...user, tempPassword, emailSent, emailDebug }, { status: 201 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Error creating user';

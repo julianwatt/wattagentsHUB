@@ -45,18 +45,18 @@ export async function PATCH(req: NextRequest) {
   const { error } = await supabase.from('users').update({ is_active }).eq('id', id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Notify admin when a user is deactivated
-  if (!is_active) {
-    const { data: user } = await supabase.from('users').select('name, username').eq('id', id).single();
-    if (user) {
-      await supabase.from('admin_notifications').insert({
-        type: 'user_deactivated',
-        user_id: id,
-        user_name: user.name,
-        user_username: user.username,
-        status: 'pending',
-      });
-    }
+  // Notify admin when a user is deactivated or reactivated
+  const notifType = is_active ? 'user_activated' : 'user_deactivated';
+  const { data: user } = await supabase.from('users').select('name, username').eq('id', id).single();
+  if (user) {
+    await supabase.from('admin_notifications').insert({
+      type: notifType,
+      user_id: id,
+      user_name: user.name,
+      user_username: user.username,
+      data: { actor_name: session.user.name },
+      status: 'pending',
+    });
   }
 
   return NextResponse.json({ ok: true });

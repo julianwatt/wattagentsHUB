@@ -19,7 +19,7 @@ export default withAuth(
     if (pathname.startsWith('/admin') && role !== 'admin' && role !== 'ceo') {
       return NextResponse.redirect(new URL('/activity', req.url));
     }
-    if (pathname.startsWith('/notifications') && role !== 'admin') {
+    if (pathname.startsWith('/notifications') && role !== 'admin' && role !== 'ceo') {
       return NextResponse.redirect(new URL('/activity', req.url));
     }
     if (pathname.startsWith('/team') && role === 'agent') {

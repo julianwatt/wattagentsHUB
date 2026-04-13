@@ -132,23 +132,26 @@ export default function AppLayout({ session, children }: Props) {
   ];
 
   // ── Notification bell (admin only) ──
-  interface NotifItem { id: string; type: string; user_name?: string; user_username?: string; status: string; created_at: string; }
+  interface NotifItem { id: string; type: string; user_name?: string; user_username?: string; data?: { actor_name?: string } | null; status: string; created_at: string; }
   const notifTypeLabel = (type: string) => {
     if (type === 'password_reset') return t('notifications.passwordReset');
     if (type === 'password_change') return t('notifications.passwordChange');
     if (type === 'user_deactivated') return t('notifications.userDeactivated');
+    if (type === 'user_activated') return t('notifications.userActivated');
     return type;
   };
   const notifBadgeColor = (type: string) => {
     if (type === 'password_reset') return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300';
     if (type === 'password_change') return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300';
     if (type === 'user_deactivated') return 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300';
+    if (type === 'user_activated') return 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300';
     return 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300';
   };
   const notifPreviewText = (n: NotifItem) => {
     if (n.type === 'password_reset') return `${n.user_name ?? '—'} ${t('admin.notifPreviewReset')}`;
     if (n.type === 'password_change') return `${n.user_name ?? '—'} ${t('admin.notifPreviewChange')}`;
     if (n.type === 'user_deactivated') return `${n.user_name ?? '—'} ${t('admin.notifPreviewDeactivated')}`;
+    if (n.type === 'user_activated') return `${n.user_name ?? '—'} ${t('admin.notifPreviewActivated')}`;
     return n.user_name ?? '—';
   };
   const [notifItems, setNotifItems] = useState<NotifItem[]>([]);

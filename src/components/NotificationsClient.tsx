@@ -26,6 +26,7 @@ interface NotifItem {
   type: string;
   user_name: string | null;
   user_username: string | null;
+  data: { actor_name?: string } | null;
   status: string;
   created_at: string;
 }
@@ -93,6 +94,7 @@ export default function NotificationsClient({ session }: { session: Session }) {
     if (type === 'password_reset') return t('notifications.passwordReset');
     if (type === 'password_change') return t('notifications.passwordChange');
     if (type === 'user_deactivated') return t('notifications.userDeactivated');
+    if (type === 'user_activated') return t('notifications.userActivated');
     return type;
   };
 
@@ -100,13 +102,21 @@ export default function NotificationsClient({ session }: { session: Session }) {
     if (type === 'password_reset') return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300';
     if (type === 'password_change') return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300';
     if (type === 'user_deactivated') return 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300';
+    if (type === 'user_activated') return 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300';
     return 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300';
   };
 
   const notifDesc = (n: NotifItem) => {
     if (n.type === 'password_reset') return t('notifications.descReset');
     if (n.type === 'password_change') return `${t('notifications.descAdminChange')} ${n.user_name ?? '—'}`;
-    if (n.type === 'user_deactivated') return t('notifications.descDeactivated');
+    if (n.type === 'user_deactivated') {
+      const actor = n.data?.actor_name;
+      return actor ? t('notifications.descDeactivatedBy').replace('{actor}', actor) : t('notifications.descDeactivated');
+    }
+    if (n.type === 'user_activated') {
+      const actor = n.data?.actor_name;
+      return actor ? t('notifications.descActivatedBy').replace('{actor}', actor) : t('notifications.descActivated');
+    }
     return '';
   };
 
