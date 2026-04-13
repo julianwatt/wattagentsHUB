@@ -38,26 +38,20 @@ export async function sendTempPasswordEmailDetailed(
   username: string,
   tempPassword: string,
 ): Promise<EmailSendResult> {
-  // ── 1. Primary: Supabase Auth invite ──────────────────────────────
+  // ── 1. Primary: Resend API (sends our branded HTML template) ──
+  const resendResult = await sendViaResendDetailed(to, name, username, tempPassword);
+  if (resendResult.ok) return resendResult;
+
+  // ── 2. Fallback: Supabase Auth invite (sends default template) ──
   const admin = getSupabaseAdmin();
   if (admin) {
+    console.warn('[email] Resend failed, trying Supabase invite fallback');
     const inviteData = { name, username, temp_password: tempPassword, app: 'Watt Distributors' };
     const sent = await supabaseInviteWithRetry(admin, to, inviteData);
-    if (sent) {
-      return { ok: true, path: 'supabase', stage: 'supabase_invite_sent' };
-    }
-    console.warn('[email] Supabase invite path failed for new user, trying Resend');
-    const fallback = await sendViaResendDetailed(to, name, username, tempPassword);
-    return { ...fallback, stage: `supabase_invite_failed -> ${fallback.stage}` };
+    if (sent) return { ok: true, path: 'supabase', stage: 'supabase_invite_sent' };
   }
-  console.warn('[email] SUPABASE_SERVICE_ROLE_KEY not set — skipping Supabase invite path');
 
-  // ── 2. Fallback: Resend HTTP API ─────────────────────────────────
-  const fallback = await sendViaResendDetailed(to, name, username, tempPassword);
-  return {
-    ...fallback,
-    stage: `no_supabase_admin -> ${fallback.stage}`,
-  };
+  return { ...resendResult, stage: `all_paths_failed -> ${resendResult.stage}` };
 }
 
 async function sendViaResend(
@@ -83,45 +77,22 @@ async function sendViaResendDetailed(
   }
 
   const from = process.env.RESEND_FROM || 'Watt Distributors <onboarding@resend.dev>';
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://watt.local';
-
-  const html = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
-      <div style="text-align: center; padding: 24px 0;">
-        <span style="font-family: Georgia, serif; font-size: 48px; font-weight: 800; color: #c2994b;">W</span>
-        <span style="font-family: Georgia, serif; font-size: 28px; font-weight: 700; color: #c2994b; margin-left: 8px;">WATT</span>
-      </div>
-      <h2 style="color: #1a1a1a;">Bienvenido, ${escapeHtml(name)}</h2>
-      <p style="color: #555; line-height: 1.6;">Se ha creado tu cuenta en la plataforma de Watt Distributors. Estos son tus datos de acceso:</p>
-      <div style="background: #f5f5f5; border-radius: 12px; padding: 16px 20px; margin: 16px 0;">
-        ${username ? `<p style="margin: 4px 0;"><strong>Usuario:</strong> ${escapeHtml(username)}</p>` : ''}
-        <p style="margin: 4px 0;"><strong>Contraseña temporal:</strong> <code style="background: #fff; padding: 2px 8px; border-radius: 4px; font-size: 16px;">${escapeHtml(tempPassword)}</code></p>
-      </div>
-      <p style="color: #555; line-height: 1.6;">Por seguridad, deberás cambiar esta contraseña la primera vez que inicies sesión.</p>
-      <a href="${appUrl}/login" style="display: inline-block; background: #c2994b; color: #fff; padding: 12px 24px; border-radius: 12px; text-decoration: none; font-weight: bold; margin-top: 12px;">Iniciar sesión</a>
-      <p style="color: #999; font-size: 12px; margin-top: 32px;">Si no esperabas este correo, puedes ignorarlo.</p>
-    </div>
-  `;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://watt.local';
+  const html = buildResetEmailHtml(name, username, tempPassword, appUrl);
 
   try {
+    console.log('[email] Sending welcome email via Resend to', to);
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from,
-        to,
-        subject: 'Tu cuenta en Watt Distributors',
-        html,
-      }),
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to, subject: 'Tu cuenta en Watt Distributors · Your Watt Distributors Account', html }),
     });
+    const body = await res.text();
     if (!res.ok) {
-      const body = await res.text();
       console.error('[email] Resend HTTP error:', res.status, body);
       return { ok: false, path: 'resend', stage: 'resend_http_error', detail: `${res.status}: ${body}` };
     }
+    console.log('[email] Resend welcome email sent:', res.status, body);
     return { ok: true, path: 'resend', stage: 'resend_sent' };
   } catch (err) {
     console.error('[email] Resend threw:', err);
@@ -140,61 +111,52 @@ export async function sendPasswordResetEmail(
   tempPassword: string,
 ): Promise<boolean> {
   console.log('[email] sendPasswordResetEmail called', { to, name, username });
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://watt.local';
 
-  // ── 1. Primary: Supabase Auth invite (uses Supabase's built-in SMTP) ──
-  // The invite template must be customized in Supabase Dashboard > Auth > Email Templates
-  // to render {{ .Data.temp_password }}, {{ .Data.username }}, etc.
-  const admin = getSupabaseAdmin();
-  if (admin) {
-    const inviteData = { name, username, temp_password: tempPassword, app: 'Watt Distributors' };
-    const sent = await supabaseInviteWithRetry(admin, to, inviteData);
-    if (sent) return true;
-    console.warn('[email] Supabase invite path failed, trying fallbacks');
-  } else {
-    console.warn('[email] No SUPABASE_SERVICE_ROLE_KEY — skipping Supabase path for reset');
+  // ── 1. Primary: Resend API (sends our branded HTML template) ──
+  const apiKey = process.env.RESEND_API_KEY;
+  if (apiKey) {
+    const from = process.env.RESEND_FROM || 'Watt Distributors <onboarding@resend.dev>';
+    const html = buildResetEmailHtml(name, username, tempPassword, appUrl);
+    try {
+      console.log('[email] Sending reset email via Resend to', to, 'from', from);
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from, to, subject: 'Contraseña restablecida · Password Reset — Watt Distributors', html }),
+      });
+      const body = await res.text();
+      if (res.ok) {
+        console.log('[email] Resend reset email sent successfully:', res.status, body);
+        return true;
+      }
+      console.error('[email] Resend reset email error:', res.status, body);
+    } catch (err) {
+      console.error('[email] Resend reset email threw:', err);
+    }
   }
 
-  // ── 2. Fallback: Nodemailer SMTP (Gmail / custom SMTP) ──
+  // ── 2. Fallback: Nodemailer SMTP ──
   const smtpHost = process.env.SMTP_HOST;
   const smtpUser = process.env.SMTP_USER;
   const smtpPass = process.env.SMTP_PASSWORD;
   if (smtpHost && smtpUser && smtpPass) {
-    console.log('[email] SMTP credentials found, attempting SMTP send via', smtpHost);
+    console.log('[email] Trying SMTP fallback via', smtpHost);
     const sent = await sendResetViaSMTP(to, name, username, tempPassword);
     if (sent) return true;
-    console.warn('[email] SMTP send failed, falling through to Resend');
   }
 
-  // ── 3. Fallback: Resend HTTP API ──
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    console.warn('[email] RESEND_API_KEY not set — no more email paths available');
-    console.warn('[email] Available email env keys:', Object.keys(process.env).filter(k => k.includes('SMTP') || k.includes('RESEND') || k.includes('EMAIL') || k.includes('MAIL')).join(', ') || '(none)');
-    return false;
+  // ── 3. Last resort: Supabase invite (sends default template, not branded) ──
+  const admin = getSupabaseAdmin();
+  if (admin) {
+    console.warn('[email] Trying Supabase invite as last resort (default template)');
+    const inviteData = { name, username, temp_password: tempPassword, app: 'Watt Distributors' };
+    const sent = await supabaseInviteWithRetry(admin, to, inviteData);
+    if (sent) return true;
   }
 
-  const from = process.env.RESEND_FROM || 'Watt Distributors <onboarding@resend.dev>';
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://watt.local';
-  const html = buildResetEmailHtml(name, username, tempPassword, appUrl);
-
-  try {
-    console.log('[email] Sending reset email via Resend to', to, 'from', from);
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to, subject: 'Contraseña restablecida · Password Reset — Watt Distributors', html }),
-    });
-    const body = await res.text();
-    if (!res.ok) {
-      console.error('[email] Resend reset email error:', res.status, body);
-      return false;
-    }
-    console.log('[email] Resend reset email sent successfully:', res.status, body);
-    return true;
-  } catch (err) {
-    console.error('[email] Resend reset email threw:', err);
-    return false;
-  }
+  console.error('[email] All email paths failed for', to);
+  return false;
 }
 
 /**
