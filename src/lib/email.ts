@@ -127,12 +127,12 @@ export async function sendPasswordResetEmail(
     if (sent) return true;
   }
 
-  // ── 3. Last resort: Supabase invite ──
+  // ── 3. Last resort: Supabase invite (delete-first to avoid stale data) ──
   const admin = getSupabaseAdmin();
   if (admin) {
-    console.warn('[email] Trying Supabase invite as last resort');
+    console.warn('[email] Trying Supabase invite (delete-first) as last resort');
     const inviteData = { name, username, temp_password: tempPassword, app: 'Watt Distributors' };
-    const sent = await supabaseInviteWithRetry(admin, to, inviteData);
+    const sent = await supabaseResetInvite(admin, to, inviteData);
     if (sent) return true;
   }
 
@@ -181,6 +181,38 @@ async function supabaseInviteWithRetry(
     return false;
   } catch (err) {
     console.error('[email] supabaseInviteWithRetry threw:', err);
+    return false;
+  }
+}
+
+/**
+ * For password resets: DELETES the existing auth user first, then invites
+ * with fresh data. This prevents Supabase from resending stale invite data.
+ */
+async function supabaseResetInvite(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  email: string,
+  data: Record<string, string>,
+): Promise<boolean> {
+  try {
+    // Always delete existing auth user first to avoid stale invite data
+    const { data: { users } } = await admin.auth.admin.listUsers();
+    const existing = users.find((u) => u.email === email);
+    if (existing) {
+      await admin.auth.admin.deleteUser(existing.id);
+      console.log('[email] Deleted auth user', existing.id, 'before reset invite for', email);
+    }
+
+    // Now invite fresh — email will contain the correct temp_password
+    const { data: inviteResult, error } = await admin.auth.admin.inviteUserByEmail(email, { data });
+    if (error) {
+      console.error('[email] Reset invite failed:', error.message);
+      return false;
+    }
+    console.log('[email] Reset invite sent to', email, 'user id:', inviteResult?.user?.id);
+    return true;
+  } catch (err) {
+    console.error('[email] supabaseResetInvite threw:', err);
     return false;
   }
 }
