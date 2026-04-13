@@ -33,6 +33,26 @@ export default function AppLayout({ session, children }: Props) {
   const { theme, toggleTheme } = useTheme();
   const { realRole, previewRole, previewUserId, previewUserName, effectiveRole, setPreviewRole, setPreviewUser } = usePreviewRole();
 
+  // ── Fetch real user name + hire_date from DB ──
+  const [dbUserName, setDbUserName] = useState<string>(session.user.name ?? '');
+  const [hireDate, setHireDate] = useState<string | null>(null);
+  useEffect(() => {
+    (async () => {
+      try {
+        const sb = getSupabaseBrowser();
+        const { data } = await sb
+          .from('users')
+          .select('name, hire_date')
+          .eq('id', session.user.id)
+          .single();
+        if (data) {
+          if (data.name) setDbUserName(data.name);
+          if (data.hire_date) setHireDate(data.hire_date);
+        }
+      } catch {}
+    })();
+  }, [session.user.id, session.user.name]);
+
   // Fetch active users for "Ver como" individual selection
   interface PreviewUser { id: string; name: string; role: string; }
   const [previewUsers, setPreviewUsers] = useState<PreviewUser[]>([]);
@@ -56,13 +76,11 @@ export default function AppLayout({ session, children }: Props) {
   // Navigate to appropriate page when preview role changes
   const handlePreviewChange = (value: string) => {
     if (!value) {
-      // Exiting preview
       setPreviewUser(null, null, null);
       setPreviewRole(null);
       router.push('/admin');
       return;
     }
-    // Check if it's a user ID (starts with "user:")
     if (value.startsWith('user:')) {
       const userId = value.slice(5);
       const u = previewUsers.find((p) => p.id === userId);
@@ -74,13 +92,13 @@ export default function AppLayout({ session, children }: Props) {
       }
       return;
     }
-    // It's a role
     const newRole = value as Role;
     setPreviewRole(newRole);
     if (newRole === 'agent') router.push('/activity');
     else if (newRole === 'jr_manager' || newRole === 'sr_manager') router.push('/activity');
     else if (newRole === 'ceo') router.push('/dashboard');
   };
+
   const realIsAdmin = (realRole ?? session.user.role) === 'admin';
   const role = (effectiveRole ?? session.user.role) as Role;
   const canSeeAdmin = role === 'admin' || role === 'ceo';
@@ -133,7 +151,6 @@ export default function AppLayout({ session, children }: Props) {
   useEffect(() => {
     fetchNotifs();
     if (!isAdminReal || previewRole) return;
-    // Supabase Realtime subscription
     const sb = getSupabaseBrowser();
     const channel = sb.channel('admin-notifs').on(
       'postgres_changes',
@@ -143,7 +160,7 @@ export default function AppLayout({ session, children }: Props) {
     return () => { sb.removeChannel(channel); };
   }, [fetchNotifs, isAdminReal, previewRole]);
 
-  // Close dropdown on outside click
+  // Close bell dropdown on outside click
   useEffect(() => {
     function onClickOut(e: MouseEvent) {
       if (bellRef.current && !bellRef.current.contains(e.target as Node)) setNotifOpen(false);
@@ -152,12 +169,44 @@ export default function AppLayout({ session, children }: Props) {
     return () => document.removeEventListener('mousedown', onClickOut);
   }, []);
 
+  // ── Hamburger menu state ──
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close hamburger on outside click
+  useEffect(() => {
+    function onClickOut(e: MouseEvent) {
+      if (menuOpen && menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    }
+    document.addEventListener('mousedown', onClickOut);
+    return () => document.removeEventListener('mousedown', onClickOut);
+  }, [menuOpen]);
+
+  // Close hamburger on route change
+  useEffect(() => { setMenuOpen(false); }, [pathname]);
+
   const roleLabel =
     role === 'admin' ? t('nav.administrator')
     : role === 'ceo' ? t('nav.ceo')
     : role === 'sr_manager' ? t('admin.roleSrManager')
     : role === 'jr_manager' ? t('admin.roleJrManager')
     : t('nav.agent');
+
+  // ── Tenure calculation ──
+  const tenureText = (() => {
+    if (!hireDate) return '';
+    const start = new Date(hireDate);
+    const now = new Date();
+    const diffMs = now.getTime() - start.getTime();
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (days < 14) return `${days} ${t('nav.tenureDays')}`;
+    const weeks = Math.floor(days / 7);
+    if (days < 90) return `${weeks} ${t('nav.tenureWeeks')}`;
+    const months = Math.floor(days / 30.44);
+    if (months < 24) return `${months} ${t('nav.tenureMonths')}`;
+    const years = (days / 365.25).toFixed(1);
+    return `${years} ${t('nav.tenureYears')}`;
+  })();
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col transition-colors">
@@ -179,6 +228,7 @@ export default function AppLayout({ session, children }: Props) {
           </button>
         </div>
       )}
+
       {/* Top navbar */}
       <header className="sticky z-40 shadow-sm" style={{ backgroundColor: 'var(--dark)', top: realIsAdmin && previewRole ? '32px' : 0 }}>
         <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-2">
@@ -212,13 +262,13 @@ export default function AppLayout({ session, children }: Props) {
 
           {/* Controls */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            {/* Preview-as selector — admin only, visible on all screens */}
+            {/* Preview-as selector — admin only, desktop only */}
             {realIsAdmin && (
               <select
                 value={previewUserId ? `user:${previewUserId}` : (previewRole ?? '')}
                 onChange={(e) => handlePreviewChange(e.target.value)}
                 title={t('admin.viewAs')}
-                className="h-8 px-1 sm:px-2 rounded-lg text-[10px] sm:text-[11px] font-bold bg-white/10 text-white hover:bg-white/20 border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 max-w-[130px] sm:max-w-[180px]"
+                className="hidden md:block h-8 px-2 rounded-lg text-[11px] font-bold bg-white/10 text-white hover:bg-white/20 border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 max-w-[180px]"
               >
                 <option value="" className="text-gray-900">
                   👁️ {t('admin.viewAs')}
@@ -240,6 +290,15 @@ export default function AppLayout({ session, children }: Props) {
                 )}
               </select>
             )}
+
+            {/* Language toggle */}
+            <button
+              onClick={() => setLang(lang === 'es' ? 'en' : 'es')}
+              className="h-8 px-2 rounded-lg text-xs font-bold text-white/70 hover:text-white hover:bg-white/10 transition-colors border border-white/20"
+            >
+              {lang === 'es' ? 'EN' : 'ES'}
+            </button>
+
             {/* Notification bell (admin only) */}
             {isAdminReal && !previewRole && (
               <div ref={bellRef} className="relative">
@@ -303,40 +362,92 @@ export default function AppLayout({ session, children }: Props) {
               {theme === 'dark' ? <SunIcon className="w-4 h-4" /> : <MoonIcon className="w-4 h-4" />}
             </button>
 
-            {/* Language toggle */}
+            {/* Hamburger button — mobile only */}
             <button
-              onClick={() => setLang(lang === 'es' ? 'en' : 'es')}
-              className="h-8 px-2 rounded-lg text-xs font-bold text-white/70 hover:text-white hover:bg-white/10 transition-colors border border-white/20"
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+              aria-label={t('nav.menu')}
             >
-              {lang === 'es' ? 'EN' : 'ES'}
+              <HamburgerIcon className="w-5 h-5" />
             </button>
 
-            {/* User + logout */}
-            <div className="flex items-center gap-2 pl-1 border-l border-white/20 ml-1">
+            {/* Desktop: User name + logout */}
+            <div className="hidden md:flex items-center gap-2 pl-1 border-l border-white/20 ml-1">
               <div className="text-right leading-none">
-                <p className="text-xs font-semibold text-white max-w-[80px] sm:max-w-[100px] truncate">{session.user.name}</p>
-                <p className="text-[10px] text-white/50 hidden sm:block">{roleLabel}</p>
+                <p className="text-xs font-semibold text-white max-w-[100px] truncate">{dbUserName || session.user.name}</p>
+                <p className="text-[10px] text-white/50">{roleLabel}</p>
               </div>
+              <button
+                onClick={() => signOut({ callbackUrl: '/login' })}
+                title={t('nav.logout')}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-red-500/20 hover:text-red-300 transition-colors"
+              >
+                <LogoutIcon className="w-4 h-4" />
+              </button>
             </div>
-            <button
-              onClick={() => signOut({ callbackUrl: '/login' })}
-              title={t('nav.logout')}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-red-500/20 hover:text-red-300 transition-colors"
-            >
-              <LogoutIcon className="w-4 h-4" />
-            </button>
           </div>
         </div>
       </header>
 
-      {/* Main content with bottom padding on mobile for tab bar */}
-      <main className="flex-1 pb-16 md:pb-0 min-h-0">
-        {children}
-      </main>
+      {/* ── Mobile slide-out hamburger menu ── */}
+      {/* Overlay */}
+      <div
+        className={`md:hidden fixed inset-0 z-50 bg-black/40 transition-opacity duration-300 ${menuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+        onClick={() => setMenuOpen(false)}
+      />
+      {/* Panel */}
+      <div
+        ref={menuRef}
+        className={`md:hidden fixed top-0 right-0 z-50 h-full w-72 bg-white dark:bg-gray-900 shadow-2xl transform transition-transform duration-300 ease-in-out ${menuOpen ? 'translate-x-0' : 'translate-x-full'}`}
+      >
+        {/* Close button */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-2">
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{t('nav.menu')}</span>
+          <button
+            onClick={() => setMenuOpen(false)}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            <CloseIcon className="w-5 h-5" />
+          </button>
+        </div>
 
-      {/* Mobile bottom tab bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-40 safe-area-bottom">
-        <div className="flex">
+        {/* User info card */}
+        <div className="mx-4 mb-4 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800">
+          <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{dbUserName || session.user.name}</p>
+          <p className="text-[11px] font-semibold mt-0.5" style={{ color: 'var(--primary)' }}>{roleLabel}</p>
+          {tenureText && (
+            <p className="text-[10px] text-gray-400 mt-0.5">{tenureText}</p>
+          )}
+        </div>
+
+        {/* "Ver como" selector — admin only, inside hamburger */}
+        {realIsAdmin && (
+          <div className="mx-4 mb-3">
+            <select
+              value={previewUserId ? `user:${previewUserId}` : (previewRole ?? '')}
+              onChange={(e) => { handlePreviewChange(e.target.value); setMenuOpen(false); }}
+              className="w-full h-9 px-2 rounded-xl text-[11px] font-bold bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+            >
+              <option value="">👁️ {t('admin.viewAs')}</option>
+              <optgroup label={lang === 'es' ? '— Roles —' : '— Roles —'}>
+                <option value="agent">{t('admin.roleAgent')}</option>
+                <option value="jr_manager">{t('admin.roleJrManager')}</option>
+                <option value="sr_manager">{t('admin.roleSrManager')}</option>
+                <option value="ceo">{t('admin.roleCeo')}</option>
+              </optgroup>
+              {previewUsers.length > 0 && (
+                <optgroup label={lang === 'es' ? '— Usuarios —' : '— Users —'}>
+                  {previewUsers.map((u) => (
+                    <option key={u.id} value={`user:${u.id}`}>{u.name}</option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </div>
+        )}
+
+        {/* Nav links */}
+        <nav className="px-2 space-y-0.5">
           {allNav.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href;
@@ -344,18 +455,37 @@ export default function AppLayout({ session, children }: Props) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-[10px] font-semibold transition-colors ${
-                  active ? '' : 'text-gray-400 dark:text-gray-500'
+                onClick={() => setMenuOpen(false)}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                  active
+                    ? 'text-white'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
-                style={active ? { color: 'var(--primary)' } : {}}
+                style={active ? { backgroundColor: 'var(--primary)' } : {}}
               >
                 <Icon className="w-5 h-5" />
-                <span>{t(item.key)}</span>
+                {t(item.key)}
               </Link>
             );
           })}
+        </nav>
+
+        {/* Logout at bottom */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100 dark:border-gray-800 safe-area-bottom">
+          <button
+            onClick={() => { signOut({ callbackUrl: '/login' }); setMenuOpen(false); }}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+          >
+            <LogoutIcon className="w-5 h-5" />
+            {t('nav.logout')}
+          </button>
         </div>
-      </nav>
+      </div>
+
+      {/* Main content */}
+      <main className="flex-1 min-h-0">
+        {children}
+      </main>
     </div>
   );
 }
@@ -394,4 +524,9 @@ function NotifNavIcon({ className }: { className: string }) {
 function RosterIcon({ className }: { className: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>;
 }
-
+function HamburgerIcon({ className }: { className: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>;
+}
+function CloseIcon({ className }: { className: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>;
+}

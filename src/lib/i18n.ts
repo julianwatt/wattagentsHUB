@@ -12,6 +12,11 @@ const es = {
     administrator: 'Administrador',
     ceo: 'CEO',
     roster: 'Roster',
+    menu: 'Menú',
+    tenureDays: 'días en la empresa',
+    tenureWeeks: 'semanas en la empresa',
+    tenureMonths: 'meses en la empresa',
+    tenureYears: 'años en la empresa',
   },
   auth: {
     login: 'Iniciar Sesión',
@@ -332,6 +337,11 @@ const en: typeof es = {
     administrator: 'Administrator',
     ceo: 'CEO',
     roster: 'Roster',
+    menu: 'Menu',
+    tenureDays: 'days at the company',
+    tenureWeeks: 'weeks at the company',
+    tenureMonths: 'months at the company',
+    tenureYears: 'years at the company',
   },
   auth: {
     login: 'Sign In',
