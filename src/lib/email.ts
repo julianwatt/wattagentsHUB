@@ -41,36 +41,14 @@ export async function sendTempPasswordEmailDetailed(
   // ── 1. Primary: Supabase Auth invite ──────────────────────────────
   const admin = getSupabaseAdmin();
   if (admin) {
-    try {
-      const { data, error } = await admin.auth.admin.inviteUserByEmail(to, {
-        data: {
-          name,
-          username,
-          temp_password: tempPassword,
-          app: 'Watt Distributors',
-        },
-      });
-      if (error) {
-        console.error('[email] Supabase inviteUserByEmail error:', error.message, error);
-        // fall through to Resend
-        const fallback = await sendViaResendDetailed(to, name, username, tempPassword);
-        return {
-          ...fallback,
-          stage: `supabase_invite_error -> ${fallback.stage}`,
-          detail: `${error.message}${fallback.detail ? ' | ' + fallback.detail : ''}`,
-        };
-      }
-      console.log('[email] Supabase invite sent to', to, 'user id:', data?.user?.id);
-      return { ok: true, path: 'supabase', stage: 'supabase_invite_sent', detail: data?.user?.id };
-    } catch (err) {
-      console.error('[email] Supabase invite threw:', err);
-      const fallback = await sendViaResendDetailed(to, name, username, tempPassword);
-      return {
-        ...fallback,
-        stage: `supabase_invite_threw -> ${fallback.stage}`,
-        detail: `${err instanceof Error ? err.message : String(err)}${fallback.detail ? ' | ' + fallback.detail : ''}`,
-      };
+    const inviteData = { name, username, temp_password: tempPassword, app: 'Watt Distributors' };
+    const sent = await supabaseInviteWithRetry(admin, to, inviteData);
+    if (sent) {
+      return { ok: true, path: 'supabase', stage: 'supabase_invite_sent' };
     }
+    console.warn('[email] Supabase invite path failed for new user, trying Resend');
+    const fallback = await sendViaResendDetailed(to, name, username, tempPassword);
+    return { ...fallback, stage: `supabase_invite_failed -> ${fallback.stage}` };
   }
   console.warn('[email] SUPABASE_SERVICE_ROLE_KEY not set — skipping Supabase invite path');
 
@@ -164,49 +142,14 @@ export async function sendPasswordResetEmail(
   console.log('[email] sendPasswordResetEmail called', { to, name, username });
 
   // ── 1. Primary: Supabase Auth invite (uses Supabase's built-in SMTP) ──
+  // The invite template must be customized in Supabase Dashboard > Auth > Email Templates
+  // to render {{ .Data.temp_password }}, {{ .Data.username }}, etc.
   const admin = getSupabaseAdmin();
   if (admin) {
-    try {
-      console.log('[email] Attempting Supabase invite for password reset to', to);
-      const { data, error } = await admin.auth.admin.inviteUserByEmail(to, {
-        data: {
-          name,
-          username,
-          temp_password: tempPassword,
-          app: 'Watt Distributors',
-          reset: true,
-        },
-      });
-      if (error) {
-        console.error('[email] Supabase invite error (reset):', error.message, error);
-        // If user already exists in auth.users, try updating their metadata and resending
-        if (error.message?.includes('already been registered') || error.message?.includes('already exists')) {
-          console.log('[email] User exists in auth.users, trying generateLink approach');
-          try {
-            const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
-              type: 'magiclink',
-              email: to,
-              options: { data: { name, username, temp_password: tempPassword, app: 'Watt Distributors', reset: true } },
-            });
-            if (linkError) {
-              console.error('[email] generateLink error:', linkError.message);
-            } else {
-              console.log('[email] generateLink success, link generated for', to, linkData?.properties?.action_link ? '(link present)' : '(no link)');
-              // The generateLink with magiclink type sends the email automatically via Supabase SMTP
-              return true;
-            }
-          } catch (linkErr) {
-            console.error('[email] generateLink threw:', linkErr);
-          }
-        }
-        // fall through to other paths
-      } else {
-        console.log('[email] Supabase invite sent (reset) to', to, 'user id:', data?.user?.id);
-        return true;
-      }
-    } catch (err) {
-      console.error('[email] Supabase invite threw (reset):', err);
-    }
+    const inviteData = { name, username, temp_password: tempPassword, app: 'Watt Distributors' };
+    const sent = await supabaseInviteWithRetry(admin, to, inviteData);
+    if (sent) return true;
+    console.warn('[email] Supabase invite path failed, trying fallbacks');
   } else {
     console.warn('[email] No SUPABASE_SERVICE_ROLE_KEY — skipping Supabase path for reset');
   }
@@ -250,6 +193,51 @@ export async function sendPasswordResetEmail(
     return true;
   } catch (err) {
     console.error('[email] Resend reset email threw:', err);
+    return false;
+  }
+}
+
+/**
+ * Tries inviteUserByEmail. If the user already exists in auth.users,
+ * deletes them first and re-invites so the email is always sent.
+ */
+async function supabaseInviteWithRetry(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  email: string,
+  data: Record<string, string>,
+): Promise<boolean> {
+  try {
+    console.log('[email] Attempting Supabase invite to', email);
+    const { data: inviteResult, error } = await admin.auth.admin.inviteUserByEmail(email, { data });
+    if (!error) {
+      console.log('[email] Supabase invite sent to', email, 'user id:', inviteResult?.user?.id);
+      return true;
+    }
+
+    console.warn('[email] Supabase invite error:', error.message);
+
+    // User already exists in auth.users — delete and re-invite
+    if (error.message?.includes('already') || error.status === 422) {
+      console.log('[email] User exists in auth.users, deleting to re-invite');
+      const { data: { users } } = await admin.auth.admin.listUsers();
+      const existing = users.find((u) => u.email === email);
+      if (existing) {
+        await admin.auth.admin.deleteUser(existing.id);
+        console.log('[email] Deleted auth.users entry', existing.id, 'for', email);
+      }
+      // Re-invite
+      const { data: retryResult, error: retryError } = await admin.auth.admin.inviteUserByEmail(email, { data });
+      if (retryError) {
+        console.error('[email] Re-invite failed:', retryError.message);
+        return false;
+      }
+      console.log('[email] Re-invite sent to', email, 'user id:', retryResult?.user?.id);
+      return true;
+    }
+
+    return false;
+  } catch (err) {
+    console.error('[email] supabaseInviteWithRetry threw:', err);
     return false;
   }
 }
