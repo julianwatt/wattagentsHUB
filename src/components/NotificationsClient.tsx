@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Session } from 'next-auth';
 import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
-import { fmtDate } from '@/lib/i18n';
+import { fmtDate, fmtDateTime } from '@/lib/i18n';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
 
 interface DailySummary {
@@ -249,7 +249,7 @@ export default function NotificationsClient({ session }: { session: Session }) {
                         <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${notifBadgeColor(n.type)}`}>
                           {notifLabel(n.type)}
                         </span>
-                        <span className="text-[10px] text-gray-400">{fmtDate(n.created_at, lang)}</span>
+                        <span className="text-[10px] text-gray-400">{fmtDateTime(n.created_at, lang)}</span>
                       </div>
                       <p className="text-xs font-semibold text-gray-800 dark:text-gray-100">{n.user_name ?? '—'}</p>
                       <p className="text-[11px] text-gray-500 dark:text-gray-400">

@@ -768,6 +768,22 @@ export function fmtDate(dateStr: string, lang: Lang = 'es'): string {
   return `${mmm}/${dd}/${yy}`;
 }
 
+/** Format date + time as MMM/DD/YY HH:MM (AM/PM for EN, 24h for ES) */
+export function fmtDateTime(dateStr: string, lang: Lang = 'es'): string {
+  const d = new Date(dateStr);
+  const datePart = fmtDate(dateStr, lang);
+  if (lang === 'en') {
+    let h = d.getHours();
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${datePart} ${h}:${mm} ${ampm}`;
+  }
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${datePart} ${hh}:${mm}`;
+}
+
 export function getT(lang: Lang) {
   const dict = translations[lang];
   return function t(path: string): string {

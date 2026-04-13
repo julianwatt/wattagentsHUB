@@ -7,7 +7,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLanguage } from './LanguageContext';
 import { useTheme } from './ThemeContext';
 import { usePreviewRole, Role } from './PreviewRoleContext';
-import { fmtDate } from '@/lib/i18n';
+import { fmtDate, fmtDateTime } from '@/lib/i18n';
 import WattLogo from './WattLogo';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
 
@@ -353,7 +353,7 @@ export default function AppLayout({ session, children }: Props) {
                                 <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${notifBadgeColor(n.type)}`}>
                                   {notifTypeLabel(n.type)}
                                 </span>
-                                <span className="text-[10px] text-gray-400">{fmtDate(n.created_at, lang)}</span>
+                                <span className="text-[10px] text-gray-400">{fmtDateTime(n.created_at, lang)}</span>
                               </div>
                               <p className="text-xs text-gray-600 dark:text-gray-300 truncate leading-snug">{notifPreviewText(n)}</p>
                               <p className="text-[10px] text-gray-400">@{n.user_username}</p>
