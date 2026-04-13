@@ -190,8 +190,8 @@ export default function NotificationsClient({ session }: { session: Session }) {
                   style={{ color: 'var(--primary)' }}
                 >
                   {showAll
-                    ? (lang === 'es' ? 'Mostrar menos' : 'Show less')
-                    : (lang === 'es' ? `Ver los ${summaries.length} días` : `View all ${summaries.length} days`)}
+                    ? t('notifications.showLess')
+                    : t('notifications.viewAllDays').replace('{count}', String(summaries.length))}
                 </button>
               </div>
             )}

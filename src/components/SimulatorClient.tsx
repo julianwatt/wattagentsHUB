@@ -23,7 +23,7 @@ export default function SimulatorClient({ session }: { session: Session }) {
   };
 
   const simulate = useCallback(() => {
-    const name = customerName.trim() || (lang === 'es' ? 'Cliente Prospecto' : 'Prospect Customer');
+    const name = customerName.trim() || t('simulator.defaultCustomerName');
     setResult(calculateBill(name, kwh, selectedTdu, selectedPlan, false, lang));
   }, [customerName, kwh, selectedTdu, selectedPlan, lang]);
 

@@ -156,7 +156,7 @@ export default function AdminClient({ session }: { session: Session }) {
                     className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm placeholder-gray-400" />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Email</label>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.emailLabel')}</label>
                   <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
                     placeholder="maria@watt.com"
                     className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm placeholder-gray-400" />
@@ -221,14 +221,14 @@ export default function AdminClient({ session }: { session: Session }) {
                   <div className="rounded-xl border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 p-3 space-y-1.5">
                     <p className="text-sm font-bold text-green-700 dark:text-green-300">✓ {t('admin.registerSuccess')}: {created.name}</p>
                     <div className="text-xs">
-                      <p className="text-gray-600 dark:text-gray-300">{lang === 'es' ? 'Contraseña temporal:' : 'Temporary password:'}</p>
+                      <p className="text-gray-600 dark:text-gray-300">{t('admin.tempPasswordLabel')}</p>
                       <code className="block mt-1 bg-white dark:bg-gray-800 px-2 py-1.5 rounded text-sm font-mono font-bold text-gray-800 dark:text-gray-100 select-all">{created.tempPassword}</code>
                     </div>
                     {created.email && (
                       <p className="text-[11px] text-gray-500 dark:text-gray-400">
                         {created.emailSent
-                          ? `📧 Enviada a ${created.email}`
-                          : `⚠ No se pudo enviar el correo a ${created.email}. Comparte la contraseña manualmente.`}
+                          ? `📧 ${t('admin.tempPasswordSentTo')} ${created.email}`
+                          : `⚠ ${t('admin.tempPasswordNotSent')} ${created.email}`}
                       </p>
                     )}
                     <button type="button" onClick={() => setCreated(null)} className="text-[11px] text-gray-400 hover:text-gray-600 underline mt-1">{t('common.close')}</button>
@@ -437,7 +437,7 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
               className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm" />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Email</label>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.emailLabel')}</label>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
               placeholder="correo@watt.com"
               className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm" />
@@ -497,7 +497,7 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
           )}
 
           {error && <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl px-3 py-2">{error}</p>}
-          {saveSuccess && <p className="text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded-xl px-3 py-2">✓ {lang === 'es' ? 'Guardado correctamente' : 'Saved successfully'}</p>}
+          {saveSuccess && <p className="text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded-xl px-3 py-2">✓ {t('admin.savedSuccess')}</p>}
 
           {resetResult && (
             <div className="rounded-xl border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 p-3 space-y-1">

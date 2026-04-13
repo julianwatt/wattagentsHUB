@@ -21,18 +21,18 @@ const STORE_CHAINS = ['Walmart', 'HEB', "Sam's Club", 'El Rancho Supermercado', 
 type D2DKey = 'knocks' | 'contacts' | 'bills' | 'sales';
 type RetailKey = 'stops' | 'zipcodes' | 'credit_checks' | 'sales';
 
-const D2D_FIELDS: Array<{ key: D2DKey; goal?: number; label: string; sub: string }> = [
-  { key: 'knocks',   goal: 100, label: '🚪 Knocks',        sub: 'Puertas tocadas' },
-  { key: 'contacts', goal: 30,  label: '🤝 Contactos',     sub: 'Prospectos contactados' },
-  { key: 'bills',    goal: undefined, label: '📄 Billes',  sub: 'Recibos solicitados' },
-  { key: 'sales',    goal: undefined, label: '✅ Ventas',   sub: 'Ventas cerradas' },
+const D2D_FIELDS: Array<{ key: D2DKey; goal?: number; icon: string; labelKey: string; subKey: string }> = [
+  { key: 'knocks',   goal: 100, icon: '🚪', labelKey: 'activity.d2dKnocksLabel',   subKey: 'activity.d2dKnocksSub' },
+  { key: 'contacts', goal: 30,  icon: '🤝', labelKey: 'activity.d2dContactsLabel', subKey: 'activity.d2dContactsSub' },
+  { key: 'bills',    goal: undefined, icon: '📄', labelKey: 'activity.d2dBillsLabel',   subKey: 'activity.d2dBillsSub' },
+  { key: 'sales',    goal: undefined, icon: '✅', labelKey: 'activity.d2dSalesLabel',   subKey: 'activity.d2dSalesSub' },
 ];
 
-const RETAIL_FIELDS: Array<{ key: RetailKey; goal?: number; label: string; sub: string }> = [
-  { key: 'stops',         goal: 100, label: '🛒 Stops',         sub: 'Paradas de cliente' },
-  { key: 'zipcodes',      goal: 30,  label: '📍 Zipcodes',      sub: 'Zipcodes pedidos' },
-  { key: 'credit_checks', goal: undefined, label: '💳 Credit Check', sub: 'Revisiones de crédito' },
-  { key: 'sales',         goal: undefined, label: '✅ Ventas',        sub: 'Ventas cerradas' },
+const RETAIL_FIELDS: Array<{ key: RetailKey; goal?: number; icon: string; labelKey: string; subKey: string }> = [
+  { key: 'stops',         goal: 100, icon: '🛒', labelKey: 'activity.rtlStopsLabel',        subKey: 'activity.rtlStopsSub' },
+  { key: 'zipcodes',      goal: 30,  icon: '📍', labelKey: 'activity.rtlZipcodesLabel',     subKey: 'activity.rtlZipcodesSub' },
+  { key: 'credit_checks', goal: undefined, icon: '💳', labelKey: 'activity.rtlCreditChecksLabel', subKey: 'activity.rtlCreditChecksSub' },
+  { key: 'sales',         goal: undefined, icon: '✅', labelKey: 'activity.rtlSalesLabel',        subKey: 'activity.rtlSalesSub' },
 ];
 
 const EMPTY_D2D = { knocks: 0, contacts: 0, bills: 0, sales: 0 };
@@ -266,7 +266,7 @@ export default function ActivityClient({ session }: { session: Session }) {
     if (campaignType === 'Retail') return retail.zipcodes > 0 ? ((retail.sales / retail.zipcodes) * 100).toFixed(1) : '0.0';
     return d2d.contacts > 0 ? ((d2d.sales / d2d.contacts) * 100).toFixed(1) : '0.0';
   })();
-  const effLabel = campaignType === 'Retail' ? 'Zipcodes → Ventas' : 'Contactos → Ventas';
+  const effLabel = campaignType === 'Retail' ? t('activity.effZipcodes') : t('activity.effContacts');
 
   return (
     <AppLayout session={session}>
@@ -280,10 +280,10 @@ export default function ActivityClient({ session }: { session: Session }) {
         {todayEntry && (
           <div className="mb-4 rounded-2xl px-4 py-3 flex flex-wrap gap-4 items-center text-sm"
             style={{ backgroundColor: 'var(--dark)', color: 'white' }}>
-            <span className="font-semibold opacity-70 text-xs uppercase tracking-wide">Hoy</span>
-            <span>🕐 Primera actividad: <strong>{fmtTime(todayEntry.first_activity_at)}</strong></span>
-            <span>🕐 Última actividad: <strong>{fmtTime(todayEntry.last_activity_at)}</strong></span>
-            <span>Tipo: <strong>{todayEntry.campaign_type}</strong></span>
+            <span className="font-semibold opacity-70 text-xs uppercase tracking-wide">{t('activity.todayLabel')}</span>
+            <span>🕐 {t('activity.firstActivity')}: <strong>{fmtTime(todayEntry.first_activity_at)}</strong></span>
+            <span>🕐 {t('activity.lastActivity')}: <strong>{fmtTime(todayEntry.last_activity_at)}</strong></span>
+            <span>{t('activity.typeLabel')}: <strong>{todayEntry.campaign_type}</strong></span>
           </div>
         )}
 
@@ -358,8 +358,8 @@ export default function ActivityClient({ session }: { session: Session }) {
                     <div key={f.key} className="rounded-xl border border-gray-100 dark:border-gray-800 p-2 sm:p-3">
                       <div className="flex items-center justify-between mb-1">
                         <div>
-                          <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{f.label}</p>
-                          <p className="text-[10px] text-gray-400">{f.sub}{f.goal ? ` — meta: ${f.goal}` : ''}</p>
+                          <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{f.icon} {t(f.labelKey)}</p>
+                          <p className="text-[10px] text-gray-400">{t(f.subKey)}{f.goal ? ` — meta: ${f.goal}` : ''}</p>
                         </div>
                         {f.goal && (
                           <div className="text-right">
@@ -399,7 +399,7 @@ export default function ActivityClient({ session }: { session: Session }) {
                 </div>
 
                 {saving && (
-                  <div className="text-center text-xs text-gray-400 py-1">Guardando...</div>
+                  <div className="text-center text-xs text-gray-400 py-1">{t('activity.savingText')}</div>
                 )}
                 {success && (
                   <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 text-green-700 dark:text-green-400 rounded-xl px-4 py-2.5 text-sm font-medium text-center">
@@ -423,7 +423,7 @@ export default function ActivityClient({ session }: { session: Session }) {
               </div>
 
               {loading ? (
-                <div className="p-8 text-center text-gray-400 text-sm">Cargando...</div>
+                <div className="p-8 text-center text-gray-400 text-sm">{t('activity.loadingText')}</div>
               ) : history.length === 0 ? (
                 <div className="p-8 text-center text-gray-400 text-sm">{t('activity.noHistory')}</div>
               ) : (
@@ -435,8 +435,8 @@ export default function ActivityClient({ session }: { session: Session }) {
                     const primaryB = isD2D ? entry.contacts : entry.zipcodes;
                     const primaryC = isD2D ? entry.bills : entry.credit_checks;
                     const labelA = isD2D ? 'Knocks' : 'Stops';
-                    const labelB = isD2D ? 'Contactos' : 'Zipcodes';
-                    const labelC = isD2D ? 'Billes' : 'Credit';
+                    const labelB = isD2D ? t('notifications.contacts') : 'Zipcodes';
+                    const labelC = isD2D ? 'Bills' : 'Credit';
                     return (
                       <div key={entry.id} className="px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                         <div className="flex items-start justify-between gap-2">
@@ -459,7 +459,7 @@ export default function ActivityClient({ session }: { session: Session }) {
                               <span>{labelA}: <strong className="text-gray-800 dark:text-gray-200">{primaryA}</strong></span>
                               <span>{labelB}: <strong className="text-gray-800 dark:text-gray-200">{primaryB}</strong></span>
                               <span>{labelC}: <strong className="text-gray-800 dark:text-gray-200">{primaryC}</strong></span>
-                              <span>Ventas: <strong style={{ color: 'var(--primary)' }}>{entry.sales}</strong></span>
+                              <span>{t('notifications.sales')}: <strong style={{ color: 'var(--primary)' }}>{entry.sales}</strong></span>
                               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${eff >= 25 ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' : eff >= 15 ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300' : 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400'}`}>
                                 {eff.toFixed(1)}%
                               </span>

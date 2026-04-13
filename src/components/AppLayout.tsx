@@ -133,9 +133,9 @@ export default function AppLayout({ session, children }: Props) {
   // ── Notification bell (admin only) ──
   interface NotifItem { id: string; type: string; user_name?: string; user_username?: string; status: string; created_at: string; }
   const notifTypeLabel = (type: string) => {
-    if (type === 'password_reset') return lang === 'es' ? 'Reseteo de contraseña' : 'Password reset';
-    if (type === 'password_change') return lang === 'es' ? 'Cambio de contraseña' : 'Password change';
-    if (type === 'user_deactivated') return lang === 'es' ? 'Usuario desactivado' : 'User deactivated';
+    if (type === 'password_reset') return t('notifications.passwordReset');
+    if (type === 'password_change') return t('notifications.passwordChange');
+    if (type === 'user_deactivated') return t('notifications.userDeactivated');
     return type;
   };
   const notifBadgeColor = (type: string) => {
@@ -374,7 +374,7 @@ export default function AppLayout({ session, children }: Props) {
             {/* Dark mode toggle */}
             <button
               onClick={toggleTheme}
-              title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
+              title={theme === 'dark' ? t('nav.lightMode') : t('nav.darkMode')}
               className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
             >
               {theme === 'dark' ? <SunIcon className="w-4 h-4" /> : <MoonIcon className="w-4 h-4" />}
