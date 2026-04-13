@@ -508,10 +508,33 @@ export default function AppLayout({ session, children }: Props) {
         </div>
       </div>
 
-      {/* Main content */}
-      <main className="flex-1 min-h-0">
+      {/* Main content — bottom padding on mobile for tab bar */}
+      <main className="flex-1 pb-16 md:pb-0 min-h-0">
         {children}
       </main>
+
+      {/* Mobile bottom tab bar — always visible */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-40 safe-area-bottom">
+        <div className="flex">
+          {allNav.map((item) => {
+            const Icon = item.icon;
+            const active = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-[10px] font-semibold transition-colors ${
+                  active ? '' : 'text-gray-400 dark:text-gray-500'
+                }`}
+                style={active ? { color: 'var(--primary)' } : {}}
+              >
+                <Icon className="w-5 h-5" />
+                <span>{t(item.key)}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }
