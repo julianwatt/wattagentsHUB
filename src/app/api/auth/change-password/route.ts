@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { findByUsername, verifyPassword, updateUser } from '@/lib/users';
+import { supabase } from '@/lib/supabase';
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -26,5 +27,15 @@ export async function POST(req: NextRequest) {
   }
 
   await updateUser(user.id, { password: newPassword, must_change_password: false });
+
+  // Notify admin that user changed their password
+  await supabase.from('admin_notifications').insert({
+    type: 'password_change',
+    user_id: user.id,
+    user_name: user.name,
+    user_username: user.username,
+    status: 'pending',
+  });
+
   return NextResponse.json({ success: true });
 }

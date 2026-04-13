@@ -1,10 +1,8 @@
 'use client';
-import { useState, useEffect, useCallback, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { Session } from 'next-auth';
 import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
-import { fmtDate } from '@/lib/i18n';
-import { getSupabaseBrowser } from '@/lib/supabase-browser';
 import ToggleSwitch from './ToggleSwitch';
 // Theme picker removed — Watt Gold only
 
@@ -71,43 +69,6 @@ export default function AdminClient({ session }: { session: Session }) {
     setToggling(null);
   };
 
-  // Notifications state
-  interface ResetRequest { id: string; user_name: string; user_username: string; created_at: string; status: string; }
-  interface DailySummary { date: string; d2d: { sales: number; interactions: number; contacts: number; count: number }; rtl: { sales: number; interactions: number; contacts: number; count: number } }
-  const [resetRequests, setResetRequests] = useState<ResetRequest[]>([]);
-  const [dailySummary, setDailySummary] = useState<DailySummary | null>(null);
-  const [notifLoading, setNotifLoading] = useState(true);
-
-  const fetchNotifications = useCallback(async () => {
-    setNotifLoading(true);
-    try {
-      const res = await fetch('/api/notifications');
-      if (res.ok) {
-        const data = await res.json();
-        setResetRequests(data.resetRequests ?? []);
-        setDailySummary(data.summary ?? null);
-      }
-    } catch {}
-    setNotifLoading(false);
-  }, []);
-  useEffect(() => {
-    if (isCeoViewer) return;
-    fetchNotifications();
-    // Supabase Realtime subscription
-    const sb = getSupabaseBrowser();
-    const channel = sb.channel('admin-notifs-panel').on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'admin_notifications' },
-      () => { fetchNotifications(); },
-    ).subscribe();
-    return () => { sb.removeChannel(channel); };
-  }, [isCeoViewer, fetchNotifications]);
-
-  const handleDismissNotif = async (id: string) => {
-    await fetch('/api/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-    setResetRequests((prev) => prev.map((r) => r.id === id ? { ...r, status: 'done' } : r));
-  };
-
   const fetchUsers = async () => {
     setLoading(true);
     const res = await fetch('/api/users');
@@ -160,75 +121,6 @@ export default function AdminClient({ session }: { session: Session }) {
         </div>
 
         {/* Theme picker removed — Watt Gold is the only active theme */}
-
-        {/* === NOTIFICATIONS === */}
-        {!isCeoViewer && (
-          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
-            <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-4 flex items-center gap-2">
-              <span>🔔</span> {t('admin.notifications')}
-            </h3>
-            {notifLoading ? (
-              <p className="text-xs text-gray-400">...</p>
-            ) : (
-              <div className="grid md:grid-cols-2 gap-4">
-                {/* Password reset requests */}
-                <div>
-                  <h4 className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2">{t('admin.notifPasswordReset')}</h4>
-                  {resetRequests.length === 0 ? (
-                    <p className="text-xs text-gray-400">{t('admin.notifNoRequests')}</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {resetRequests.map((r) => (
-                        <div key={r.id} className={`flex items-center justify-between rounded-xl px-3 py-2 border ${r.status === 'done' ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800' : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'}`}>
-                          <div>
-                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{r.user_name}</p>
-                            <p className="text-[10px] text-gray-400">@{r.user_username} · {fmtDate(r.created_at, lang)}</p>
-                          </div>
-                          {r.status === 'done' ? (
-                            <span className="text-[10px] px-2 py-1 rounded-lg font-bold text-green-600 dark:text-green-400">{t('admin.notifDone')}</span>
-                          ) : (
-                            <button onClick={() => handleDismissNotif(r.id)}
-                              className="text-[10px] px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:text-green-600 hover:border-green-300 transition-colors">
-                              {t('admin.notifMarkDone')}
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Daily summary */}
-                <div>
-                  <h4 className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2">{t('admin.notifDailySummary')}</h4>
-                  {!dailySummary || (dailySummary.d2d.count === 0 && dailySummary.rtl.count === 0) ? (
-                    <p className="text-xs text-gray-400">{t('admin.notifNoSummary')}</p>
-                  ) : (
-                    <div className="space-y-2">
-                      <p className="text-[10px] text-gray-500 mb-1">{fmtDate(dailySummary.date, lang)}</p>
-                      {dailySummary.rtl.count > 0 && (
-                        <div className="bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-xl px-3 py-2">
-                          <p className="text-xs text-gray-700 dark:text-gray-200">
-                            <strong className="text-violet-700 dark:text-violet-300">RTL</strong>
-                            {' — '}{t('admin.notifCierres')}: {dailySummary.rtl.sales} | {t('admin.notifInteracciones')}: {dailySummary.rtl.interactions} | {t('admin.notifEfectividad')}: {dailySummary.rtl.contacts > 0 ? ((dailySummary.rtl.sales / dailySummary.rtl.contacts) * 100).toFixed(1) : '0.0'}%
-                          </p>
-                        </div>
-                      )}
-                      {dailySummary.d2d.count > 0 && (
-                        <div className="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl px-3 py-2">
-                          <p className="text-xs text-gray-700 dark:text-gray-200">
-                            <strong className="text-sky-700 dark:text-sky-300">D2D</strong>
-                            {' — '}{t('admin.notifCierres')}: {dailySummary.d2d.sales} | {t('admin.notifInteracciones')}: {dailySummary.d2d.interactions} | {t('admin.notifEfectividad')}: {dailySummary.d2d.contacts > 0 ? ((dailySummary.d2d.sales / dailySummary.d2d.contacts) * 100).toFixed(1) : '0.0'}%
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
         <div className="grid md:grid-cols-3 gap-5">
           {/* Add user form */}

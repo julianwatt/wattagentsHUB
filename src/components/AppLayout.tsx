@@ -24,6 +24,7 @@ const BASE_NAV = [
 const TEAM_NAV = { href: '/team', icon: TeamIcon, key: 'nav.team' };
 const ADMIN_NAV = { href: '/admin', icon: AdminIcon, key: 'nav.admin' };
 const ROSTER_NAV = { href: '/roster', icon: RosterIcon, key: 'nav.roster' };
+const NOTIF_NAV = { href: '/notifications', icon: NotifNavIcon, key: 'admin.notifications' };
 
 export default function AppLayout({ session, children }: Props) {
   const pathname = usePathname();
@@ -89,6 +90,7 @@ export default function AppLayout({ session, children }: Props) {
     ...BASE_NAV.filter((item) => !(item.hideForAdmin && isAdminReal && !previewRole)),
     ...(canSeeTeam ? [TEAM_NAV] : []),
     ...(isAdminReal && !previewRole ? [ROSTER_NAV] : []),
+    ...(isAdminReal && !previewRole ? [NOTIF_NAV] : []),
     ...(canSeeAdmin ? [ADMIN_NAV] : []),
   ];
 
@@ -96,18 +98,20 @@ export default function AppLayout({ session, children }: Props) {
   interface NotifItem { id: string; type: string; user_name?: string; user_username?: string; status: string; created_at: string; }
   const notifTypeLabel = (type: string) => {
     if (type === 'password_reset') return lang === 'es' ? 'Reseteo de contraseña' : 'Password reset';
-    if (type === 'new_user') return lang === 'es' ? 'Nuevo usuario' : 'New user';
-    if (type === 'activity') return lang === 'es' ? 'Actividad' : 'Activity';
+    if (type === 'password_change') return lang === 'es' ? 'Cambio de contraseña' : 'Password change';
+    if (type === 'user_deactivated') return lang === 'es' ? 'Usuario desactivado' : 'User deactivated';
     return type;
   };
   const notifBadgeColor = (type: string) => {
     if (type === 'password_reset') return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300';
-    if (type === 'new_user') return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300';
-    if (type === 'activity') return 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300';
+    if (type === 'password_change') return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300';
+    if (type === 'user_deactivated') return 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300';
     return 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300';
   };
   const notifPreviewText = (n: NotifItem) => {
     if (n.type === 'password_reset') return `${n.user_name ?? '—'} ${t('admin.notifPreviewReset')}`;
+    if (n.type === 'password_change') return `${n.user_name ?? '—'} ${t('admin.notifPreviewChange')}`;
+    if (n.type === 'user_deactivated') return `${n.user_name ?? '—'} ${t('admin.notifPreviewDeactivated')}`;
     return n.user_name ?? '—';
   };
   const [notifItems, setNotifItems] = useState<NotifItem[]>([]);
@@ -121,7 +125,7 @@ export default function AppLayout({ session, children }: Props) {
       const res = await fetch('/api/notifications');
       if (res.ok) {
         const data = await res.json();
-        setNotifItems(data.resetRequests ?? []);
+        setNotifItems(data.notifications ?? []);
       }
     } catch {}
   }, [isAdminReal, previewRole]);
@@ -280,7 +284,7 @@ export default function AppLayout({ session, children }: Props) {
                         </div>
                       ))}
                     </div>
-                    <Link href="/admin" onClick={() => setNotifOpen(false)}
+                    <Link href="/notifications" onClick={() => setNotifOpen(false)}
                       className="block px-4 py-2 text-center text-[11px] font-semibold border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
                       style={{ color: 'var(--primary)' }}>
                       {t('admin.notifViewAll')}
@@ -382,6 +386,9 @@ function LogoutIcon({ className }: { className: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>;
 }
 function BellIcon({ className }: { className: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>;
+}
+function NotifNavIcon({ className }: { className: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>;
 }
 function RosterIcon({ className }: { className: string }) {

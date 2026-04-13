@@ -39,5 +39,14 @@ export async function POST(req: NextRequest) {
     console.error('[forgot-password] Failed to send reset email to', user.email);
   }
 
+  // Create admin notification
+  await supabase.from('admin_notifications').insert({
+    type: 'password_reset',
+    user_id: user.id,
+    user_name: user.name,
+    user_username: user.username,
+    status: 'pending',
+  });
+
   return NextResponse.json({ ok: true });
 }

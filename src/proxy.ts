@@ -19,6 +19,9 @@ export default withAuth(
     if (pathname.startsWith('/admin') && role !== 'admin' && role !== 'ceo') {
       return NextResponse.redirect(new URL('/activity', req.url));
     }
+    if (pathname.startsWith('/notifications') && role !== 'admin') {
+      return NextResponse.redirect(new URL('/activity', req.url));
+    }
     if (pathname.startsWith('/team') && role === 'agent') {
       return NextResponse.redirect(new URL('/activity', req.url));
     }
@@ -32,5 +35,5 @@ export default withAuth(
 );
 
 export const config = {
-  matcher: ['/simulator/:path*', '/admin/:path*', '/activity/:path*', '/dashboard/:path*', '/team/:path*', '/change-password'],
+  matcher: ['/simulator/:path*', '/admin/:path*', '/activity/:path*', '/dashboard/:path*', '/team/:path*', '/notifications/:path*', '/change-password'],
 };
