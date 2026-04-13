@@ -77,7 +77,7 @@ async function sendViaResendDetailed(
   }
 
   const from = process.env.RESEND_FROM || 'Watt Distributors <onboarding@resend.dev>';
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://watt.local';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://wattagenthub.vercel.app';
   const html = buildResetEmailHtml(name, username, tempPassword, appUrl);
 
   try {
@@ -111,7 +111,7 @@ export async function sendPasswordResetEmail(
   tempPassword: string,
 ): Promise<boolean> {
   console.log('[email] sendPasswordResetEmail called', { to, name, username });
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://watt.local';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://wattagenthub.vercel.app';
 
   // ── 1. Primary: Resend API (sends our branded HTML template) ──
   const apiKey = process.env.RESEND_API_KEY;
@@ -215,7 +215,7 @@ async function sendResetViaSMTP(
   const user = process.env.SMTP_USER!;
   const pass = process.env.SMTP_PASSWORD!;
   const from = process.env.SMTP_FROM || `Watt Distributors <${user}>`;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://watt.local';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://wattagenthub.vercel.app';
 
   const html = buildResetEmailHtml(name, username, tempPassword, appUrl);
 
