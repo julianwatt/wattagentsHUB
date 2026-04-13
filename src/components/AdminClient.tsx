@@ -92,12 +92,18 @@ export default function AdminClient({ session }: { session: Session }) {
   const handleAdd = async (e: FormEvent) => {
     e.preventDefault();
     setFormError(''); setCreated(null); setSubmitting(true);
-    const { sr_manager_filter: _sr, ...formData } = form;
+    const { sr_manager_filter: srFilter, ...formData } = form;
+    // For agents: prefer jr_manager, fallback to sr_manager (direct report)
+    // For jr_managers: manager_id is already the sr_manager from the form
+    const resolvedMgr = formData.role === 'agent'
+      ? (formData.manager_id || srFilter || null)
+      : (formData.manager_id || null);
     const payload = {
       ...formData,
-      manager_id: formData.manager_id || null,
+      manager_id: resolvedMgr,
       email: formData.email || null,
     };
+    console.log('[handleAdd] manager_id resolution:', { role: formData.role, jrManager: formData.manager_id, srFilter, resolved: resolvedMgr });
     const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     setSubmitting(false);
     if (res.ok) {
