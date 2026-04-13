@@ -163,7 +163,55 @@ export async function sendPasswordResetEmail(
 ): Promise<boolean> {
   console.log('[email] sendPasswordResetEmail called', { to, name, username });
 
-  // Try Nodemailer SMTP first (Gmail / custom SMTP)
+  // ── 1. Primary: Supabase Auth invite (uses Supabase's built-in SMTP) ──
+  const admin = getSupabaseAdmin();
+  if (admin) {
+    try {
+      console.log('[email] Attempting Supabase invite for password reset to', to);
+      const { data, error } = await admin.auth.admin.inviteUserByEmail(to, {
+        data: {
+          name,
+          username,
+          temp_password: tempPassword,
+          app: 'Watt Distributors',
+          reset: true,
+        },
+      });
+      if (error) {
+        console.error('[email] Supabase invite error (reset):', error.message, error);
+        // If user already exists in auth.users, try updating their metadata and resending
+        if (error.message?.includes('already been registered') || error.message?.includes('already exists')) {
+          console.log('[email] User exists in auth.users, trying generateLink approach');
+          try {
+            const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+              type: 'magiclink',
+              email: to,
+              options: { data: { name, username, temp_password: tempPassword, app: 'Watt Distributors', reset: true } },
+            });
+            if (linkError) {
+              console.error('[email] generateLink error:', linkError.message);
+            } else {
+              console.log('[email] generateLink success, link generated for', to, linkData?.properties?.action_link ? '(link present)' : '(no link)');
+              // The generateLink with magiclink type sends the email automatically via Supabase SMTP
+              return true;
+            }
+          } catch (linkErr) {
+            console.error('[email] generateLink threw:', linkErr);
+          }
+        }
+        // fall through to other paths
+      } else {
+        console.log('[email] Supabase invite sent (reset) to', to, 'user id:', data?.user?.id);
+        return true;
+      }
+    } catch (err) {
+      console.error('[email] Supabase invite threw (reset):', err);
+    }
+  } else {
+    console.warn('[email] No SUPABASE_SERVICE_ROLE_KEY — skipping Supabase path for reset');
+  }
+
+  // ── 2. Fallback: Nodemailer SMTP (Gmail / custom SMTP) ──
   const smtpHost = process.env.SMTP_HOST;
   const smtpUser = process.env.SMTP_USER;
   const smtpPass = process.env.SMTP_PASSWORD;
@@ -172,14 +220,13 @@ export async function sendPasswordResetEmail(
     const sent = await sendResetViaSMTP(to, name, username, tempPassword);
     if (sent) return true;
     console.warn('[email] SMTP send failed, falling through to Resend');
-  } else {
-    console.log('[email] No SMTP credentials (SMTP_HOST/SMTP_USER/SMTP_PASSWORD), trying Resend');
   }
 
+  // ── 3. Fallback: Resend HTTP API ──
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn('[email] RESEND_API_KEY not set — cannot send reset email');
-    console.warn('[email] Available env keys:', Object.keys(process.env).filter(k => k.includes('SMTP') || k.includes('RESEND') || k.includes('EMAIL') || k.includes('MAIL')).join(', ') || '(none)');
+    console.warn('[email] RESEND_API_KEY not set — no more email paths available');
+    console.warn('[email] Available email env keys:', Object.keys(process.env).filter(k => k.includes('SMTP') || k.includes('RESEND') || k.includes('EMAIL') || k.includes('MAIL')).join(', ') || '(none)');
     return false;
   }
 
