@@ -186,8 +186,10 @@ async function supabaseInviteWithRetry(
 }
 
 /**
- * For password resets: DELETES the existing auth user first, then invites
- * with fresh data. This prevents Supabase from resending stale invite data.
+ * For password resets: updates auth user metadata with the new temp password,
+ * then deletes and re-invites to trigger a fresh email.
+ * Belt-and-suspenders: even if re-invite somehow reuses stored data,
+ * that data was already updated in step 1.
  */
 async function supabaseResetInvite(
   admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
@@ -195,15 +197,24 @@ async function supabaseResetInvite(
   data: Record<string, string>,
 ): Promise<boolean> {
   try {
-    // Always delete existing auth user first to avoid stale invite data
+    console.log('[email] supabaseResetInvite called for', email, 'with temp_password:', data.temp_password);
     const { data: { users } } = await admin.auth.admin.listUsers();
     const existing = users.find((u) => u.email === email);
+
     if (existing) {
+      // Step 1: Update metadata so even a stale resend has the correct password
+      console.log('[email] Updating auth user metadata for', existing.id);
+      await admin.auth.admin.updateUserById(existing.id, {
+        user_metadata: data,
+      });
+
+      // Step 2: Delete the auth user entirely
+      console.log('[email] Deleting auth user', existing.id);
       await admin.auth.admin.deleteUser(existing.id);
-      console.log('[email] Deleted auth user', existing.id, 'before reset invite for', email);
     }
 
-    // Now invite fresh — email will contain the correct temp_password
+    // Step 3: Fresh invite with correct data
+    console.log('[email] Sending fresh invite to', email);
     const { data: inviteResult, error } = await admin.auth.admin.inviteUserByEmail(email, { data });
     if (error) {
       console.error('[email] Reset invite failed:', error.message);
