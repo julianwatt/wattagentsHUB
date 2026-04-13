@@ -133,17 +133,17 @@ export default function AdminClient({ session }: { session: Session }) {
 
   return (
     <AppLayout session={session}>
-      <div className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-6">
+      <div className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-6 overflow-x-hidden">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{t('admin.title')}</h1>
         </div>
 
         {/* Theme picker removed — Watt Gold is the only active theme */}
 
-        <div className="grid md:grid-cols-3 gap-5">
+        <div className="grid md:grid-cols-3 gap-5 min-w-0">
           {/* Add user form */}
           <div className="md:col-span-1">
-            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-3 sm:p-5">
               <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-5 flex items-center gap-2 text-sm">
                 <svg className="w-4 h-4" style={{ color: 'var(--primary)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
                 {t('admin.addUser')}
@@ -253,7 +253,7 @@ export default function AdminClient({ session }: { session: Session }) {
           {/* Users table */}
           <div className="md:col-span-2 space-y-4">
             <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between">
+              <div className="px-3 sm:px-5 py-3 sm:py-4 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between">
                 <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">{t('admin.usersTable')}</h3>
                 <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full px-2.5 py-0.5 font-semibold flex-shrink-0">{users.length}</span>
               </div>
@@ -262,10 +262,10 @@ export default function AdminClient({ session }: { session: Session }) {
               ) : (
                 <div className="divide-y divide-gray-50 dark:divide-gray-800">
                   {sortUsers(users).map((u) => (
-                    <div key={u.id} className={`flex items-center justify-between px-5 py-4 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 ${!u.is_active ? 'opacity-50' : ''}`}>
-                      <div className="flex items-center gap-3 min-w-0">
+                    <div key={u.id} className={`flex items-center justify-between px-3 sm:px-5 py-3 sm:py-4 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 ${!u.is_active ? 'opacity-50' : ''}`}>
+                      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                         <div
-                          className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0"
+                          className="w-7 h-7 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm flex-shrink-0"
                           style={u.role === 'admin' || u.role === 'ceo'
                             ? { backgroundColor: 'var(--dark-light)', color: 'var(--dark)' }
                             : { backgroundColor: 'var(--primary-light)', color: 'var(--primary)' }}
@@ -273,19 +273,12 @@ export default function AdminClient({ session }: { session: Session }) {
                           {u.name.charAt(0).toUpperCase()}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm truncate">{u.name}</p>
-                          <p className="text-xs text-gray-400">@{u.username}{u.email ? ` · ${u.email}` : ''}</p>
+                          <p className="font-semibold text-gray-800 dark:text-gray-100 text-xs sm:text-sm truncate">{u.name}</p>
+                          <p className="text-[10px] sm:text-xs text-gray-400 truncate">@{u.username}<span className="hidden sm:inline">{u.email ? ` · ${u.email}` : ''}</span></p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {u.role !== 'admin' && u.id !== session.user.id && (
-                          <ToggleSwitch
-                            checked={u.is_active}
-                            onChange={(v) => handleToggleActive(u.id, v)}
-                            disabled={toggling === u.id}
-                          />
-                        )}
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${roleBadgeClass(u.role)}`}>
+                      <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                        <span className={`text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded-full whitespace-nowrap ${roleBadgeClass(u.role)}`}>
                           {u.role === 'ceo' ? t('admin.roleCeo')
                             : u.role === 'admin' ? t('admin.roleAdmin')
                             : u.role === 'sr_manager' ? t('admin.roleSrManager')
@@ -294,15 +287,22 @@ export default function AdminClient({ session }: { session: Session }) {
                         </span>
                         <button onClick={() => setEditing(u)}
                           title={t('common.edit')}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-[var(--primary)] hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                          className="p-1 sm:p-1.5 rounded-lg text-gray-400 hover:text-[var(--primary)] hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                          <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                         </button>
                         {u.id !== session.user.id && !(isCeoViewer && u.role === 'admin') && (
                           <button onClick={() => handleDelete(u.id, u.name)}
                             title={t('common.delete')}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            className="p-1 sm:p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                           </button>
+                        )}
+                        {u.role !== 'admin' && u.id !== session.user.id && (
+                          <ToggleSwitch
+                            checked={u.is_active}
+                            onChange={(v) => handleToggleActive(u.id, v)}
+                            disabled={toggling === u.id}
+                          />
                         )}
                       </div>
                     </div>

@@ -294,7 +294,7 @@ export default function DashboardClient({ session }: { session: Session }) {
                               <th className="px-3 py-1.5">{t('dashboard.headcountDate')}</th>
                               <th className="px-2 py-1.5">D2D</th>
                               <th className="px-2 py-1.5">RTL</th>
-                              <th className="px-2 py-1.5 text-right">#</th>
+                              <th className="px-2 py-1.5 text-right">{t('dashboard.headcountTotal')}</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
