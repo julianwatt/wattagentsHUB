@@ -105,6 +105,7 @@ export async function updateUser(
     password?: string;
     must_change_password?: boolean;
     hire_date?: string;
+    is_active?: boolean;
   },
 ): Promise<void> {
   const patch: Record<string, unknown> = {};
@@ -115,6 +116,7 @@ export async function updateUser(
   if (updates.password) patch.password_hash = await bcrypt.hash(updates.password, 10);
   if (updates.must_change_password !== undefined) patch.must_change_password = updates.must_change_password;
   if (updates.hire_date !== undefined) patch.hire_date = updates.hire_date;
+  if (updates.is_active !== undefined) patch.is_active = updates.is_active;
   const { error } = await supabase.from('users').update(patch).eq('id', id);
   if (error) {
     if (error.code === '23505') {

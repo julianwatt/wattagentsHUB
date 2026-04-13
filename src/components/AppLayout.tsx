@@ -73,6 +73,23 @@ export default function AppLayout({ session, children }: Props) {
     })();
   }, [realRole, session.user.role]);
 
+  // First available page for a given role
+  const firstPageForRole = (r: string): string => {
+    if (r === 'ceo') return '/dashboard';
+    if (r === 'agent') return '/activity';
+    if (r === 'jr_manager' || r === 'sr_manager') return '/activity';
+    return '/admin';
+  };
+
+  // Check if a role can access a path
+  const canAccess = (r: string, path: string): boolean => {
+    if (path.startsWith('/admin')) return r === 'admin' || r === 'ceo';
+    if (path.startsWith('/team')) return r !== 'agent';
+    if (path.startsWith('/roster') || path.startsWith('/notifications')) return false; // admin-only, hidden in preview
+    if (path.startsWith('/activity')) return r !== 'admin' && r !== 'ceo'; // hidden for admin/ceo without preview
+    return true;
+  };
+
   // Navigate to appropriate page when preview role changes
   const handlePreviewChange = (value: string) => {
     if (!value) {
@@ -81,22 +98,23 @@ export default function AppLayout({ session, children }: Props) {
       router.push('/admin');
       return;
     }
+    let targetRole: string;
     if (value.startsWith('user:')) {
       const userId = value.slice(5);
       const u = previewUsers.find((p) => p.id === userId);
-      if (u) {
-        setPreviewUser(u.id, u.role as Role, u.name);
-        if (u.role === 'agent') router.push('/activity');
-        else if (u.role === 'ceo') router.push('/dashboard');
-        else router.push('/activity');
-      }
-      return;
+      if (!u) return;
+      setPreviewUser(u.id, u.role as Role, u.name);
+      targetRole = u.role;
+    } else {
+      targetRole = value;
+      setPreviewRole(value as Role);
     }
-    const newRole = value as Role;
-    setPreviewRole(newRole);
-    if (newRole === 'agent') router.push('/activity');
-    else if (newRole === 'jr_manager' || newRole === 'sr_manager') router.push('/activity');
-    else if (newRole === 'ceo') router.push('/dashboard');
+    // Redirect to current page if accessible, otherwise first available
+    if (canAccess(targetRole, pathname)) {
+      router.refresh();
+    } else {
+      router.push(firstPageForRole(targetRole));
+    }
   };
 
   const realIsAdmin = (realRole ?? session.user.role) === 'admin';
@@ -422,7 +440,7 @@ export default function AppLayout({ session, children }: Props) {
 
         {/* "Ver como" selector — admin only, inside hamburger */}
         {realIsAdmin && (
-          <div className="mx-4 mb-3">
+          <div className="mx-4 mb-3 space-y-2">
             <select
               value={previewUserId ? `user:${previewUserId}` : (previewRole ?? '')}
               onChange={(e) => { handlePreviewChange(e.target.value); setMenuOpen(false); }}
@@ -443,6 +461,14 @@ export default function AppLayout({ session, children }: Props) {
                 </optgroup>
               )}
             </select>
+            {previewRole && (
+              <button
+                onClick={() => { handlePreviewChange(''); setMenuOpen(false); }}
+                className="w-full h-9 rounded-xl text-[11px] font-bold bg-amber-400 text-amber-950 hover:bg-amber-500 transition-colors"
+              >
+                {t('admin.exitPreview')}
+              </button>
+            )}
           </div>
         )}
 

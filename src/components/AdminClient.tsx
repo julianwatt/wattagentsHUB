@@ -33,6 +33,18 @@ function roleBadgeClass(role: UserRole): string {
   }
 }
 
+const ROLE_ORDER: Record<UserRole, number> = { admin: 0, ceo: 1, sr_manager: 2, jr_manager: 3, agent: 4 };
+
+function sortUsers(list: User[]): User[] {
+  return [...list].sort((a, b) => {
+    const ra = ROLE_ORDER[a.role] ?? 9;
+    const rb = ROLE_ORDER[b.role] ?? 9;
+    if (ra !== rb) return ra - rb;
+    if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+    return b.hire_date.localeCompare(a.hire_date);
+  });
+}
+
 interface CreatedUserInfo { username: string; name: string; tempPassword: string; emailSent: boolean; email: string | null; }
 
 export default function AdminClient({ session }: { session: Session }) {
@@ -243,7 +255,7 @@ export default function AdminClient({ session }: { session: Session }) {
                 <div className="p-12 text-center text-gray-400 text-sm">{t('common.loading')}</div>
               ) : (
                 <div className="divide-y divide-gray-50 dark:divide-gray-800">
-                  {users.map((u) => (
+                  {sortUsers(users).map((u) => (
                     <div key={u.id} className={`flex items-center justify-between px-5 py-4 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 ${!u.is_active ? 'opacity-50' : ''}`}>
                       <div className="flex items-center gap-3 min-w-0">
                         <div
@@ -345,29 +357,43 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
   const [hireDate, setHireDate] = useState(user.hire_date);
   const [srManager, setSrManager] = useState(initialSr);
   const [managerId, setManagerId] = useState(user.manager_id ?? '');
+  const [isActive, setIsActive] = useState(user.is_active);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [resetResult, setResetResult] = useState<{ tempPassword: string; emailSent: boolean } | null>(null);
 
   async function handleSave(e: FormEvent) {
     e.preventDefault();
-    setError(''); setSaving(true);
+    setError(''); setSaveSuccess(false); setSaving(true);
     const payload: Record<string, unknown> = {
       id: user.id,
       name,
       email: email || null,
       role,
       hire_date: hireDate,
+      is_active: isActive,
       manager_id: role === 'agent' || role === 'jr_manager' ? (managerId || null) : null,
     };
     // For an agent, manager_id is the jr_manager's id; for a jr_manager, it's the sr_manager's id.
     if (role === 'jr_manager') payload.manager_id = srManager || null;
-    const res = await fetch('/api/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    setSaving(false);
-    if (res.ok) onSaved();
-    else {
-      const d = await res.json().catch(() => ({}));
-      setError(d.error || 'Error');
+    try {
+      const res = await fetch('/api/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      setSaving(false);
+      if (res.ok) {
+        setSaveSuccess(true);
+        setTimeout(() => onSaved(), 800);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        const msg = d.error || 'Error';
+        setError(msg);
+        console.error('[EditUserModal] Save failed:', msg, d);
+      }
+    } catch (err) {
+      setSaving(false);
+      const msg = err instanceof Error ? err.message : 'Network error';
+      setError(msg);
+      console.error('[EditUserModal] Save error:', err);
     }
   }
 
@@ -393,7 +419,12 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
           <h3 className="font-bold text-gray-800 dark:text-gray-100">{t('admin.editUser')}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+          <div className="flex items-center gap-3">
+            {user.role !== 'admin' && (
+              <ToggleSwitch checked={isActive} onChange={setIsActive} size="md" />
+            )}
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+          </div>
         </div>
         <form onSubmit={handleSave} className="p-5 space-y-3">
           <div>
@@ -466,6 +497,7 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
           )}
 
           {error && <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl px-3 py-2">{error}</p>}
+          {saveSuccess && <p className="text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded-xl px-3 py-2">✓ {lang === 'es' ? 'Guardado correctamente' : 'Saved successfully'}</p>}
 
           {resetResult && (
             <div className="rounded-xl border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 p-3 space-y-1">

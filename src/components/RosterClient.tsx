@@ -225,12 +225,7 @@ function AgentRow({ agent, toggling, onToggle, t }: {
         </div>
         <p className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">{agent.name}</p>
       </div>
-      <div className="flex items-center gap-1.5 flex-shrink-0">
-        <ToggleSwitch checked={agent.is_active} onChange={(v) => onToggle(agent.id, v)} disabled={isToggling} />
-        <span className={`text-[9px] font-bold ${agent.is_active ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
-          {isToggling ? '...' : agent.is_active ? t('roster.active') : t('roster.inactive')}
-        </span>
-      </div>
+      <ToggleSwitch checked={agent.is_active} onChange={(v) => onToggle(agent.id, v)} disabled={isToggling} />
     </div>
   );
 }
