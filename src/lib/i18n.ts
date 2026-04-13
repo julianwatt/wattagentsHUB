@@ -113,6 +113,7 @@ const es = {
     billCreditItem: 'Crédito en Factura',
   },
   activity: {
+    greeting: 'Hola',
     title: 'Registro de Actividad',
     subtitle: 'Registra tu actividad diaria de campo',
     date: 'Fecha',
@@ -295,7 +296,8 @@ const es = {
   team: {
     title: 'Equipo',
     subtitle: 'Resumen, rankings y rendimiento',
-    rosterTitle: 'Agentes activos',
+    rosterTitle: 'Agentes',
+    topPerformers: 'Mejor rendimiento',
     hireDate: 'Contratación',
     tenure: 'Tiempo en la empresa',
     days: 'días',
@@ -437,6 +439,7 @@ const en: typeof es = {
     billCreditItem: 'Bill Credit',
   },
   activity: {
+    greeting: 'Hi',
     title: 'Activity Log',
     subtitle: 'Record your daily field activity',
     date: 'Date',
@@ -619,7 +622,8 @@ const en: typeof es = {
   team: {
     title: 'Team',
     subtitle: 'Summary, rankings and performance',
-    rosterTitle: 'Active agents',
+    rosterTitle: 'Agents',
+    topPerformers: 'Top Performers',
     hireDate: 'Hired',
     tenure: 'Tenure',
     days: 'days',

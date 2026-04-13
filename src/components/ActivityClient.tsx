@@ -6,6 +6,7 @@ import { useLanguage } from './LanguageContext';
 import { fmtDate } from '@/lib/i18n';
 import { ActivityEntry, CampaignType, effectivenessRate } from '@/lib/activity';
 import { createClient } from '@supabase/supabase-js';
+import { getSupabaseBrowser } from '@/lib/supabase-browser';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -44,6 +45,19 @@ function fmtTime(iso: string | null | undefined): string {
 
 export default function ActivityClient({ session }: { session: Session }) {
   const { t, lang } = useLanguage();
+
+  // Fetch real user name from DB
+  const [dbUserName, setDbUserName] = useState<string>(session.user.name ?? '');
+  useEffect(() => {
+    (async () => {
+      try {
+        const sb = getSupabaseBrowser();
+        const { data } = await sb.from('users').select('name').eq('id', session.user.id).single();
+        if (data?.name) setDbUserName(data.name);
+      } catch {}
+    })();
+  }, [session.user.id, session.user.name]);
+
   // If admin visits /activity without preview mode, redirect to /admin
   const isRealAdmin = session.user.role === 'admin';
   // Check localStorage for preview role (same key as PreviewRoleContext)
@@ -257,6 +271,11 @@ export default function ActivityClient({ session }: { session: Session }) {
   return (
     <AppLayout session={session}>
       <div className="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
+        {/* Greeting */}
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+          {t('activity.greeting')}, {dbUserName || session.user.name}
+        </h1>
+
         {/* Today summary strip */}
         {todayEntry && (
           <div className="mb-4 rounded-2xl px-4 py-3 flex flex-wrap gap-4 items-center text-sm"

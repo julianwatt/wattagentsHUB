@@ -36,14 +36,14 @@ export async function GET(req: Request) {
     role: string;
     manager_id: string | null;
     hire_date: string;
+    is_active: boolean;
   }> = [];
 
   if (memberIds.length > 0) {
     const { data } = await supabase
       .from('users')
-      .select('id, name, username, role, manager_id, hire_date')
+      .select('id, name, username, role, manager_id, hire_date, is_active')
       .in('id', memberIds)
-      .eq('is_active', true)
       .order('hire_date', { ascending: true });
     members = (data ?? []) as typeof members;
   }

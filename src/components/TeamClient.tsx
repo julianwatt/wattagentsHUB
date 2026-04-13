@@ -7,6 +7,7 @@ import { usePreviewRole } from './PreviewRoleContext';
 import { fmtDate } from '@/lib/i18n';
 import { ActivityEntryWithAgent, effectivenessRate } from '@/lib/activity';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
+import ToggleSwitch from './ToggleSwitch';
 
 interface Member {
   id: string;
@@ -15,6 +16,7 @@ interface Member {
   role: string;
   manager_id: string | null;
   hire_date: string;
+  is_active: boolean;
 }
 
 interface TeamData {
@@ -55,6 +57,23 @@ export default function TeamClient({ session }: { session: Session }) {
   const { previewUserId } = usePreviewRole();
   const [data, setData] = useState<TeamData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [toggling, setToggling] = useState<string | null>(null);
+
+  const handleToggle = async (userId: string, newActive: boolean) => {
+    setToggling(userId);
+    const res = await fetch('/api/roster', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: userId, is_active: newActive }),
+    });
+    if (res.ok) {
+      setData((prev) => prev ? {
+        ...prev,
+        members: prev.members.map((m) => m.id === userId ? { ...m, is_active: newActive } : m),
+      } : prev);
+    }
+    setToggling(null);
+  };
 
   useEffect(() => {
     (async () => {
@@ -204,43 +223,52 @@ export default function TeamClient({ session }: { session: Session }) {
             <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
               <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-4">{t('team.rankingsTitle')}</h3>
               {ranking && (
-                <div className="flex flex-wrap gap-3">
-                  <RankCard
-                    label={`${t('team.bestAgent')} · ${t('team.metricSales')}`}
-                    sub={t('team.rankSubBestSales')}
-                    name={ranking.bestSales.agent?.name ?? '—'}
-                    value={ranking.bestSales.sales}
-                    accent="emerald"
-                    icon="🥇"
-                  />
-                  <RankCard
-                    label={`${t('team.worstAgent')} · ${t('team.metricSales')}`}
-                    sub={t('team.rankSubWorstSales')}
-                    name={ranking.worstSales.agent?.name ?? '—'}
-                    value={ranking.worstSales.sales}
-                    accent="rose"
-                    icon="📉"
-                  />
-                  <RankCard
-                    label={`${t('team.bestAgent')} · ${t('team.metricInteractions')}`}
-                    sub={t('team.rankSubBestInteractions')}
-                    name={ranking.bestInteractions.agent?.name ?? '—'}
-                    value={ranking.bestInteractions.interactions}
-                    accent="sky"
-                    icon="🚪"
-                  />
-                  <RankCard
-                    label={`${t('team.bestAgent')} · ${t('team.metricEffectiveness')}`}
-                    sub={t('team.rankSubBestEffectiveness')}
-                    name={ranking.bestEffectiveness.agent?.name ?? '—'}
-                    value={`${ranking.bestEffectiveness.effectiveness.toFixed(1)}%`}
-                    accent="violet"
-                    icon="🎯"
-                  />
-                  {/* Top Rep cards inline */}
-                  <TopRepCard label={`🏆 ${t('team.topWeek')}`} entry={topRep.week} />
-                  <TopRepCard label={`🏆 ${t('team.topMonth')}`} entry={topRep.month} />
-                  <TopRepCard label={`🏆 ${t('team.topYear')}`} entry={topRep.year} />
+                <div className="space-y-4">
+                  {/* Top Performers header */}
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">{t('team.topPerformers')}</p>
+                  <div className="flex flex-wrap gap-3">
+                    <RankCard
+                      label={`${t('team.bestAgent')} · ${t('team.metricSales')}`}
+                      sub={t('team.rankSubBestSales')}
+                      name={ranking.bestSales.agent?.name ?? '—'}
+                      value={ranking.bestSales.sales}
+                      accent="emerald"
+                      icon="🥇"
+                    />
+                    <RankCard
+                      label={`${t('team.bestAgent')} · ${t('team.metricInteractions')}`}
+                      sub={t('team.rankSubBestInteractions')}
+                      name={ranking.bestInteractions.agent?.name ?? '—'}
+                      value={ranking.bestInteractions.interactions}
+                      accent="sky"
+                      icon="🚪"
+                    />
+                    <RankCard
+                      label={`${t('team.bestAgent')} · ${t('team.metricEffectiveness')}`}
+                      sub={t('team.rankSubBestEffectiveness')}
+                      name={ranking.bestEffectiveness.agent?.name ?? '—'}
+                      value={`${ranking.bestEffectiveness.effectiveness.toFixed(1)}%`}
+                      accent="violet"
+                      icon="🎯"
+                    />
+                  </div>
+                  {/* Lowest performer — no header */}
+                  <div className="flex flex-wrap gap-3">
+                    <RankCard
+                      label={`${t('team.worstAgent')} · ${t('team.metricSales')}`}
+                      sub={t('team.rankSubWorstSales')}
+                      name={ranking.worstSales.agent?.name ?? '—'}
+                      value={ranking.worstSales.sales}
+                      accent="rose"
+                      icon="📉"
+                    />
+                  </div>
+                  {/* Top Rep cards */}
+                  <div className="flex flex-wrap gap-3">
+                    <TopRepCard label={`🏆 ${t('team.topWeek')}`} entry={topRep.week} />
+                    <TopRepCard label={`🏆 ${t('team.topMonth')}`} entry={topRep.month} />
+                    <TopRepCard label={`🏆 ${t('team.topYear')}`} entry={topRep.year} />
+                  </div>
                 </div>
               )}
 
@@ -262,20 +290,25 @@ export default function TeamClient({ session }: { session: Session }) {
 
             {/* ── Roster + Mini Charts — same row ── */}
             <div className="flex flex-col lg:flex-row gap-5">
-              {/* Roster — compact, newest first, narrower */}
-              <div className="lg:w-80 flex-shrink-0">
+              {/* Roster — wider, sorted: active first then by hire_date desc */}
+              <div className="lg:w-[26rem] flex-shrink-0">
                 <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
                   <div className="px-3 py-2 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between">
-                    <h3 className="font-bold text-gray-800 dark:text-gray-100 text-xs">{t('team.rosterTitle')}</h3>
+                    <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">{t('team.rosterTitle')}</h3>
                     <span className="text-[10px] bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full px-2 py-0.5 font-semibold">{members.length}</span>
                   </div>
                   <div className="divide-y divide-gray-50 dark:divide-gray-800">
-                    {[...members].sort((a, b) => b.hire_date.localeCompare(a.hire_date)).map((m) => {
+                    {[...members]
+                      .sort((a, b) => {
+                        if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+                        return b.hire_date.localeCompare(a.hire_date);
+                      })
+                      .map((m) => {
                       const days = daysSince(m.hire_date);
                       const isNewest = newest?.id === m.id;
                       const isOldest = oldest?.id === m.id;
                       return (
-                        <div key={m.id} className="px-3 py-1.5 flex items-center justify-between gap-1.5">
+                        <div key={m.id} className={`px-3 py-1.5 flex items-center justify-between gap-1.5 ${!m.is_active ? 'opacity-50' : ''}`}>
                           <div className="flex items-center gap-1.5 min-w-0">
                             <div className="w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] flex-shrink-0"
                               style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary)' }}>
@@ -286,10 +319,11 @@ export default function TeamClient({ session }: { session: Session }) {
                               <p className="text-[9px] text-gray-400 leading-tight">@{m.username} · {roleLabel(m.role, t)}</p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-1 flex-shrink-0 text-right">
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
                             {isNewest && <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">★ {t('team.newest')}</span>}
                             {isOldest && !isNewest && <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">{t('team.oldest')}</span>}
                             <p className="text-[9px] text-gray-500">{fmtDate(m.hire_date, lang)} · {tenureLabel(days, t)}</p>
+                            <ToggleSwitch checked={m.is_active} onChange={(v) => handleToggle(m.id, v)} disabled={toggling === m.id} />
                           </div>
                         </div>
                       );
@@ -351,13 +385,11 @@ function RankCard({ label, sub, name, value, accent, icon }: {
   };
   return (
     <div className={`bg-gradient-to-br ${colors[accent]} rounded-xl p-3 text-white shadow-sm flex-1 min-w-[140px]`}>
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-wide text-white/80">{label}</p>
-          {sub && <p className="text-[9px] text-white/60 mt-0.5 leading-tight">{sub}</p>}
-        </div>
-        <span className="text-4xl">{icon}</span>
+      <div className="flex items-start justify-between mb-0.5">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-white/80">{label}</p>
+        <span className="text-2xl leading-none flex-shrink-0 ml-2">{icon}</span>
       </div>
+      {sub && <p className="text-[9px] text-white/60 leading-tight w-full">{sub}</p>}
       <p className="text-sm font-semibold mt-1 truncate">{name}</p>
       <p className="text-xl font-extrabold leading-tight">{value}</p>
     </div>
