@@ -363,6 +363,13 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
   const [error, setError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [resetResult, setResetResult] = useState<{ tempPassword: string; emailSent: boolean } | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
+  const [pwError, setPwError] = useState('');
+  const [pwSuccess, setPwSuccess] = useState(false);
+  const [pwSaving, setPwSaving] = useState(false);
 
   async function handleSave(e: FormEvent) {
     e.preventDefault();
@@ -371,6 +378,12 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
     // Log raw state values BEFORE building payload
     console.log('[EditUserModal] State before save:', { role, managerId, srManager, name, email, hireDate, isActive });
 
+    // For agents: prefer jr_manager, fallback to sr_manager (direct report if no jr assigned)
+    // For jr_managers: use sr_manager
+    const resolvedManagerId = role === 'agent' ? (managerId || srManager || null)
+      : role === 'jr_manager' ? (srManager || null)
+      : null;
+
     const payload: Record<string, unknown> = {
       id: user.id,
       name,
@@ -378,12 +391,10 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
       role,
       hire_date: hireDate,
       is_active: isActive,
-      manager_id: role === 'agent' || role === 'jr_manager' ? (managerId || null) : null,
+      manager_id: resolvedManagerId,
     };
-    // For an agent, manager_id is the jr_manager's id; for a jr_manager, it's the sr_manager's id.
-    if (role === 'jr_manager') payload.manager_id = srManager || null;
 
-    console.log('[EditUserModal] Final payload.manager_id:', payload.manager_id, '| role:', role);
+    console.log('[EditUserModal] manager_id resolution:', { role, managerId, srManager, resolvedManagerId });
     console.log('[EditUserModal] Full payload:', JSON.stringify(payload));
 
     try {
@@ -435,6 +446,26 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
       setResetResult({ tempPassword: d.tempPassword, emailSent: d.emailSent });
     } else {
       setError(t('admin.resetPasswordError'));
+    }
+  }
+
+  async function handleSetPassword() {
+    setPwError(''); setPwSuccess(false);
+    if (newPassword !== confirmPassword) { setPwError(t('auth.errorMismatch')); return; }
+    if (newPassword.length < 6) { setPwError(t('auth.errorMinLength')); return; }
+    setPwSaving(true);
+    const res = await fetch('/api/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: user.id, password: newPassword, must_change_password: false }),
+    });
+    setPwSaving(false);
+    if (res.ok) {
+      setPwSuccess(true);
+      setNewPassword(''); setConfirmPassword('');
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setPwError(d.error || 'Error');
     }
   }
 
@@ -545,6 +576,45 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
             </button>
           </div>
         </form>
+        {viewerRole === 'admin' && (
+          <div className="px-5 pb-5 space-y-3">
+            <div className="h-px bg-gray-200 dark:bg-gray-700" />
+            <h4 className="font-bold text-gray-800 dark:text-gray-100 text-sm">{t('admin.setPasswordTitle')}</h4>
+            <div className="relative">
+              <input
+                type={showNewPw ? 'text' : 'password'}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder={t('auth.newPassword')}
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm pr-20"
+              />
+              <button type="button" onClick={() => setShowNewPw(!showNewPw)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                {showNewPw ? t('auth.hidePassword') : t('auth.showPassword')}
+              </button>
+            </div>
+            <div className="relative">
+              <input
+                type={showConfirmPw ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder={t('auth.confirmPassword')}
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm pr-20"
+              />
+              <button type="button" onClick={() => setShowConfirmPw(!showConfirmPw)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                {showConfirmPw ? t('auth.hidePassword') : t('auth.showPassword')}
+              </button>
+            </div>
+            {pwError && <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl px-3 py-2">{pwError}</p>}
+            {pwSuccess && <p className="text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded-xl px-3 py-2">✓ {t('admin.passwordSetSuccess')}</p>}
+            <button type="button" onClick={handleSetPassword} disabled={pwSaving || !newPassword}
+              className="w-full py-2.5 rounded-xl border-2 border-[var(--primary)] font-bold text-sm disabled:opacity-60"
+              style={{ color: 'var(--primary)' }}>
+              {pwSaving ? t('common.saving') : t('admin.setPasswordBtn')}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

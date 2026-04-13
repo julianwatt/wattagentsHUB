@@ -279,8 +279,8 @@ export default function TeamClient({ session }: { session: Session }) {
                       </div>
                       {/* Row 2: Top month, day, year */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <TopRepCard label={`🏆 ${t('team.topMonth')}`} entry={topRep.month} />
                         <TopRepCard label={`🏆 ${t('team.topDay')}`} entry={topRep.day} />
+                        <TopRepCard label={`🏆 ${t('team.topMonth')}`} entry={topRep.month} />
                         <TopRepCard label={`🏆 ${t('team.topYear')}`} entry={topRep.year} />
                       </div>
                     </div>
