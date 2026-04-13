@@ -1,3 +1,5 @@
+import nodemailer from 'nodemailer';
+
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://wattagenthub.vercel.app';
 
 export interface EmailSendResult {
@@ -20,18 +22,30 @@ export async function sendTempPasswordEmailDetailed(
   to: string, name: string, username: string, tempPassword: string,
 ): Promise<EmailSendResult> {
   const html = buildWelcomeEmailHtml(name, username, tempPassword);
-  return sendViaResend(to, 'Tu cuenta en Watt Distributors · Your Watt Distributors Account', html);
+  return sendEmail(to, 'Tu cuenta en Watt Distributors · Your Watt Distributors Account', html);
 }
 
 export async function sendPasswordResetEmail(
   to: string, name: string, username: string, tempPassword: string,
 ): Promise<boolean> {
   const html = buildResetEmailHtml(name, username, tempPassword);
-  const r = await sendViaResend(to, 'Contraseña restablecida · Password Reset — Watt Distributors', html);
+  const r = await sendEmail(to, 'Contraseña restablecida · Password Reset — Watt Distributors', html);
   return r.ok;
 }
 
-// ── Resend sender (single path, branded HTML always) ──
+// ── Email senders (Resend primary, SMTP fallback — both use branded HTML) ──
+
+async function sendEmail(to: string, subject: string, html: string): Promise<EmailSendResult> {
+  // 1. Try Resend
+  const resendResult = await sendViaResend(to, subject, html);
+  if (resendResult.ok) return resendResult;
+
+  // 2. Fallback: SMTP (same branded HTML)
+  const smtpOk = await sendViaSMTP(to, subject, html);
+  if (smtpOk) return { ok: true, path: 'resend', stage: 'smtp_fallback_sent' };
+
+  return resendResult; // return Resend error details
+}
 
 async function sendViaResend(to: string, subject: string, html: string): Promise<EmailSendResult> {
   const apiKey = process.env.RESEND_API_KEY;
@@ -59,6 +73,32 @@ async function sendViaResend(to: string, subject: string, html: string): Promise
   } catch (err) {
     console.error('[email] Resend threw:', err);
     return { ok: false, path: 'resend', stage: 'resend_threw', detail: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+async function sendViaSMTP(to: string, subject: string, html: string): Promise<boolean> {
+  const host = process.env.SMTP_HOST;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASSWORD;
+  if (!host || !user || !pass) {
+    console.error('[email] SMTP not configured');
+    return false;
+  }
+
+  const port = parseInt(process.env.SMTP_PORT || '587', 10);
+  const from = process.env.SMTP_FROM || `Watt Distributors <${user}>`;
+
+  try {
+    console.log('[email] Trying SMTP fallback via', host);
+    const transport = nodemailer.createTransport({
+      host, port, secure: port === 465, auth: { user, pass },
+    });
+    const info = await transport.sendMail({ from, to, subject, html });
+    console.log('[email] SMTP sent:', info.messageId);
+    return true;
+  } catch (err) {
+    console.error('[email] SMTP failed:', err);
+    return false;
   }
 }
 
