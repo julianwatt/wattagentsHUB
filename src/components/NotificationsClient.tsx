@@ -80,6 +80,15 @@ export default function NotificationsClient({ session }: { session: Session }) {
     setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, status: 'done' } : n));
   };
 
+  const handleMarkAll = async () => {
+    await fetch('/api/notifications', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markAll: true }),
+    });
+    setNotifications((prev) => prev.map((n) => ({ ...n, status: 'done' })));
+  };
+
   const notifLabel = (type: string) => {
     if (type === 'password_reset') return t('notifications.passwordReset');
     if (type === 'password_change') return t('notifications.passwordChange');
@@ -94,10 +103,10 @@ export default function NotificationsClient({ session }: { session: Session }) {
     return 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300';
   };
 
-  const notifDesc = (type: string) => {
-    if (type === 'password_reset') return t('notifications.descReset');
-    if (type === 'password_change') return t('notifications.descChange');
-    if (type === 'user_deactivated') return t('notifications.descDeactivated');
+  const notifDesc = (n: NotifItem) => {
+    if (n.type === 'password_reset') return t('notifications.descReset');
+    if (n.type === 'password_change') return `${t('notifications.descAdminChange')} ${n.user_name ?? '—'}`;
+    if (n.type === 'user_deactivated') return t('notifications.descDeactivated');
     return '';
   };
 
@@ -199,13 +208,22 @@ export default function NotificationsClient({ session }: { session: Session }) {
 
           {/* ── Card 2: User Notifications ── */}
           <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between gap-2">
               <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">{t('notifications.userNotifications')}</h3>
-              {notifications.filter((n) => n.status === 'pending').length > 0 && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300">
-                  {notifications.filter((n) => n.status === 'pending').length}
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {notifications.filter((n) => n.status === 'pending').length > 0 && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300">
+                    {notifications.filter((n) => n.status === 'pending').length}
+                  </span>
+                )}
+                <button
+                  onClick={handleMarkAll}
+                  disabled={notifications.filter((n) => n.status === 'pending').length === 0}
+                  className="text-[10px] font-semibold px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:text-green-600 hover:border-green-300 dark:hover:text-green-400 dark:hover:border-green-700 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  {t('notifications.markAllRead')}
+                </button>
+              </div>
             </div>
 
             <div className="max-h-[520px] overflow-y-auto divide-y divide-gray-50 dark:divide-gray-800">
@@ -225,7 +243,7 @@ export default function NotificationsClient({ session }: { session: Session }) {
                       </div>
                       <p className="text-xs font-semibold text-gray-800 dark:text-gray-100">{n.user_name ?? '—'}</p>
                       <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                        {notifDesc(n.type)} · @{n.user_username}
+                        {notifDesc(n)} · @{n.user_username}
                       </p>
                     </div>
                     <div className="flex-shrink-0 mt-1">

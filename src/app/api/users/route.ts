@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { getUsers, getUserById, createUser, updateUser, deleteUser, generateTempPassword } from '@/lib/users';
-import { UserRole } from '@/lib/supabase';
+import { UserRole, supabase } from '@/lib/supabase';
 import { sendTempPasswordEmail, sendTempPasswordEmailDetailed, sendPasswordResetEmail } from '@/lib/email';
 
 async function requireAdminOrCeo() {
@@ -117,6 +117,24 @@ export async function PATCH(req: NextRequest) {
 
     console.log('[PATCH /api/users] updateUser', { id, manager_id: updates.manager_id, updates });
     await updateUser(id, updates);
+
+    // If admin manually set a password, create a notification
+    if (updates.password) {
+      const target = await getUserById(id);
+      console.log('[PATCH /api/users] password changed, inserting notification for:', target?.name);
+      if (target) {
+        const { error: notifErr } = await supabase.from('admin_notifications').insert({
+          type: 'password_change',
+          user_id: id,
+          user_name: target.name,
+          user_username: target.username,
+          status: 'pending',
+        });
+        if (notifErr) console.error('[PATCH /api/users] notification insert error:', notifErr);
+        else console.log('[PATCH /api/users] notification inserted OK');
+      }
+    }
+
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Error updating user';

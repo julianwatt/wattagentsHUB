@@ -24,12 +24,19 @@ export async function GET() {
   return NextResponse.json({ notifications: notifications ?? [] });
 }
 
-// PATCH — mark notification as done
+// PATCH — mark notification(s) as done
 export async function PATCH(req: NextRequest) {
   const session = await requireAdminOrCeo();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { id } = await req.json();
+  const { id, markAll } = await req.json();
+
+  // Bulk: mark all pending as done
+  if (markAll) {
+    await supabase.from('admin_notifications').update({ status: 'done' }).eq('status', 'pending');
+    return NextResponse.json({ ok: true });
+  }
+
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
   await supabase.from('admin_notifications').update({ status: 'done' }).eq('id', id);
