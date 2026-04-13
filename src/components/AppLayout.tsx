@@ -127,7 +127,7 @@ export default function AppLayout({ session, children }: Props) {
     ...BASE_NAV.filter((item) => !(item.hideForAdmin && isAdminReal && !previewRole)),
     ...(canSeeTeam ? [TEAM_NAV] : []),
     ...(isAdminReal && !previewRole ? [ROSTER_NAV] : []),
-    ...((isAdminReal || role === 'ceo') && !previewRole ? [NOTIF_NAV] : []),
+    ...((isAdminReal && !previewRole) || role === 'ceo' ? [NOTIF_NAV] : []),
     ...(canSeeAdmin ? [ADMIN_NAV] : []),
   ];
 
