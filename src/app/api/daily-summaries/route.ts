@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 // GET — fetch daily summaries for last N days
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'admin') {
+  if (!session || (session.user.role !== 'admin' && session.user.role !== 'ceo')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -265,10 +265,14 @@ export default function AdminClient({ session }: { session: Session }) {
                     <div key={u.id} className={`flex items-center justify-between px-3 sm:px-5 py-3 sm:py-4 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 ${!u.is_active ? 'opacity-50' : ''}`}>
                       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                         <div
-                          className="w-7 h-7 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm flex-shrink-0"
-                          style={u.role === 'admin' || u.role === 'ceo'
-                            ? { backgroundColor: 'var(--dark-light)', color: 'var(--dark)' }
-                            : { backgroundColor: 'var(--primary-light)', color: 'var(--primary)' }}
+                          className={`w-7 h-7 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm flex-shrink-0 ${
+                            u.role === 'admin' || u.role === 'ceo'
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                              : ''
+                          }`}
+                          style={u.role !== 'admin' && u.role !== 'ceo'
+                            ? { backgroundColor: 'var(--primary-light)', color: 'var(--primary)' }
+                            : undefined}
                         >
                           {u.name.charAt(0).toUpperCase()}
                         </div>
