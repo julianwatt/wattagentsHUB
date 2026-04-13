@@ -85,7 +85,8 @@ export default function AppLayout({ session, children }: Props) {
   const canAccess = (r: string, path: string): boolean => {
     if (path.startsWith('/admin')) return r === 'admin' || r === 'ceo';
     if (path.startsWith('/team')) return r !== 'agent';
-    if (path.startsWith('/roster') || path.startsWith('/notifications')) return false; // admin-only, hidden in preview
+    if (path.startsWith('/roster')) return false; // admin-only, hidden in preview
+    if (path.startsWith('/notifications')) return r === 'ceo'; // ceo can access, others hidden in preview
     if (path.startsWith('/activity')) return r !== 'admin' && r !== 'ceo'; // hidden for admin/ceo without preview
     return true;
   };
@@ -126,7 +127,7 @@ export default function AppLayout({ session, children }: Props) {
     ...BASE_NAV.filter((item) => !(item.hideForAdmin && isAdminReal && !previewRole)),
     ...(canSeeTeam ? [TEAM_NAV] : []),
     ...(isAdminReal && !previewRole ? [ROSTER_NAV] : []),
-    ...(isAdminReal && !previewRole ? [NOTIF_NAV] : []),
+    ...((isAdminReal || role === 'ceo') && !previewRole ? [NOTIF_NAV] : []),
     ...(canSeeAdmin ? [ADMIN_NAV] : []),
   ];
 

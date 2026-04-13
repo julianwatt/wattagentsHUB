@@ -3,15 +3,15 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { supabase } from '@/lib/supabase';
 
-async function requireAdmin() {
+async function requireAdminOrCeo() {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'admin') return null;
+  if (!session || (session.user.role !== 'admin' && session.user.role !== 'ceo')) return null;
   return session;
 }
 
 // GET — fetch all notifications (all types)
 export async function GET() {
-  const session = await requireAdmin();
+  const session = await requireAdminOrCeo();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   // All notifications — password_reset, password_change, user_deactivated
@@ -26,7 +26,7 @@ export async function GET() {
 
 // PATCH — mark notification as done
 export async function PATCH(req: NextRequest) {
-  const session = await requireAdmin();
+  const session = await requireAdminOrCeo();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await req.json();

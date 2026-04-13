@@ -292,13 +292,11 @@ export default function AdminClient({ session }: { session: Session }) {
                             : u.role === 'jr_manager' ? t('admin.roleJrManager')
                             : t('admin.roleAgent')}
                         </span>
-                        {!(isCeoViewer && u.role === 'admin') && (
-                          <button onClick={() => setEditing(u)}
-                            title={t('common.edit')}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-[var(--primary)] hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                          </button>
-                        )}
+                        <button onClick={() => setEditing(u)}
+                          title={t('common.edit')}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-[var(--primary)] hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        </button>
                         {u.id !== session.user.id && !(isCeoViewer && u.role === 'admin') && (
                           <button onClick={() => handleDelete(u.id, u.name)}
                             title={t('common.delete')}
@@ -349,6 +347,7 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
   lang: string;
 }) {
   const isCeoViewer = viewerRole === 'ceo';
+  const ceoViewingAdmin = isCeoViewer && user.role === 'admin';
 
   // Resolve initial Sr Manager and Jr Manager based on who the agent's manager_id points to
   const initialSr = (() => {
@@ -497,12 +496,17 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
         <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
           <h3 className="font-bold text-gray-800 dark:text-gray-100">{t('admin.editUser')}</h3>
           <div className="flex items-center gap-3">
-            {user.role !== 'admin' && (
+            {user.role !== 'admin' && !ceoViewingAdmin && (
               <ToggleSwitch checked={isActive} onChange={setIsActive} size="md" />
             )}
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
           </div>
         </div>
+        {ceoViewingAdmin && (
+          <div className="mx-5 mt-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3">
+            <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">⚠ {t('admin.cannotEditAdmin')}</p>
+          </div>
+        )}
         <form onSubmit={handleSave} className="p-5 space-y-3">
           <div>
             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.username')}</label>
@@ -511,23 +515,26 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
           <div>
             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.fullName')}</label>
             <input type="text" value={name} required onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm" />
+              disabled={ceoViewingAdmin}
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm disabled:opacity-60" />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.emailLabel')}</label>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+              disabled={ceoViewingAdmin}
               placeholder="correo@watt.com"
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm" />
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm disabled:opacity-60" />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.hireDate')}</label>
             <input type="date" value={hireDate} required onChange={(e) => setHireDate(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm" />
+              disabled={ceoViewingAdmin}
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm disabled:opacity-60" />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.role')}</label>
             <select value={role} onChange={(e) => { setRole(e.target.value as UserRole); setManagerId(''); setSrManager(''); }}
-              disabled={isCeoViewer && user.role === 'admin'}
+              disabled={ceoViewingAdmin}
               className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm disabled:opacity-60">
               <option value="agent">{t('admin.roleAgent')}</option>
               <option value="jr_manager">{t('admin.roleJrManager')}</option>
@@ -586,17 +593,19 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
             </div>
           )}
 
-          <div className="flex gap-2 pt-2">
-            <button type="button" onClick={handleReset} disabled={saving}
-              className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 font-semibold text-xs hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60">
-              🔑 {t('admin.resetPasswordBtn')}
-            </button>
-            <button type="submit" disabled={saving}
-              className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm disabled:opacity-60"
-              style={{ backgroundColor: 'var(--primary)' }}>
-              {saving ? t('common.saving') : t('common.save')}
-            </button>
-          </div>
+          {!ceoViewingAdmin && (
+            <div className="flex gap-2 pt-2">
+              <button type="button" onClick={handleReset} disabled={saving}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 font-semibold text-xs hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60">
+                🔑 {t('admin.resetPasswordBtn')}
+              </button>
+              <button type="submit" disabled={saving}
+                className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm disabled:opacity-60"
+                style={{ backgroundColor: 'var(--primary)' }}>
+                {saving ? t('common.saving') : t('common.save')}
+              </button>
+            </div>
+          )}
         </form>
         {viewerRole === 'admin' && (
           <div className="px-5 pb-5 space-y-3">
