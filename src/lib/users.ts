@@ -117,8 +117,9 @@ export async function updateUser(
   if (updates.must_change_password !== undefined) patch.must_change_password = updates.must_change_password;
   if (updates.hire_date !== undefined) patch.hire_date = updates.hire_date;
   if (updates.is_active !== undefined) patch.is_active = updates.is_active;
-  console.log('[updateUser] id:', id, 'manager_id in patch:', 'manager_id' in patch ? patch.manager_id : '(NOT INCLUDED)', 'full patch:', JSON.stringify(patch));
-  const { error } = await supabase.from('users').update(patch).eq('id', id);
+  console.log('[updateUser] id:', id, 'manager_id value:', patch.manager_id, 'type:', typeof patch.manager_id, 'full patch:', JSON.stringify(patch, null, 2));
+  const { data, error } = await supabase.from('users').update(patch).eq('id', id).select('id, name, manager_id, role').single();
+  console.log('[updateUser] Supabase response — data:', JSON.stringify(data), 'error:', JSON.stringify(error));
   if (error) {
     if (error.code === '23505') {
       if (updates.role === 'ceo') throw new Error('Ya existe un usuario con rol CEO');
@@ -126,6 +127,7 @@ export async function updateUser(
     }
     throw new Error(error.message);
   }
+  console.log('[updateUser] VERIFIED — manager_id in DB after save:', data?.manager_id);
 }
 
 export async function deleteUser(id: string): Promise<void> {

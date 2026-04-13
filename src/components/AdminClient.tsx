@@ -343,21 +343,37 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
   lang: string;
 }) {
   const isCeoViewer = viewerRole === 'ceo';
+
+  // Resolve initial Sr Manager and Jr Manager based on who the agent's manager_id points to
   const initialSr = (() => {
     if (user.role === 'jr_manager') return user.manager_id ?? '';
     if (user.role === 'agent' && user.manager_id) {
-      const jr = users.find((u) => u.id === user.manager_id);
-      return jr?.manager_id ?? '';
+      const mgr = users.find((u) => u.id === user.manager_id);
+      if (!mgr) return '';
+      // Agent reports directly to a sr_manager (no jr_manager in between)
+      if (mgr.role === 'sr_manager') return mgr.id;
+      // Agent reports to a jr_manager → sr_manager is the jr's manager
+      if (mgr.role === 'jr_manager') return mgr.manager_id ?? '';
     }
     return '';
   })();
+
+  // managerId should only hold a jr_manager's id; if agent reports directly to sr, it's empty
+  const initialMgr = (() => {
+    if (user.role !== 'agent' || !user.manager_id) return user.manager_id ?? '';
+    const mgr = users.find((u) => u.id === user.manager_id);
+    if (mgr?.role === 'jr_manager') return user.manager_id;
+    return ''; // sr_manager or unknown → no jr_manager assigned
+  })();
+
+  console.log('[EditUserModal] init:', { userId: user.id, userName: user.name, role: user.role, dbManagerId: user.manager_id, initialSr, initialMgr });
 
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email ?? '');
   const [role, setRole] = useState<UserRole>(user.role);
   const [hireDate, setHireDate] = useState(user.hire_date);
   const [srManager, setSrManager] = useState(initialSr);
-  const [managerId, setManagerId] = useState(user.manager_id ?? '');
+  const [managerId, setManagerId] = useState(initialMgr);
   const [isActive, setIsActive] = useState(user.is_active);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -394,8 +410,8 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
       manager_id: resolvedManagerId,
     };
 
-    console.log('[EditUserModal] manager_id resolution:', { role, managerId, srManager, resolvedManagerId });
-    console.log('[EditUserModal] Full payload:', JSON.stringify(payload));
+    console.log('[EditUserModal] manager_id resolution:', { role, managerId, srManager, resolvedManagerId, managerIdType: typeof managerId, resolvedType: typeof resolvedManagerId });
+    console.log('[EditUserModal] Full payload:', JSON.stringify(payload, null, 2));
 
     try {
       const res = await fetch('/api/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
