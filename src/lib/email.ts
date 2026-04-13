@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from './supabase';
+import nodemailer from 'nodemailer';
 
 /**
  * Sends a welcome / temporary-password email to a newly created user.
@@ -160,16 +161,90 @@ export async function sendPasswordResetEmail(
   username: string,
   tempPassword: string,
 ): Promise<boolean> {
+  console.log('[email] sendPasswordResetEmail called', { to, name, username });
+
+  // Try Nodemailer SMTP first (Gmail / custom SMTP)
+  const smtpHost = process.env.SMTP_HOST;
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASSWORD;
+  if (smtpHost && smtpUser && smtpPass) {
+    console.log('[email] SMTP credentials found, attempting SMTP send via', smtpHost);
+    const sent = await sendResetViaSMTP(to, name, username, tempPassword);
+    if (sent) return true;
+    console.warn('[email] SMTP send failed, falling through to Resend');
+  } else {
+    console.log('[email] No SMTP credentials (SMTP_HOST/SMTP_USER/SMTP_PASSWORD), trying Resend');
+  }
+
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.warn('[email] RESEND_API_KEY not set — cannot send reset email');
+    console.warn('[email] Available env keys:', Object.keys(process.env).filter(k => k.includes('SMTP') || k.includes('RESEND') || k.includes('EMAIL') || k.includes('MAIL')).join(', ') || '(none)');
     return false;
   }
 
   const from = process.env.RESEND_FROM || 'Watt Distributors <onboarding@resend.dev>';
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://watt.local';
+  const html = buildResetEmailHtml(name, username, tempPassword, appUrl);
 
-  const html = `<!DOCTYPE html>
+  try {
+    console.log('[email] Sending reset email via Resend to', to, 'from', from);
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to, subject: 'Contraseña restablecida · Password Reset — Watt Distributors', html }),
+    });
+    const body = await res.text();
+    if (!res.ok) {
+      console.error('[email] Resend reset email error:', res.status, body);
+      return false;
+    }
+    console.log('[email] Resend reset email sent successfully:', res.status, body);
+    return true;
+  } catch (err) {
+    console.error('[email] Resend reset email threw:', err);
+    return false;
+  }
+}
+
+async function sendResetViaSMTP(
+  to: string,
+  name: string,
+  username: string,
+  tempPassword: string,
+): Promise<boolean> {
+  const host = process.env.SMTP_HOST!;
+  const port = parseInt(process.env.SMTP_PORT || '587', 10);
+  const user = process.env.SMTP_USER!;
+  const pass = process.env.SMTP_PASSWORD!;
+  const from = process.env.SMTP_FROM || `Watt Distributors <${user}>`;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://watt.local';
+
+  const html = buildResetEmailHtml(name, username, tempPassword, appUrl);
+
+  try {
+    const transport = nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: { user, pass },
+    });
+    const info = await transport.sendMail({
+      from,
+      to,
+      subject: 'Contraseña restablecida · Password Reset — Watt Distributors',
+      html,
+    });
+    console.log('[email] SMTP send success:', info.messageId, info.response);
+    return true;
+  } catch (err) {
+    console.error('[email] SMTP send failed:', err);
+    return false;
+  }
+}
+
+function buildResetEmailHtml(name: string, username: string, tempPassword: string, appUrl: string): string {
+  return `<!DOCTYPE html>
 <html lang="es">
 <head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/></head>
 <body style="margin:0;padding:0;background:#f4f1ea;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2937;">
@@ -226,22 +301,6 @@ export async function sendPasswordResetEmail(
 </table>
 </td></tr></table>
 </body></html>`;
-
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to, subject: 'Contraseña restablecida · Password Reset — Watt Distributors', html }),
-    });
-    if (!res.ok) {
-      console.error('[email] Reset email error:', res.status, await res.text());
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error('[email] Reset email threw:', err);
-    return false;
-  }
 }
 
 function escapeHtml(s: string): string {

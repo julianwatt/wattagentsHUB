@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Session } from 'next-auth';
 import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
+import { usePreviewRole } from './PreviewRoleContext';
 import { fmtDate } from '@/lib/i18n';
 import { ActivityEntry, CampaignType, effectivenessRate } from '@/lib/activity';
 import { createClient } from '@supabase/supabase-js';
@@ -45,18 +46,24 @@ function fmtTime(iso: string | null | undefined): string {
 
 export default function ActivityClient({ session }: { session: Session }) {
   const { t, lang } = useLanguage();
+  const { previewUserId, previewUserName } = usePreviewRole();
+
+  // Effective user: preview target or logged-in user
+  const effectiveUserId = previewUserId ?? session.user.id;
+  const isPreviewMode = !!previewUserId;
 
   // Fetch real user name from DB
-  const [dbUserName, setDbUserName] = useState<string>(session.user.name ?? '');
+  const [dbUserName, setDbUserName] = useState<string>(previewUserName ?? session.user.name ?? '');
   useEffect(() => {
+    if (previewUserName) { setDbUserName(previewUserName); return; }
     (async () => {
       try {
         const sb = getSupabaseBrowser();
-        const { data } = await sb.from('users').select('name').eq('id', session.user.id).single();
+        const { data } = await sb.from('users').select('name').eq('id', effectiveUserId).single();
         if (data?.name) setDbUserName(data.name);
       } catch {}
     })();
-  }, [session.user.id, session.user.name]);
+  }, [effectiveUserId, previewUserName, session.user.name]);
 
   // If admin visits /activity without preview mode, redirect to /admin
   const isRealAdmin = session.user.role === 'admin';
@@ -87,7 +94,7 @@ export default function ActivityClient({ session }: { session: Session }) {
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadEntry = useCallback(async (d: string) => {
-    const res = await fetch(`/api/activity?agentId=${session.user.id}&date=${d}`);
+    const res = await fetch(`/api/activity?agentId=${effectiveUserId}&date=${d}`);
     if (res.ok) {
       const entry: ActivityEntry | null = await res.json();
       if (entry) {
@@ -99,11 +106,14 @@ export default function ActivityClient({ session }: { session: Session }) {
         if (d === today()) setTodayEntry(null);
       }
     }
-  }, [session.user.id]);
+  }, [effectiveUserId]);
 
   const loadHistory = useCallback(async () => {
     setLoading(true);
-    const res = await fetch('/api/activity');
+    const url = previewUserId
+      ? `/api/activity?asUser=${previewUserId}`
+      : '/api/activity';
+    const res = await fetch(url);
     if (res.ok) {
       const data: ActivityEntry[] = await res.json();
       setHistory(data);
@@ -111,7 +121,7 @@ export default function ActivityClient({ session }: { session: Session }) {
       if (te) { setTodayEntry(te); applyEntry(te); }
     }
     setLoading(false);
-  }, []);
+  }, [previewUserId]);
 
   function applyEntry(entry: ActivityEntry) {
     setD2d({ knocks: entry.knocks, contacts: entry.contacts, bills: entry.bills, sales: entry.sales });
@@ -133,7 +143,7 @@ export default function ActivityClient({ session }: { session: Session }) {
         event: '*',
         schema: 'public',
         table: 'activity_entries',
-        filter: `agent_id=eq.${session.user.id}`,
+        filter: `agent_id=eq.${effectiveUserId}`,
       }, (payload) => {
         const entry = payload.new as ActivityEntry;
         if (!entry?.date) return;
@@ -147,7 +157,7 @@ export default function ActivityClient({ session }: { session: Session }) {
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [session.user.id, date]);
+  }, [effectiveUserId, date]);
 
   // +/- click → immediate API call
   const handleIncrement = async (field: string, delta: 1 | -1) => {
@@ -371,15 +381,15 @@ export default function ActivityClient({ session }: { session: Session }) {
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <button type="button" disabled={isIncMinus || val === 0}
+                        <button type="button" disabled={isPreviewMode || isIncMinus || val === 0}
                           onClick={() => handleIncrement(f.key, -1)}
                           className="w-9 h-9 rounded-xl font-bold text-lg flex items-center justify-center border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-red-50 hover:text-red-500 disabled:opacity-30 transition-colors flex-shrink-0">
                           {isIncMinus ? '…' : '−'}
                         </button>
-                        <input type="number" min={0} max={999} value={val}
+                        <input type="number" min={0} max={999} value={val} readOnly={isPreviewMode}
                           onChange={(e) => setMetrics(f.key, Math.max(0, Number(e.target.value)))}
                           className="flex-1 text-center px-2 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 font-bold text-xl focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
-                        <button type="button" disabled={isIncPlus}
+                        <button type="button" disabled={isPreviewMode || isIncPlus}
                           onClick={() => handleIncrement(f.key, 1)}
                           className="w-9 h-9 rounded-xl font-bold text-lg flex items-center justify-center text-white disabled:opacity-50 transition-colors flex-shrink-0"
                           style={{ backgroundColor: 'var(--primary)' }}>
@@ -465,6 +475,7 @@ export default function ActivityClient({ session }: { session: Session }) {
                               </span>
                             </div>
                           </div>
+                          {!isPreviewMode && (
                           <div className="flex gap-1 flex-shrink-0">
                             <button onClick={() => { setDate(entry.date); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                               className="text-xs px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors">
@@ -475,6 +486,7 @@ export default function ActivityClient({ session }: { session: Session }) {
                               {t('activity.delete')}
                             </button>
                           </div>
+                          )}
                         </div>
                       </div>
                     );

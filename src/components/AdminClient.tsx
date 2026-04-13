@@ -377,14 +377,16 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
     };
     // For an agent, manager_id is the jr_manager's id; for a jr_manager, it's the sr_manager's id.
     if (role === 'jr_manager') payload.manager_id = srManager || null;
+    console.log('[EditUserModal] Saving payload:', JSON.stringify(payload));
     try {
       const res = await fetch('/api/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const d = await res.json().catch(() => ({}));
+      console.log('[EditUserModal] Supabase response:', res.status, JSON.stringify(d));
       setSaving(false);
       if (res.ok) {
         setSaveSuccess(true);
         setTimeout(() => onSaved(), 800);
       } else {
-        const d = await res.json().catch(() => ({}));
         const msg = d.error || 'Error';
         setError(msg);
         console.error('[EditUserModal] Save failed:', msg, d);

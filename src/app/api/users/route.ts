@@ -115,6 +115,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: true, tempPassword, emailSent });
     }
 
+    console.log('[PATCH /api/users] updateUser', { id, updates });
     await updateUser(id, updates);
     return NextResponse.json({ success: true });
   } catch (err: unknown) {

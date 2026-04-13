@@ -28,12 +28,14 @@ export async function POST(req: NextRequest) {
   await updateUser(user.id, { password: tempPassword, must_change_password: true });
 
   // Send email directly to the user
+  console.log('[forgot-password] Sending reset email to', user.email, 'for user', user.username);
   const emailSent = await sendPasswordResetEmail(
     user.email,
     user.name,
     user.username,
     tempPassword,
   );
+  console.log('[forgot-password] Email send result:', emailSent ? 'SUCCESS' : 'FAILED');
 
   if (!emailSent) {
     console.error('[forgot-password] Failed to send reset email to', user.email);
