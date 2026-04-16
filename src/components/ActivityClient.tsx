@@ -6,14 +6,7 @@ import { useLanguage } from './LanguageContext';
 import { usePreviewRole, useActiveUserId } from './PreviewRoleContext';
 import { fmtDate } from '@/lib/i18n';
 import { ActivityEntry, CampaignType, effectivenessRate } from '@/lib/activity';
-import { createClient } from '@supabase/supabase-js';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  { auth: { persistSession: false } }
-);
 
 const today = () => new Date().toISOString().split('T')[0];
 
@@ -137,7 +130,8 @@ export default function ActivityClient({ session }: { session: Session }) {
 
   // Realtime subscription
   useEffect(() => {
-    const channel = supabase
+    const sb = getSupabaseBrowser();
+    const channel = sb
       .channel('activity-realtime')
       .on('postgres_changes', {
         event: '*',
@@ -156,7 +150,7 @@ export default function ActivityClient({ session }: { session: Session }) {
         if (entry.date === date) applyEntry(entry);
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { sb.removeChannel(channel); };
   }, [activeUserId, date]);
 
   // +/- click → immediate API call
