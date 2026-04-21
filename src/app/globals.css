@@ -33,6 +33,36 @@
 .text-dark { color: var(--dark); }
 .ring-brand { --tw-ring-color: var(--primary); }
 
+/* === TABLET / iPad TOUCH OPTIMIZATION === */
+@media (pointer: coarse) and (min-width: 768px) {
+  /* Larger tap targets for inputs and buttons on touch tablets */
+  input[type="text"],
+  input[type="number"],
+  input[type="date"],
+  input[type="email"],
+  input[type="password"],
+  select,
+  textarea {
+    min-height: 44px;
+    font-size: 16px; /* prevents iOS auto-zoom on focus */
+  }
+
+  /* Comfortable button tap zones */
+  button, a[role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Wider scrollbar for touch dragging */
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-thumb { border-radius: 4px; background: rgba(0,0,0,0.2); }
+}
+
+/* Safe area for iPad home indicator + notch devices */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 @media print {
   .print\:hidden { display: none !important; }
   body { background: white !important; color: black !important; }

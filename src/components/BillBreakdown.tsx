@@ -42,9 +42,9 @@ export default function BillBreakdown({ result, onReset, agentName }: Props) {
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-4 sm:gap-6">
+      <div className="grid md:grid-cols-3 gap-4 sm:gap-6">
         {/* Bill table */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="md:col-span-2 space-y-4">
           {/* Header */}
           <div className="rounded-2xl p-5 text-white" style={{ background: `linear-gradient(to right, var(--dark), var(--dark-alt))` }}>
             <div className="flex items-start justify-between gap-4">

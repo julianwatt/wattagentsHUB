@@ -22,6 +22,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="es" className="h-full" suppressHydrationWarning>
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         {/* Inject theme CSS variables server-side (no flash) */}
         <style dangerouslySetInnerHTML={{ __html: `:root { ${cssVars} }` }} />
         {/* Prevent dark mode flash */}

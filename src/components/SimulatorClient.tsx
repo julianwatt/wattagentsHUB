@@ -40,9 +40,9 @@ export default function SimulatorClient({ session }: { session: Session }) {
     <AppLayout session={session}>
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
         {!result ? (
-          <div className="grid lg:grid-cols-3 gap-4 sm:gap-6">
+          <div className="grid md:grid-cols-3 gap-4 sm:gap-6">
             {/* Inputs column */}
-            <div className="lg:col-span-1 space-y-4">
+            <div className="md:col-span-1 space-y-4">
               {/* Step 1: Customer */}
               <Card step="1" title={t('simulator.step1')}>
                 <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">{t('simulator.customerName')}</label>
@@ -92,7 +92,7 @@ export default function SimulatorClient({ session }: { session: Session }) {
             </div>
 
             {/* TDU + Plan */}
-            <div className="lg:col-span-2 space-y-4">
+            <div className="md:col-span-2 space-y-4">
               {/* Step 3: TDU */}
               <Card step="3" title={t('simulator.step3')}>
                 <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-2.5">

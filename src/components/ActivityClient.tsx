@@ -291,9 +291,9 @@ export default function ActivityClient({ session }: { session: Session }) {
           </div>
         )}
 
-        <div className="grid lg:grid-cols-5 gap-5">
+        <div className="grid md:grid-cols-5 gap-5">
           {/* ── Form ── */}
-          <div className="lg:col-span-2">
+          <div className="md:col-span-2">
             <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-3 sm:p-5">
               {/* Date */}
               <div className="mb-4">
@@ -377,15 +377,15 @@ export default function ActivityClient({ session }: { session: Session }) {
                       <div className="flex items-center gap-2">
                         <button type="button" disabled={isPreviewMode || isIncMinus || val === 0}
                           onClick={() => handleIncrement(f.key, -1)}
-                          className="w-9 h-9 rounded-xl font-bold text-lg flex items-center justify-center border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-red-50 hover:text-red-500 disabled:opacity-30 transition-colors flex-shrink-0">
+                          className="w-11 h-11 md:w-12 md:h-12 rounded-xl font-bold text-lg md:text-xl flex items-center justify-center border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-red-50 hover:text-red-500 active:scale-95 disabled:opacity-30 transition-all flex-shrink-0">
                           {isIncMinus ? '…' : '−'}
                         </button>
                         <input type="number" min={0} max={999} value={val} readOnly={isPreviewMode}
                           onChange={(e) => setMetrics(f.key, Math.max(0, Number(e.target.value)))}
-                          className="flex-1 text-center px-2 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 font-bold text-xl focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
+                          className="flex-1 text-center px-2 py-2.5 md:py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 font-bold text-xl md:text-2xl focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
                         <button type="button" disabled={isPreviewMode || isIncPlus}
                           onClick={() => handleIncrement(f.key, 1)}
-                          className="w-9 h-9 rounded-xl font-bold text-lg flex items-center justify-center text-white disabled:opacity-50 transition-colors flex-shrink-0"
+                          className="w-11 h-11 md:w-12 md:h-12 rounded-xl font-bold text-lg md:text-xl flex items-center justify-center text-white active:scale-95 disabled:opacity-50 transition-all flex-shrink-0"
                           style={{ backgroundColor: 'var(--primary)' }}>
                           {isIncPlus ? '…' : '+'}
                         </button>
@@ -420,7 +420,7 @@ export default function ActivityClient({ session }: { session: Session }) {
           </div>
 
           {/* ── History ── */}
-          <div className="lg:col-span-3">
+          <div className="md:col-span-3">
             <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-gray-50 dark:border-gray-800">
                 <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">{t('activity.history')}</h3>

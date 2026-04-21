@@ -259,8 +259,8 @@ export default function AppLayout({ session, children }: Props) {
             <WattLogo className="h-full w-auto" />
           </div>
 
-          {/* Desktop nav links */}
-          <nav className="hidden md:flex items-center gap-1">
+          {/* Desktop nav links (lg+ = 1024px — iPads in portrait keep bottom tab bar) */}
+          <nav className="hidden lg:flex items-center gap-1">
             {allNav.map((item) => {
               const Icon = item.icon;
               const active = pathname === item.href;
@@ -290,7 +290,7 @@ export default function AppLayout({ session, children }: Props) {
                 value={previewUserId ? `user:${previewUserId}` : (previewRole ?? '')}
                 onChange={(e) => handlePreviewChange(e.target.value)}
                 title={t('admin.viewAs')}
-                className="hidden md:block h-8 px-2 rounded-lg text-[11px] font-bold bg-white/10 text-white hover:bg-white/20 border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 max-w-[180px]"
+                className="hidden lg:block h-8 px-2 rounded-lg text-[11px] font-bold bg-white/10 text-white hover:bg-white/20 border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 max-w-[180px]"
               >
                 <option value="" className="text-gray-900">
                   👁️ {t('admin.viewAs')}
@@ -384,17 +384,17 @@ export default function AppLayout({ session, children }: Props) {
               {theme === 'dark' ? <SunIcon className="w-4 h-4" /> : <MoonIcon className="w-4 h-4" />}
             </button>
 
-            {/* Hamburger button — mobile only */}
+            {/* Hamburger button — mobile + tablet */}
             <button
               onClick={() => setMenuOpen(!menuOpen)}
-              className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+              className="lg:hidden w-10 h-10 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
               aria-label={t('nav.menu')}
             >
               <HamburgerIcon className="w-5 h-5" />
             </button>
 
             {/* Desktop: User name + logout */}
-            <div className="hidden md:flex items-center gap-2 pl-1 border-l border-white/20 ml-1">
+            <div className="hidden lg:flex items-center gap-2 pl-1 border-l border-white/20 ml-1">
               <div className="text-right leading-none">
                 <p className="text-xs font-semibold text-white max-w-[100px] truncate">{dbUserName || session.user.name}</p>
                 <p className="text-[10px] text-white/50">{roleLabel}</p>
@@ -411,16 +411,16 @@ export default function AppLayout({ session, children }: Props) {
         </div>
       </header>
 
-      {/* ── Mobile slide-out hamburger menu ── */}
+      {/* ── Slide-out hamburger menu (mobile + tablet) ── */}
       {/* Overlay */}
       <div
-        className={`md:hidden fixed inset-0 z-50 bg-black/40 transition-opacity duration-300 ${menuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+        className={`lg:hidden fixed inset-0 z-50 bg-black/40 transition-opacity duration-300 ${menuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
         onClick={() => setMenuOpen(false)}
       />
       {/* Panel */}
       <div
         ref={menuRef}
-        className={`md:hidden fixed top-0 right-0 z-50 h-full w-72 bg-white dark:bg-gray-900 shadow-2xl transform transition-transform duration-300 ease-in-out ${menuOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`lg:hidden fixed top-0 right-0 z-50 h-full w-72 md:w-80 bg-white dark:bg-gray-900 shadow-2xl transform transition-transform duration-300 ease-in-out ${menuOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         {/* Close button */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
@@ -486,14 +486,14 @@ export default function AppLayout({ session, children }: Props) {
                 key={item.href}
                 href={item.href}
                 onClick={() => setMenuOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                className={`flex items-center gap-3 px-3 py-3 md:py-3.5 rounded-xl text-sm md:text-base font-medium transition-colors ${
                   active
                     ? 'text-white'
                     : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
                 style={active ? { backgroundColor: 'var(--primary)' } : {}}
               >
-                <Icon className="w-5 h-5" />
+                <Icon className="w-5 h-5 md:w-6 md:h-6" />
                 {t(item.key)}
               </Link>
             );
@@ -512,13 +512,13 @@ export default function AppLayout({ session, children }: Props) {
         </div>
       </div>
 
-      {/* Main content — bottom padding on mobile for tab bar */}
-      <main className="flex-1 pb-16 md:pb-0 min-h-0">
+      {/* Main content — bottom padding for tab bar (mobile + tablet) */}
+      <main className="flex-1 pb-16 lg:pb-0 min-h-0">
         {children}
       </main>
 
-      {/* Mobile bottom tab bar — always visible */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-40 safe-area-bottom">
+      {/* Bottom tab bar — mobile + iPad portrait */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-40 safe-area-bottom">
         <div className="flex">
           {allNav.map((item) => {
             const Icon = item.icon;
@@ -527,12 +527,12 @@ export default function AppLayout({ session, children }: Props) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-[10px] font-semibold transition-colors ${
+                className={`flex-1 flex flex-col items-center justify-center py-2.5 md:py-3 gap-0.5 text-[10px] md:text-xs font-semibold transition-colors ${
                   active ? '' : 'text-gray-400 dark:text-gray-500'
                 }`}
                 style={active ? { color: 'var(--primary)' } : {}}
               >
-                <Icon className="w-5 h-5" />
+                <Icon className="w-5 h-5 md:w-6 md:h-6" />
                 <span>{t(item.key)}</span>
               </Link>
             );

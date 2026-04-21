@@ -208,7 +208,7 @@ export default function DashboardClient({ session }: { session: Session }) {
         ) : (
           <>
             {/* Stat cards — order: Best Day, Interactions, Contacts/Zipcodes, Sales, Effectiveness */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
               <StatCard
                 label={t('dashboard.bestDayCard')}
                 value={best && best.sales > 0 ? `${best.sales}` : '—'}
