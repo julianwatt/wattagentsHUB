@@ -47,8 +47,9 @@
     font-size: 16px; /* prevents iOS auto-zoom on focus */
   }
 
-  /* Comfortable button tap zones */
-  button, a[role="button"] {
+  /* Comfortable button tap zones (exclude toggle switches & tiny inline controls) */
+  button:not([role="switch"]):not(.no-min-size),
+  a[role="button"] {
     min-height: 44px;
     min-width: 44px;
   }
