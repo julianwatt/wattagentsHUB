@@ -12,7 +12,7 @@ interface Props {
 
 export function Providers({ children, themeId }: Props) {
   return (
-    <SessionProvider>
+    <SessionProvider refetchOnWindowFocus={false} refetchInterval={0}>
       <ThemeProvider>
         <LanguageProvider>
           <ColorThemeProvider initialThemeId={themeId}>

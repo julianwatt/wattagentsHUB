@@ -25,11 +25,12 @@ export default function ChangePasswordPage() {
   const [showConfirm, setShowConfirm] = useState(false);
 
   // If user already changed password, redirect to activity
+  const mustChange = session?.user?.must_change_password;
   useEffect(() => {
-    if (status === 'authenticated' && !session?.user?.must_change_password) {
+    if (status === 'authenticated' && !mustChange) {
       router.replace('/activity');
     }
-  }, [status, session, router]);
+  }, [status, mustChange, router]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();

@@ -2,13 +2,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Session } from 'next-auth';
 import AppLayout from './AppLayout';
+import InfoTooltip from './InfoTooltip';
 import { useLanguage } from './LanguageContext';
 import { usePreviewRole, useActiveUserId } from './PreviewRoleContext';
 import { fmtDate } from '@/lib/i18n';
 import { ActivityEntry, CampaignType, effectivenessRate } from '@/lib/activity';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
 
-const today = () => new Date().toISOString().split('T')[0];
+// Use local date (not UTC) — toISOString() shifts day when UTC > local date
+const today = () => new Date().toLocaleDateString('en-CA');
 
 const STORE_CHAINS = ['Walmart', 'HEB', "Sam's Club", 'El Rancho Supermercado', 'La Michoacana', 'Fiesta Mart', 'Otro'];
 
@@ -31,6 +33,7 @@ const RETAIL_FIELDS: Array<{ key: RetailKey; goal?: number; icon: string; labelK
 
 const EMPTY_D2D = { knocks: 0, contacts: 0, bills: 0, sales: 0 };
 const EMPTY_RETAIL = { stops: 0, zipcodes: 0, credit_checks: 0, sales: 0 };
+const draftKey = (userId: string) => `watt_activity_draft_${userId}`;
 
 function fmtTime(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -82,6 +85,7 @@ export default function ActivityClient({ session }: { session: Session }) {
   const [success, setSuccess] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [incrementing, setIncrementing] = useState<string | null>(null);
+  const [draftRestored, setDraftRestored] = useState(false);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadEntry = useCallback(async (d: string) => {
@@ -127,6 +131,54 @@ export default function ActivityClient({ session }: { session: Session }) {
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
   useEffect(() => { loadEntry(date); }, [date, loadEntry]);
+
+  // Restore localStorage draft once initial load is done and no DB entry exists for today
+  useEffect(() => {
+    if (loading) return;
+    if (todayEntry) return;
+    if (date !== today()) return;
+    if (isPreviewMode) return;
+    try {
+      const raw = localStorage.getItem(draftKey(activeUserId));
+      if (!raw) return;
+      const draft = JSON.parse(raw) as {
+        d2d: typeof EMPTY_D2D;
+        retail: typeof EMPTY_RETAIL;
+        zipCode: string;
+        storeChain: string;
+        storeAddress: string;
+        campaignType: CampaignType;
+      };
+      setD2d(draft.d2d ?? EMPTY_D2D);
+      setRetail(draft.retail ?? EMPTY_RETAIL);
+      setZipCode(draft.zipCode ?? '');
+      setStoreChain(draft.storeChain ?? STORE_CHAINS[0]);
+      setStoreAddress(draft.storeAddress ?? '');
+      setCampaignType(draft.campaignType ?? 'D2D');
+      setDraftRestored(true);
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, todayEntry?.id, date, activeUserId, isPreviewMode]);
+
+  // Save draft to localStorage every 5s for offline recovery
+  useEffect(() => {
+    if (isPreviewMode) return;
+    const id = setInterval(() => {
+      if (date !== today()) return;
+      try {
+        localStorage.setItem(draftKey(activeUserId), JSON.stringify({
+          d2d, retail, zipCode, storeChain, storeAddress, campaignType,
+        }));
+      } catch {}
+    }, 5000);
+    return () => clearInterval(id);
+  }, [d2d, retail, zipCode, storeChain, storeAddress, campaignType, date, activeUserId, isPreviewMode]);
+
+  // Clear draft on successful save
+  useEffect(() => {
+    if (!success) return;
+    try { localStorage.removeItem(draftKey(activeUserId)); } catch {}
+  }, [success, activeUserId]);
 
   // Realtime subscription
   useEffect(() => {
@@ -304,7 +356,20 @@ export default function ActivityClient({ session }: { session: Session }) {
 
               {/* Campaign type */}
               <div className="mb-4">
-                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">{t('activity.campaignType')}</label>
+                <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide flex items-center gap-1.5">
+                  {t('activity.campaignType')}
+                  <InfoTooltip text={t('activity.campaignTypeTooltip')} />
+                </label>
+                {todayEntry && date === today() && (
+                  <div className="mb-2 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-[11px] leading-snug text-amber-800 dark:text-amber-200 flex items-start gap-1.5">
+                    <span aria-hidden>🔒</span>
+                    <span>
+                      {t('activity.campaignLockedBannerPrefix')}{' '}
+                      <strong>{todayEntry.campaign_type}</strong>{' '}
+                      {t('activity.campaignLockedBannerSuffix')}
+                    </span>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   {(['D2D', 'Retail'] as CampaignType[]).map((ct) => {
                     // Lock the other tab if today already has an entry of one type
@@ -316,8 +381,9 @@ export default function ActivityClient({ session }: { session: Session }) {
                         disabled={!!lockedByEntry}
                         onClick={() => setCampaignType(ct)}
                         title={lockedByEntry ? t('activity.campaignLocked') : undefined}
-                        className={`py-2 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${isActive ? 'text-white border-transparent' : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700'}`}
-                        style={isActive ? { backgroundColor: ctColor } : {}}>
+                        className={`relative py-2 rounded-xl text-sm font-semibold border transition-colors disabled:cursor-not-allowed ${lockedByEntry ? 'opacity-50 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-dashed border-gray-300 dark:border-gray-600' : isActive ? 'text-white border-transparent' : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700'}`}
+                        style={isActive && !lockedByEntry ? { backgroundColor: ctColor } : {}}>
+                        {lockedByEntry && <span className="absolute top-1 right-1.5 text-[10px]" aria-hidden>🔒</span>}
                         {ct === 'D2D' ? '🚶 D2D' : '🏪 Retail'}
                       </button>
                     );
@@ -396,7 +462,10 @@ export default function ActivityClient({ session }: { session: Session }) {
 
                 {/* Effectiveness */}
                 <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                  <p className="text-xs text-gray-500">{effLabel}</p>
+                  <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                    {effLabel}
+                    <InfoTooltip text={t('activity.effectivenessTooltip')} />
+                  </span>
                   <div className={`text-2xl font-extrabold ${parseFloat(effRate) >= 20 ? 'text-green-600' : parseFloat(effRate) >= 10 ? 'text-orange-500' : 'text-gray-400'}`}>
                     {effRate}%
                   </div>
@@ -413,6 +482,12 @@ export default function ActivityClient({ session }: { session: Session }) {
                 {saveError && (
                   <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 text-red-700 dark:text-red-400 rounded-xl px-4 py-2.5 text-sm font-medium text-center">
                     ⚠ {saveError}
+                  </div>
+                )}
+                {draftRestored && (
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 rounded-xl px-4 py-2.5 text-sm flex items-center justify-between gap-2">
+                    <span>📋 {t('home.draftRestored')}</span>
+                    <button type="button" onClick={() => setDraftRestored(false)} className="text-[11px] underline opacity-70">OK</button>
                   </div>
                 )}
               </div>
@@ -491,6 +566,21 @@ export default function ActivityClient({ session }: { session: Session }) {
           </div>
         </div>
       </div>
+
+      {/* Sticky bottom save CTA — mobile only, today's date, not preview */}
+      {date === today() && !isPreviewMode && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 md:hidden px-4 py-3 bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm border-t border-gray-100 dark:border-gray-800">
+          <button
+            type="button"
+            onClick={() => doSave(date, campaignType, d2d, retail, zipCode, storeChain, storeAddress)}
+            disabled={saving}
+            className="w-full py-3.5 rounded-xl font-bold text-white text-sm transition-opacity disabled:opacity-60 active:scale-95"
+            style={{ backgroundColor: 'var(--primary)' }}
+          >
+            {saving ? t('home.savingSticky') : success ? t('home.savedSticky') : t('home.saveCTA')}
+          </button>
+        </div>
+      )}
     </AppLayout>
   );
 }

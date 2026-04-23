@@ -9,6 +9,7 @@ import { useTheme } from './ThemeContext';
 import { usePreviewRole, Role } from './PreviewRoleContext';
 import { fmtDate, fmtDateTime } from '@/lib/i18n';
 import WattLogo from './WattLogo';
+import PreviewRoleSwitcher, { PreviewUser } from './PreviewRoleSwitcher';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
 
 interface Props {
@@ -16,14 +17,17 @@ interface Props {
   children: React.ReactNode;
 }
 
+function HomeIcon({ className }: { className: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>;
+}
+const HOME_NAV = { href: '/home', icon: HomeIcon, key: 'nav.home' };
 const BASE_NAV = [
   { href: '/activity', icon: ActivityIcon, key: 'nav.activity', hideForAdmin: true },
   { href: '/simulator', icon: SimIcon, key: 'nav.simulator' },
   { href: '/dashboard', icon: DashIcon, key: 'nav.dashboard' },
 ];
 const TEAM_NAV = { href: '/team', icon: TeamIcon, key: 'nav.team' };
-const ADMIN_NAV = { href: '/admin', icon: AdminIcon, key: 'nav.admin' };
-const ROSTER_NAV = { href: '/roster', icon: RosterIcon, key: 'nav.roster' };
+const MANAGE_NAV = { href: '/manage/users', icon: AdminIcon, key: 'nav.manage' };
 const NOTIF_NAV = { href: '/notifications', icon: NotifNavIcon, key: 'admin.notifications' };
 
 export default function AppLayout({ session, children }: Props) {
@@ -54,7 +58,6 @@ export default function AppLayout({ session, children }: Props) {
   }, [session.user.id, session.user.name]);
 
   // Fetch active users for "Ver como" individual selection
-  interface PreviewUser { id: string; name: string; role: string; }
   const [previewUsers, setPreviewUsers] = useState<PreviewUser[]>([]);
   useEffect(() => {
     if (realRole !== 'admin' && (realRole ?? session.user.role) !== 'admin') return;
@@ -75,17 +78,17 @@ export default function AppLayout({ session, children }: Props) {
 
   // First available page for a given role
   const firstPageForRole = (r: string): string => {
-    if (r === 'ceo') return '/dashboard';
-    if (r === 'agent') return '/activity';
-    if (r === 'jr_manager' || r === 'sr_manager') return '/activity';
-    return '/admin';
+    if (r === 'admin') return '/manage/users';
+    return '/home';
   };
 
   // Check if a role can access a path
   const canAccess = (r: string, path: string): boolean => {
+    if (path.startsWith('/home')) return true;
+    if (path.startsWith('/manage')) return r === 'admin' || r === 'ceo';
     if (path.startsWith('/admin')) return r === 'admin' || r === 'ceo';
     if (path.startsWith('/team')) return r !== 'agent';
-    if (path.startsWith('/roster')) return false; // admin-only, hidden in preview
+    if (path.startsWith('/roster')) return false; // redirects to /manage/users
     if (path.startsWith('/notifications')) return r === 'ceo'; // ceo can access, others hidden in preview
     if (path.startsWith('/activity')) return r !== 'admin' && r !== 'ceo'; // hidden for admin/ceo without preview
     return true;
@@ -124,11 +127,11 @@ export default function AppLayout({ session, children }: Props) {
   const canSeeTeam = role === 'jr_manager' || role === 'sr_manager' || role === 'ceo';
   const isAdminReal = realRole === 'admin' || (realRole ?? session.user.role) === 'admin';
   const allNav = [
+    HOME_NAV,
     ...BASE_NAV.filter((item) => !(item.hideForAdmin && isAdminReal && !previewRole)),
     ...(canSeeTeam ? [TEAM_NAV] : []),
-    ...(isAdminReal && !previewRole ? [ROSTER_NAV] : []),
     ...((isAdminReal && !previewRole) || role === 'ceo' ? [NOTIF_NAV] : []),
-    ...(canSeeAdmin ? [ADMIN_NAV] : []),
+    ...(canSeeAdmin ? [MANAGE_NAV] : []),
   ];
 
   // ── Notification bell (admin only) ──
@@ -263,7 +266,7 @@ export default function AppLayout({ session, children }: Props) {
           <nav className="hidden lg:flex items-center gap-1">
             {allNav.map((item) => {
               const Icon = item.icon;
-              const active = pathname === item.href;
+              const active = pathname === item.href || pathname.startsWith(item.href + '/');
               return (
                 <Link
                   key={item.href}
@@ -286,31 +289,13 @@ export default function AppLayout({ session, children }: Props) {
           <div className="flex items-center gap-1.5 flex-shrink-0">
             {/* Preview-as selector — admin only, desktop only */}
             {realIsAdmin && (
-              <select
-                value={previewUserId ? `user:${previewUserId}` : (previewRole ?? '')}
-                onChange={(e) => handlePreviewChange(e.target.value)}
-                title={t('admin.viewAs')}
-                className="hidden lg:block h-8 px-2 rounded-lg text-[11px] font-bold bg-white/10 text-white hover:bg-white/20 border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 max-w-[180px]"
-              >
-                <option value="" className="text-gray-900">
-                  👁️ {t('admin.viewAs')}
-                </option>
-                <optgroup label={lang === 'es' ? '— Roles —' : '— Roles —'} className="text-gray-900">
-                  <option value="agent" className="text-gray-900">{t('admin.roleAgent')}</option>
-                  <option value="jr_manager" className="text-gray-900">{t('admin.roleJrManager')}</option>
-                  <option value="sr_manager" className="text-gray-900">{t('admin.roleSrManager')}</option>
-                  <option value="ceo" className="text-gray-900">{t('admin.roleCeo')}</option>
-                </optgroup>
-                {previewUsers.length > 0 && (
-                  <optgroup label={lang === 'es' ? '— Usuarios —' : '— Users —'} className="text-gray-900">
-                    {previewUsers.map((u) => (
-                      <option key={u.id} value={`user:${u.id}`} className="text-gray-900">
-                        {u.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
+              <PreviewRoleSwitcher
+                mode="desktop"
+                previewRole={previewRole}
+                previewUserId={previewUserId}
+                previewUsers={previewUsers}
+                onChange={handlePreviewChange}
+              />
             )}
 
             {/* Language toggle */}
@@ -444,43 +429,21 @@ export default function AppLayout({ session, children }: Props) {
 
         {/* "Ver como" selector — admin only, inside hamburger */}
         {realIsAdmin && (
-          <div className="mx-4 mb-3 space-y-2">
-            <select
-              value={previewUserId ? `user:${previewUserId}` : (previewRole ?? '')}
-              onChange={(e) => { handlePreviewChange(e.target.value); setMenuOpen(false); }}
-              className="w-full h-9 px-2 rounded-xl text-[11px] font-bold bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-            >
-              <option value="">👁️ {t('admin.viewAs')}</option>
-              <optgroup label={lang === 'es' ? '— Roles —' : '— Roles —'}>
-                <option value="agent">{t('admin.roleAgent')}</option>
-                <option value="jr_manager">{t('admin.roleJrManager')}</option>
-                <option value="sr_manager">{t('admin.roleSrManager')}</option>
-                <option value="ceo">{t('admin.roleCeo')}</option>
-              </optgroup>
-              {previewUsers.length > 0 && (
-                <optgroup label={lang === 'es' ? '— Usuarios —' : '— Users —'}>
-                  {previewUsers.map((u) => (
-                    <option key={u.id} value={`user:${u.id}`}>{u.name}</option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-            {previewRole && (
-              <button
-                onClick={() => { handlePreviewChange(''); setMenuOpen(false); }}
-                className="w-full h-9 rounded-xl text-[11px] font-bold bg-amber-400 text-amber-950 hover:bg-amber-500 transition-colors"
-              >
-                {t('admin.exitPreview')}
-              </button>
-            )}
-          </div>
+          <PreviewRoleSwitcher
+            mode="mobile"
+            previewRole={previewRole}
+            previewUserId={previewUserId}
+            previewUsers={previewUsers}
+            onChange={(v) => { handlePreviewChange(v); setMenuOpen(false); }}
+            onExit={() => { handlePreviewChange(''); setMenuOpen(false); }}
+          />
         )}
 
         {/* Nav links */}
         <nav className="px-2 space-y-0.5">
           {allNav.map((item) => {
             const Icon = item.icon;
-            const active = pathname === item.href;
+            const active = pathname === item.href || pathname.startsWith(item.href + '/');
             return (
               <Link
                 key={item.href}
