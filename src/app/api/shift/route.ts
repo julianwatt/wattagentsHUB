@@ -29,8 +29,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  const noCache = { 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Pragma': 'no-cache' };
+
   if (!events || events.length === 0) {
-    return NextResponse.json({ active: false, events: [], store: null });
+    return NextResponse.json({ active: false, events: [], store: null }, { headers: noCache });
   }
 
   // A shift is active if there's a clock_in without a corresponding clock_out
@@ -42,5 +44,5 @@ export async function GET(req: NextRequest) {
   const clockInEvent = events.find((e) => e.event_type === 'clock_in');
   const store = clockInEvent?.stores ?? null;
 
-  return NextResponse.json({ active, events, store });
+  return NextResponse.json({ active, events, store }, { headers: noCache });
 }

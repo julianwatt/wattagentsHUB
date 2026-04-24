@@ -51,13 +51,21 @@ create table public.geofence_alerts (
   shift_log_id uuid references public.shift_logs(id)
 );
 
--- ── SEED: Primera tienda ──
+-- ── SEED: Tiendas ──
 insert into public.stores (name, address, latitude, longitude, geofence_radius_meters)
 values (
   'Watt Distributors Office – Irving',
   '4425 W Airport Fwy, Ste 145, Irving, TX 75062, United States',
   32.83867021079666,
   -97.01236531587371,
+  100
+);
+
+insert into public.stores (name, latitude, longitude, geofence_radius_meters)
+values (
+  'Admin Office',
+  25.875175698036486,
+  -97.54208052208608,
   100
 );
 

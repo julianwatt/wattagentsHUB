@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { Session } from 'next-auth';
 import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
@@ -129,6 +130,7 @@ function AgentRow({ agent, toggling, onToggle, t }: {
 // ─── Main component ──────────────────────────────────────────────────────────
 export default function UsersManagementClient({ session }: { session: Session }) {
   const { t, lang } = useLanguage();
+  const router = useRouter();
   const viewerRole = session.user.role as UserRole;
   const isCeoViewer = viewerRole === 'ceo';
   const [activeTab, setActiveTab] = useState<Tab>('users');
@@ -305,6 +307,12 @@ export default function UsersManagementClient({ session }: { session: Session })
               {tab === 'users' ? t('admin.tabUsers') : t('admin.tabRoster')}
             </button>
           ))}
+          <button
+            onClick={() => router.push('/manage/shifts')}
+            className="px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors whitespace-nowrap border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+          >
+            {t('admin.tabShifts')}
+          </button>
         </div>
 
         {/* ── USERS TAB ── */}

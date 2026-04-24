@@ -97,7 +97,7 @@ export default function ActivityClient({ session }: { session: Session }) {
     (async () => {
       setShiftStoreLoading(true);
       try {
-        const res = await fetch('/api/shift');
+        const res = await fetch('/api/shift', { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
           if (data.active && data.store) {

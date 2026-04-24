@@ -82,7 +82,7 @@ export default function ShiftPanel({ userId }: Props) {
       setLoading(true);
       try {
         // Fetch stores
-        const storesRes = await fetch('/api/shift/stores');
+        const storesRes = await fetch('/api/shift/stores', { cache: 'no-store' });
         if (storesRes.ok) {
           const storeList: Store[] = await storesRes.json();
           setStores(storeList);
@@ -90,7 +90,7 @@ export default function ShiftPanel({ userId }: Props) {
         }
 
         // Fetch active shift
-        const shiftRes = await fetch('/api/shift');
+        const shiftRes = await fetch('/api/shift', { cache: 'no-store' });
         if (shiftRes.ok) {
           const data = await shiftRes.json();
           if (data.active && data.events?.length > 0) {
