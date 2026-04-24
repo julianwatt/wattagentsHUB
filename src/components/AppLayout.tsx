@@ -518,7 +518,7 @@ export default function AppLayout({ session, children }: Props) {
       </main>
 
       {/* Bottom tab bar — mobile + iPad portrait */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-40 safe-area-bottom">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-40" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         <div className="flex">
           {allNav.map((item) => {
             const Icon = item.icon;

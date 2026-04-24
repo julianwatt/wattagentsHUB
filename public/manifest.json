@@ -1,7 +1,7 @@
 {
-  "name": "Watt Distributors",
-  "short_name": "Watt",
-  "description": "Plataforma de gestión y simulación para Watt Distributors",
+  "name": "Watt Agent HUB",
+  "short_name": "Watt HUB",
+  "description": "Plataforma de gestión para Watt Distributors",
   "start_url": "/home",
   "display": "standalone",
   "orientation": "portrait-primary",

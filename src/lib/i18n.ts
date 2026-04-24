@@ -461,6 +461,9 @@ const es = {
     btnClockIn: 'Iniciar Turno',
     btnLunchStart: 'Descanso',
     btnClockOut: 'Finalizar',
+    clockOutConfirmTitle: '¿Finalizar turno?',
+    clockOutConfirmBody: 'Esta acción finalizará tu turno activo y no podrá deshacerse.',
+    clockOutConfirmBtn: 'Sí, finalizar turno',
     btnLunchEnd: 'Regresar de Descanso',
     // Result messages
     registeredAt: 'registrado a las',
@@ -986,6 +989,9 @@ const en: typeof es = {
     btnClockIn: 'Start Shift',
     btnLunchStart: 'Break',
     btnClockOut: 'End Shift',
+    clockOutConfirmTitle: 'End shift?',
+    clockOutConfirmBody: 'This will end your active shift and cannot be undone.',
+    clockOutConfirmBtn: 'Yes, end shift',
     btnLunchEnd: 'Return from Break',
     // Result messages
     registeredAt: 'registered at',

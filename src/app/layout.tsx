@@ -16,8 +16,8 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'Watt Distributors — Bill Simulator',
-  description: 'Simulador de cargos de electricidad en Texas — Watt Distributors',
+  title: 'Watt Agent HUB',
+  description: 'Plataforma de gestión para Watt Distributors',
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -34,7 +34,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="Watt" />
+        <meta name="apple-mobile-web-app-title" content="Watt Agent HUB" />
         <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
         {/* Inject theme CSS variables server-side (no flash) */}
         <style dangerouslySetInnerHTML={{ __html: `:root { ${cssVars} }` }} />

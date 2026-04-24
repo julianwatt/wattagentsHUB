@@ -55,6 +55,7 @@ export default function ShiftPanel({ userId }: Props) {
   const [lastResult, setLastResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [geofenceWarning, setGeofenceWarning] = useState<string>('');
+  const [showClockOutConfirm, setShowClockOutConfirm] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const watchRef = useRef<number | null>(null);
   const lastAlertRef = useRef<number>(0);
@@ -310,7 +311,7 @@ export default function ShiftPanel({ userId }: Props) {
       <div className="px-4 sm:px-5 py-3 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <span className="text-lg">⏱️</span>
-          <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">{t('shift.title')}</h3>
+          <h2 className="font-bold text-gray-800 dark:text-gray-100 text-xl">{t('shift.title')}</h2>
         </div>
         <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${status.color}`}>
           <span className={`w-2 h-2 rounded-full ${status.dot} ${state === 'active' ? 'animate-pulse' : ''}`} />
@@ -387,7 +388,7 @@ export default function ShiftPanel({ userId }: Props) {
                 className="py-3 md:py-3.5 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50 bg-amber-700 text-white">
                 {acting ? '...' : t('shift.btnLunchStart')}
               </button>
-              <button onClick={() => handleEvent('clock_out')} disabled={acting}
+              <button onClick={() => setShowClockOutConfirm(true)} disabled={acting}
                 className="py-3 md:py-3.5 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50 bg-red-700 text-white">
                 {acting ? '...' : t('shift.btnClockOut')}
               </button>
@@ -468,6 +469,30 @@ export default function ShiftPanel({ userId }: Props) {
           </div>
         )}
       </div>
+
+      {/* Clock-out confirmation dialog */}
+      {showClockOutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-6 w-full max-w-sm">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">{t('shift.clockOutConfirmTitle')}</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">{t('shift.clockOutConfirmBody')}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowClockOutConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl font-bold text-sm border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={() => { setShowClockOutConfirm(false); handleEvent('clock_out'); }}
+                className="flex-1 py-2.5 rounded-xl font-bold text-sm bg-red-700 text-white hover:bg-red-800 transition-colors"
+              >
+                {t('shift.clockOutConfirmBtn')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
