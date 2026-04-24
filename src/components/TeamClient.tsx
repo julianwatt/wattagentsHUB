@@ -340,13 +340,13 @@ export default function TeamClient({ session }: { session: Session }) {
                             </div>
                             <div className="min-w-0">
                               <p className="font-semibold text-gray-800 dark:text-gray-100 text-[11px] truncate leading-tight">{m.name}</p>
-                              <p className="text-[9px] text-gray-400 leading-tight">@{m.username} · {roleLabel(m.role, t)}</p>
+                              <p className="text-[10px] text-gray-400 leading-tight">@{m.username} · {roleLabel(m.role, t)}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5 flex-shrink-0">
-                            {isNewest && <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">★ {t('team.newest')}</span>}
-                            {isOldest && !isNewest && <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">{t('team.oldest')}</span>}
-                            <p className="text-[9px] text-gray-500">{fmtDate(m.hire_date, lang)} · {tenureLabel(days, t)}</p>
+                            {isNewest && <span className="text-[10px] font-bold px-1 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">★ {t('team.newest')}</span>}
+                            {isOldest && !isNewest && <span className="text-[10px] font-bold px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">{t('team.oldest')}</span>}
+                            <p className="text-[10px] text-gray-500">{fmtDate(m.hire_date, lang)} · {tenureLabel(days, t)}</p>
                             <ToggleSwitch checked={m.is_active} onChange={(v) => handleToggle(m.id, v)} disabled={toggling === m.id} />
                           </div>
                         </div>
@@ -408,12 +408,12 @@ function RankCard({ label, sub, name, value, accent, icon }: {
     violet: 'from-violet-500 to-purple-700',
   };
   return (
-    <div className={`bg-gradient-to-br ${colors[accent]} rounded-xl p-3 text-white shadow-sm flex-1 min-w-[140px]`}>
+    <div className={`bg-gradient-to-br ${colors[accent]} rounded-xl p-3 text-white shadow-sm flex-1 min-w-[120px]`}>
       <div className="flex items-start justify-between mb-0.5">
         <p className="text-[10px] font-bold uppercase tracking-wide text-white/80">{label}</p>
         <span className="text-2xl leading-none flex-shrink-0 ml-2">{icon}</span>
       </div>
-      {sub && <p className="text-[9px] text-white/60 leading-tight w-full">{sub}</p>}
+      {sub && <p className="text-[10px] text-white/60 leading-tight w-full">{sub}</p>}
       <p className="text-sm font-semibold mt-1 truncate">{name}</p>
       <p className="text-xl font-extrabold leading-tight">{value}</p>
     </div>
@@ -422,7 +422,7 @@ function RankCard({ label, sub, name, value, accent, icon }: {
 
 function TopRepCard({ label, entry }: { label: string; entry: { agent: Member; sales: number } | null }) {
   return (
-    <div className="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 p-3 flex-1 min-w-[140px]">
+    <div className="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 p-3 flex-1 min-w-[120px]">
       <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">{label}</p>
       {entry ? (
         <>

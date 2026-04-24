@@ -133,7 +133,7 @@ export default function SimulatorClient({ session }: { session: Session }) {
                         onMouseLeave={(e) => { if (!active) e.currentTarget.style.borderColor = 'transparent'; }}
                       >
                         {plan.badge && (
-                          <span className="absolute top-3 right-3 text-[9px] font-extrabold tracking-wider text-white px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--primary)' }}>
+                          <span className="absolute top-3 right-3 text-[10px] font-extrabold tracking-wider text-white px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--primary)' }}>
                             {plan.badge[lang]}
                           </span>
                         )}

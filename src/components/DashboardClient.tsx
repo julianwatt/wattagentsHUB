@@ -261,7 +261,7 @@ export default function DashboardClient({ session }: { session: Session }) {
                           <div key={e.id} className="px-3 py-2">
                             <div className="flex items-center justify-between gap-1">
                               <div className="min-w-0 flex items-center gap-1">
-                                <span className="text-[9px] px-1 py-0.5 rounded font-bold text-white flex-shrink-0" style={{ backgroundColor: isD2D ? '#0284c7' : '#9333ea' }}>
+                                <span className="text-[10px] px-1 py-0.5 rounded font-bold text-white flex-shrink-0" style={{ backgroundColor: isD2D ? '#0284c7' : '#9333ea' }}>
                                   {isD2D ? 'D2D' : 'RTL'}
                                 </span>
                                 <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200 truncate">{fmtDate(e.date, lang)}</span>

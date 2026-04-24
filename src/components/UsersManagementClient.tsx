@@ -569,9 +569,9 @@ export default function UsersManagementClient({ session }: { session: Session })
                       <button
                         disabled={page === 1}
                         onClick={() => setPage((p) => p - 1)}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        className="w-9 h-9 rounded-lg flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                       </button>
                       {Array.from({ length: totalPages }, (_, i) => i + 1)
                         .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
@@ -584,12 +584,12 @@ export default function UsersManagementClient({ session }: { session: Session })
                         }, [])
                         .map((p, idx) =>
                           p === '...' ? (
-                            <span key={`ellipsis-${idx}`} className="text-[11px] text-gray-400 px-1">…</span>
+                            <span key={`ellipsis-${idx}`} className="text-xs text-gray-400 px-1">…</span>
                           ) : (
                             <button
                               key={p}
                               onClick={() => setPage(p as number)}
-                              className={`w-7 h-7 rounded-lg text-[11px] font-semibold transition-colors ${
+                              className={`w-9 h-9 rounded-lg text-xs font-semibold transition-colors ${
                                 page === p
                                   ? 'text-white'
                                   : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
@@ -603,9 +603,9 @@ export default function UsersManagementClient({ session }: { session: Session })
                       <button
                         disabled={page === totalPages}
                         onClick={() => setPage((p) => p + 1)}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        className="w-9 h-9 rounded-lg flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                       </button>
                     </div>
                   </div>

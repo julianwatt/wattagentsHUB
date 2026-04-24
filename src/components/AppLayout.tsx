@@ -350,7 +350,7 @@ export default function AppLayout({ session, children }: Props) {
                 >
                   <BellIcon className="w-4 h-4" />
                   {pendingCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-[9px] font-bold text-white flex items-center justify-center leading-none">
+                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center leading-none">
                       {pendingCount > 9 ? '9+' : pendingCount}
                     </span>
                   )}
@@ -369,7 +369,7 @@ export default function AppLayout({ session, children }: Props) {
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5 mb-0.5">
-                                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${notifBadgeColor(n.type)}`}>
+                                <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full ${notifBadgeColor(n.type)}`}>
                                   {notifTypeLabel(n.type)}
                                 </span>
                                 <span className="text-[10px] text-gray-400">{fmtDateTime(n.created_at, lang)}</span>
@@ -377,7 +377,7 @@ export default function AppLayout({ session, children }: Props) {
                               <p className="text-xs text-gray-600 dark:text-gray-300 truncate leading-snug">{notifPreviewText(n)}</p>
                               <p className="text-[10px] text-gray-400">@{n.user_username}</p>
                             </div>
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 mt-0.5 ${n.status === 'pending' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300' : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'}`}>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 mt-0.5 ${n.status === 'pending' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300' : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'}`}>
                               {n.status === 'pending' ? '!' : '✓'}
                             </span>
                           </div>

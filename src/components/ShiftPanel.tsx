@@ -412,10 +412,10 @@ export default function ShiftPanel({ userId }: Props) {
                   <span className="font-medium text-gray-700 dark:text-gray-200">{t(EVENT_LABEL_KEYS[evt.event_type]) || evt.event_type}</span>
                   <span className="text-gray-400 ml-auto tabular-nums">{fmtTimeShort(evt.event_time, lang)}</span>
                   {evt.is_at_location === false && (
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300">{fmtDistance(evt.distance_meters ?? 0)}</span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300">{fmtDistance(evt.distance_meters ?? 0)}</span>
                   )}
                   {evt.is_at_location === true && (
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-300">✓</span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-300">✓</span>
                   )}
                 </div>
               ))}

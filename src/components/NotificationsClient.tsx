@@ -463,7 +463,7 @@ export default function NotificationsClient({ session }: { session: Session }) {
               >
                 {labels[tab]}
                 {tab === 'notifications' && pendingCount > 0 && (
-                  <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-bold leading-none">
+                  <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold leading-none">
                     {pendingCount > 9 ? '9+' : pendingCount}
                   </span>
                 )}
@@ -587,7 +587,7 @@ export default function NotificationsClient({ session }: { session: Session }) {
                   >
                     {f.label}
                     {f.badge && f.badge > 0 ? (
-                      <span className="w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center leading-none">
+                      <span className="w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center leading-none">
                         {f.badge > 9 ? '9+' : f.badge}
                       </span>
                     ) : null}
@@ -613,7 +613,7 @@ export default function NotificationsClient({ session }: { session: Session }) {
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${notifBadgeColor(n.type)}`}>
+                                <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full ${notifBadgeColor(n.type)}`}>
                                   {notifLabel(n.type)}
                                 </span>
                                 <span className="text-[10px] text-gray-400">{fmtDateTime(n.created_at, lang)}</span>
@@ -760,12 +760,12 @@ export default function NotificationsClient({ session }: { session: Session }) {
                               </td>
                               <td className="px-4 py-2.5 text-center">
                                 {log.is_at_location === true && (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
                                     {'\u2713'} {t('shift.adminInside')}
                                   </span>
                                 )}
                                 {log.is_at_location === false && (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300">
                                     {'\u26A0'} {t('shift.adminOutside')}
                                   </span>
                                 )}
@@ -793,10 +793,10 @@ export default function NotificationsClient({ session }: { session: Session }) {
                               <p className="text-[10px] text-gray-400">@{log.users?.username ?? '\u2014'}</p>
                             </div>
                             {log.is_at_location === true && (
-                              <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">{'\u2713'}</span>
+                              <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">{'\u2713'}</span>
                             )}
                             {log.is_at_location === false && (
-                              <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300">{'\u26A0'} {fmtDistance(log.distance_meters ?? 0)}</span>
+                              <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300">{'\u26A0'} {fmtDistance(log.distance_meters ?? 0)}</span>
                             )}
                           </div>
                           <div className="flex items-center gap-2 text-[11px]">
