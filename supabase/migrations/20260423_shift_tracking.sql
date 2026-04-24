@@ -11,7 +11,7 @@ create table public.stores (
   address text,
   latitude double precision not null,
   longitude double precision not null,
-  geofence_radius_meters integer default 100,
+  geofence_radius_meters integer default 200,
   created_at timestamptz default now()
 );
 
@@ -26,6 +26,7 @@ create table public.shift_logs (
   longitude double precision,
   is_at_location boolean,
   distance_meters double precision,
+  geo_method text,
   created_at timestamptz default now()
 );
 
@@ -58,7 +59,7 @@ values (
   '4425 W Airport Fwy, Ste 145, Irving, TX 75062, United States',
   32.83867021079666,
   -97.01236531587371,
-  100
+  200
 );
 
 insert into public.stores (name, latitude, longitude, geofence_radius_meters)
@@ -66,7 +67,7 @@ values (
   'Admin Office',
   25.875175698036486,
   -97.54208052208608,
-  100
+  200
 );
 
 -- =============================================================

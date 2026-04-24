@@ -443,6 +443,9 @@ const es = {
     gpsUnavailable: 'GPS no disponible',
     gpsObtaining: 'Obteniendo ubicación...',
     gpsFailed: 'No se pudo obtener ubicación',
+    gpsTryingLowAccuracy: 'Intentando con menor precisión...',
+    gpsTryingIp: 'Obteniendo ubicación aproximada...',
+    gpsAllFailed: 'No fue posible obtener la ubicación. El evento se registró sin coordenadas.',
     verifyingLocation: 'Verificando ubicación...',
     // Buttons
     btnClockIn: 'Iniciar Turno',
@@ -453,9 +456,9 @@ const es = {
     registeredAt: 'registrado a las',
     locationVerified: 'Ubicación verificada.',
     locationNotVerified: 'No se pudo verificar la ubicación.',
-    outsidePerimeter: 'Estabas a {dist}m de la tienda. El administrador fue notificado.',
+    outsidePerimeter: 'Tu ubicación no corresponde a la tienda registrada ({dist}m de distancia).',
     // Geofence warning
-    geofenceWarning: 'Estás a {dist}m de {store}. El administrador ha sido notificado.',
+    geofenceWarning: 'Tu ubicación actual no corresponde a {store} ({dist}m de distancia).',
     // Timeline
     timelineTitle: 'Eventos del turno',
     // Push
@@ -467,6 +470,12 @@ const es = {
     eventError: 'Error al registrar evento',
     // Activity read-only store
     activeStore: 'Tienda del turno activo',
+    // Agent status panel
+    agentStatusTitle: 'Estado de agentes en tienda',
+    agentStatusActive: 'Turno en curso',
+    agentStatusBreak: 'En descanso',
+    agentStatusDone: 'Turno finalizado',
+    agentStatusNoAgents: 'Ningún agente ha registrado turno hoy',
     noActiveShift: 'No hay turno activo en este momento',
     // Admin panel
     adminTitle: 'Registros de Turno',
@@ -935,6 +944,9 @@ const en: typeof es = {
     gpsUnavailable: 'GPS unavailable',
     gpsObtaining: 'Getting location...',
     gpsFailed: 'Could not get location',
+    gpsTryingLowAccuracy: 'Trying with lower accuracy...',
+    gpsTryingIp: 'Getting approximate location...',
+    gpsAllFailed: 'Could not get location. The event was registered without coordinates.',
     verifyingLocation: 'Verifying location...',
     // Buttons
     btnClockIn: 'Start Shift',
@@ -945,9 +957,9 @@ const en: typeof es = {
     registeredAt: 'registered at',
     locationVerified: 'Location verified.',
     locationNotVerified: 'Could not verify location.',
-    outsidePerimeter: 'You were {dist}m from the store. Admin has been notified.',
+    outsidePerimeter: 'Your location does not match the registered store ({dist}m away).',
     // Geofence warning
-    geofenceWarning: 'You are {dist}m from {store}. Admin has been notified.',
+    geofenceWarning: 'Your current location does not match {store} ({dist}m away).',
     // Timeline
     timelineTitle: 'Shift events',
     // Push
@@ -959,6 +971,12 @@ const en: typeof es = {
     eventError: 'Error registering event',
     // Activity read-only store
     activeStore: 'Active shift store',
+    // Agent status panel
+    agentStatusTitle: 'Agent status at store',
+    agentStatusActive: 'Shift in progress',
+    agentStatusBreak: 'On break',
+    agentStatusDone: 'Shift completed',
+    agentStatusNoAgents: 'No agents have started a shift today',
     noActiveShift: 'No active shift at the moment',
     // Admin panel
     adminTitle: 'Shift Logs',

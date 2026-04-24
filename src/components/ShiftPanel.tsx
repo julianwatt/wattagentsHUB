@@ -2,30 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePushSubscription } from './usePushSubscription';
 import { useLanguage } from './LanguageContext';
-
-// ── Types ──
-interface ShiftEvent {
-  id: string;
-  event_type: 'clock_in' | 'lunch_start' | 'lunch_end' | 'clock_out';
-  event_time: string;
-  is_at_location: boolean | null;
-  distance_meters: number | null;
-}
-
-interface Store {
-  id: string;
-  name: string;
-  address: string | null;
-  latitude: number;
-  longitude: number;
-  geofence_radius_meters: number;
-}
-
-type ShiftState = 'idle' | 'active' | 'break';
-
-interface Props {
-  userId: string;
-}
+import { useShift, ShiftEvent, ShiftStore } from './ShiftContext';
 
 // ── Helpers ──
 function fmtTimeShort(iso: string, lang: string): string {
@@ -41,34 +18,30 @@ function formatElapsed(ms: number): string {
 }
 
 const EVENT_ICONS: Record<string, string> = {
-  clock_in: '🟢',
-  lunch_start: '🍽️',
-  lunch_end: '🔄',
-  clock_out: '🔴',
+  clock_in: '🟢', lunch_start: '🍽️', lunch_end: '🔄', clock_out: '🔴',
 };
 
 const EVENT_LABEL_KEYS: Record<string, string> = {
-  clock_in: 'shift.clockIn',
-  lunch_start: 'shift.lunchStart',
-  lunch_end: 'shift.lunchEnd',
-  clock_out: 'shift.clockOut',
+  clock_in: 'shift.clockIn', lunch_start: 'shift.lunchStart',
+  lunch_end: 'shift.lunchEnd', clock_out: 'shift.clockOut',
 };
+
+interface Props { userId: string; }
 
 // ── Component ──
 export default function ShiftPanel({ userId }: Props) {
   const { t, lang } = useLanguage();
-  const [state, setState] = useState<ShiftState>('idle');
-  const [events, setEvents] = useState<ShiftEvent[]>([]);
-  const [store, setStore] = useState<Store | null>(null);
-  const [stores, setStores] = useState<Store[]>([]);
+  const { shiftState: state, events, store, loading, pushEvent, clockInTime, refresh } = useShift();
+
+  // Local-only UI state (not shared)
+  const [stores, setStores] = useState<ShiftStore[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<string>('');
-  const [loading, setLoading] = useState(true);
+  const [storesLoading, setStoresLoading] = useState(true);
   const [acting, setActing] = useState(false);
   const [gpsStatus, setGpsStatus] = useState<string>('');
   const [lastResult, setLastResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [geofenceWarning, setGeofenceWarning] = useState<string>('');
-  const clockInTime = useRef<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const watchRef = useRef<number | null>(null);
   const lastAlertRef = useRef<number>(0);
@@ -76,58 +49,45 @@ export default function ShiftPanel({ userId }: Props) {
   // Push subscription
   const { isSupported: pushSupported, permission: pushPermission, isSubscribed: pushSubscribed, subscribe: pushSubscribe, loading: pushLoading } = usePushSubscription();
 
-  // ── Load stores + active shift on mount ──
+  // ── Load store list on mount ──
   useEffect(() => {
     (async () => {
-      setLoading(true);
+      setStoresLoading(true);
       try {
-        // Fetch stores
-        const storesRes = await fetch('/api/shift/stores', { cache: 'no-store' });
-        if (storesRes.ok) {
-          const storeList: Store[] = await storesRes.json();
-          setStores(storeList);
-          if (storeList.length > 0) setSelectedStoreId(storeList[0].id);
-        }
-
-        // Fetch active shift
-        const shiftRes = await fetch('/api/shift', { cache: 'no-store' });
-        if (shiftRes.ok) {
-          const data = await shiftRes.json();
-          if (data.active && data.events?.length > 0) {
-            setEvents(data.events);
-            setStore(data.store);
-            if (data.store) setSelectedStoreId(data.store.id);
-            // Determine state from events
-            const lastEvent = data.events[data.events.length - 1];
-            if (lastEvent.event_type === 'lunch_start') {
-              setState('break');
-            } else {
-              setState('active');
-            }
-            // Set clock_in time for chronometer
-            const clockIn = data.events.find((e: ShiftEvent) => e.event_type === 'clock_in');
-            if (clockIn) clockInTime.current = new Date(clockIn.event_time).getTime();
+        const res = await fetch('/api/shift/stores', { cache: 'no-store' });
+        if (res.ok) {
+          const list: ShiftStore[] = await res.json();
+          setStores(list);
+          // Default to current shift store or first in list
+          if (store) {
+            setSelectedStoreId(store.id);
+          } else if (list.length > 0) {
+            setSelectedStoreId(list[0].id);
           }
         }
-      } catch (err) {
-        console.error('[ShiftPanel] init error:', err);
-      }
-      setLoading(false);
+      } catch {}
+      setStoresLoading(false);
     })();
-  }, [userId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Sync selectedStoreId when context store changes
+  useEffect(() => {
+    if (store) setSelectedStoreId(store.id);
+  }, [store]);
 
   // ── Chronometer ──
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current);
-    if ((state === 'active' || state === 'break') && clockInTime.current) {
-      const update = () => setElapsed(Date.now() - (clockInTime.current || Date.now()));
+    if ((state === 'active' || state === 'break') && clockInTime) {
+      const update = () => setElapsed(Date.now() - (clockInTime || Date.now()));
       update();
       timerRef.current = setInterval(update, 1000);
     } else {
       setElapsed(0);
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [state]);
+  }, [state, clockInTime]);
 
   // ── Continuous geofencing ──
   useEffect(() => {
@@ -139,7 +99,6 @@ export default function ShiftPanel({ userId }: Props) {
       setGeofenceWarning('');
       return;
     }
-
     if (!('geolocation' in navigator)) return;
 
     watchRef.current = navigator.geolocation.watchPosition(
@@ -161,12 +120,7 @@ export default function ShiftPanel({ userId }: Props) {
               await fetch('/api/shift/geofence-alert', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  storeId: store.id,
-                  latitude,
-                  longitude,
-                  shiftLogId: clockInEvt?.id || null,
-                }),
+                body: JSON.stringify({ storeId: store.id, latitude, longitude, shiftLogId: clockInEvt?.id || null }),
               });
             } catch {}
           }
@@ -186,27 +140,63 @@ export default function ShiftPanel({ userId }: Props) {
     };
   }, [state, store, events, t]);
 
-  // ── Get GPS position ──
-  const getPosition = useCallback((): Promise<{ latitude: number; longitude: number } | null> => {
-    return new Promise((resolve) => {
-      if (!('geolocation' in navigator)) {
-        setGpsStatus(t('shift.gpsUnavailable'));
-        resolve(null);
-        return;
-      }
-      setGpsStatus(t('shift.gpsObtaining'));
+  // ── Get GPS position (3-tier fallback) ──
+  const getPosition = useCallback(async (): Promise<{ latitude: number; longitude: number; method: string } | null> => {
+    if (!('geolocation' in navigator)) {
+      // No browser geolocation → try IP fallback directly
+      setGpsStatus(t('shift.gpsTryingIp'));
+      try {
+        const res = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(8000) });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.latitude && data.longitude) {
+            setGpsStatus('');
+            return { latitude: data.latitude, longitude: data.longitude, method: 'ip' };
+          }
+        }
+      } catch {}
+      setGpsStatus(t('shift.gpsAllFailed'));
+      return null;
+    }
+
+    // Tier 1: High accuracy
+    setGpsStatus(t('shift.gpsObtaining'));
+    const tier1 = await new Promise<{ latitude: number; longitude: number } | null>((resolve) => {
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setGpsStatus('');
-          resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
-        },
-        () => {
-          setGpsStatus(t('shift.gpsFailed'));
-          resolve(null);
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+        (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+        () => resolve(null),
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 },
       );
     });
+    if (tier1) { setGpsStatus(''); return { ...tier1, method: 'gps_high' }; }
+
+    // Tier 2: Low accuracy
+    setGpsStatus(t('shift.gpsTryingLowAccuracy'));
+    const tier2 = await new Promise<{ latitude: number; longitude: number } | null>((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+        () => resolve(null),
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 },
+      );
+    });
+    if (tier2) { setGpsStatus(''); return { ...tier2, method: 'gps_low' }; }
+
+    // Tier 3: IP geolocation
+    setGpsStatus(t('shift.gpsTryingIp'));
+    try {
+      const res = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(8000) });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.latitude && data.longitude) {
+          setGpsStatus('');
+          return { latitude: data.latitude, longitude: data.longitude, method: 'ip' };
+        }
+      }
+    } catch {}
+
+    // All failed
+    setGpsStatus(t('shift.gpsAllFailed'));
+    return null;
   }, [t]);
 
   // ── Register shift event ──
@@ -231,8 +221,9 @@ export default function ShiftPanel({ userId }: Props) {
         body: JSON.stringify({
           storeId,
           eventType,
-          latitude: pos?.latitude ?? 0,
-          longitude: pos?.longitude ?? 0,
+          latitude: pos?.latitude ?? null,
+          longitude: pos?.longitude ?? null,
+          geoMethod: pos?.method ?? 'none',
         }),
       });
 
@@ -245,22 +236,24 @@ export default function ShiftPanel({ userId }: Props) {
 
       const data = await res.json();
       const newEvent: ShiftEvent = data.event;
-      setEvents((prev) => [...prev, newEvent]);
 
-      // Update state
+      // Determine new state
+      let newState = state;
+      let newStore: ShiftStore | null | undefined;
       if (eventType === 'clock_in') {
-        clockInTime.current = new Date(newEvent.event_time).getTime();
-        setState('active');
-        const selectedStore = stores.find((s) => s.id === storeId);
-        if (selectedStore) setStore(selectedStore);
+        newState = 'active';
+        newStore = stores.find((s) => s.id === storeId) ?? null;
       } else if (eventType === 'lunch_start') {
-        setState('break');
+        newState = 'break';
       } else if (eventType === 'lunch_end') {
-        setState('active');
+        newState = 'active';
       } else if (eventType === 'clock_out') {
-        setState('idle');
-        clockInTime.current = null;
+        newState = 'idle';
+        newStore = null;
       }
+
+      // Update shared context (immediately available to all consumers)
+      pushEvent(newEvent, newState, newStore);
 
       // Result message
       const eventLabel = t(EVENT_LABEL_KEYS[eventType]);
@@ -277,7 +270,7 @@ export default function ShiftPanel({ userId }: Props) {
     }
 
     setActing(false);
-  }, [store, selectedStoreId, stores, getPosition, t, lang]);
+  }, [store, selectedStoreId, stores, getPosition, t, lang, state, pushEvent]);
 
   // ── Status badge ──
   const statusConfig = {
@@ -287,7 +280,7 @@ export default function ShiftPanel({ userId }: Props) {
   };
   const status = statusConfig[state];
 
-  if (loading) {
+  if (loading || storesLoading) {
     return (
       <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
         <div className="flex items-center gap-2 text-sm text-gray-400">
@@ -369,42 +362,28 @@ export default function ShiftPanel({ userId }: Props) {
         {/* Action buttons */}
         <div className="space-y-2">
           {state === 'idle' && (
-            <button
-              onClick={() => handleEvent('clock_in')}
-              disabled={acting || !selectedStoreId}
+            <button onClick={() => handleEvent('clock_in')} disabled={acting || !selectedStoreId}
               className="w-full py-3 md:py-3.5 rounded-xl font-bold text-white text-sm transition-all active:scale-[0.98] disabled:opacity-50"
-              style={{ backgroundColor: '#10b981' }}
-            >
+              style={{ backgroundColor: '#10b981' }}>
               {acting ? t('shift.verifyingLocation') : `🟢 ${t('shift.btnClockIn')}`}
             </button>
           )}
-
           {state === 'active' && (
             <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => handleEvent('lunch_start')}
-                disabled={acting}
-                className="py-3 md:py-3.5 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50 bg-amber-500 text-white"
-              >
+              <button onClick={() => handleEvent('lunch_start')} disabled={acting}
+                className="py-3 md:py-3.5 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50 bg-amber-500 text-white">
                 {acting ? '...' : `🍽️ ${t('shift.btnLunchStart')}`}
               </button>
-              <button
-                onClick={() => handleEvent('clock_out')}
-                disabled={acting}
-                className="py-3 md:py-3.5 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50 bg-red-500 text-white"
-              >
+              <button onClick={() => handleEvent('clock_out')} disabled={acting}
+                className="py-3 md:py-3.5 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50 bg-red-500 text-white">
                 {acting ? '...' : `🔴 ${t('shift.btnClockOut')}`}
               </button>
             </div>
           )}
-
           {state === 'break' && (
-            <button
-              onClick={() => handleEvent('lunch_end')}
-              disabled={acting}
+            <button onClick={() => handleEvent('lunch_end')} disabled={acting}
               className="w-full py-3 md:py-3.5 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50 text-white"
-              style={{ backgroundColor: 'var(--primary)' }}
-            >
+              style={{ backgroundColor: 'var(--primary)' }}>
               {acting ? t('shift.verifyingLocation') : `🔄 ${t('shift.btnLunchEnd')}`}
             </button>
           )}
@@ -432,14 +411,10 @@ export default function ShiftPanel({ userId }: Props) {
                   <span className="font-medium text-gray-700 dark:text-gray-200">{t(EVENT_LABEL_KEYS[evt.event_type]) || evt.event_type}</span>
                   <span className="text-gray-400 ml-auto tabular-nums">{fmtTimeShort(evt.event_time, lang)}</span>
                   {evt.is_at_location === false && (
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300">
-                      {evt.distance_meters}m
-                    </span>
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300">{evt.distance_meters}m</span>
                   )}
                   {evt.is_at_location === true && (
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-300">
-                      ✓
-                    </span>
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-300">✓</span>
                   )}
                 </div>
               ))}
@@ -451,15 +426,10 @@ export default function ShiftPanel({ userId }: Props) {
         {pushSupported && !pushSubscribed && pushPermission !== 'denied' && (
           <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
             <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-              <p className="text-xs text-blue-700 dark:text-blue-300">
-                🔔 {t('shift.pushPrompt')}
-              </p>
-              <button
-                onClick={pushSubscribe}
-                disabled={pushLoading}
+              <p className="text-xs text-blue-700 dark:text-blue-300">🔔 {t('shift.pushPrompt')}</p>
+              <button onClick={pushSubscribe} disabled={pushLoading}
                 className="no-min-size flex-shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold text-white transition-colors disabled:opacity-50"
-                style={{ backgroundColor: 'var(--primary)' }}
-              >
+                style={{ backgroundColor: 'var(--primary)' }}>
                 {pushLoading ? t('shift.pushActivating') : t('shift.pushActivate')}
               </button>
             </div>

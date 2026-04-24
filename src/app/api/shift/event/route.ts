@@ -10,10 +10,10 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { storeId, eventType, latitude, longitude } = await req.json();
+  const { storeId, eventType, latitude, longitude, geoMethod } = await req.json();
 
-  if (!storeId || !eventType || latitude == null || longitude == null) {
-    return NextResponse.json({ error: 'storeId, eventType, latitude, longitude required' }, { status: 400 });
+  if (!storeId || !eventType) {
+    return NextResponse.json({ error: 'storeId and eventType required' }, { status: 400 });
   }
 
   const validEvents = ['clock_in', 'lunch_start', 'lunch_end', 'clock_out'];
@@ -32,12 +32,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Store not found' }, { status: 404 });
   }
 
-  // Geofence check
-  const geo = checkGeofence(
-    latitude, longitude,
-    store.latitude, store.longitude,
-    store.geofence_radius_meters,
-  );
+  // Geofence check (only if coordinates provided)
+  const hasCoords = latitude != null && longitude != null && (latitude !== 0 || longitude !== 0);
+  const geo = hasCoords
+    ? checkGeofence(latitude, longitude, store.latitude, store.longitude, store.geofence_radius_meters)
+    : null;
 
   // Insert shift event
   const { data: event, error: insertErr } = await supabase
@@ -46,10 +45,11 @@ export async function POST(req: NextRequest) {
       user_id: session.user.id,
       store_id: storeId,
       event_type: eventType,
-      latitude,
-      longitude,
-      is_at_location: geo.isInside,
-      distance_meters: geo.distanceMeters,
+      latitude: hasCoords ? latitude : null,
+      longitude: hasCoords ? longitude : null,
+      is_at_location: geo?.isInside ?? null,
+      distance_meters: geo?.distanceMeters ?? null,
+      geo_method: geoMethod || null,
     })
     .select('*')
     .single();
@@ -60,17 +60,15 @@ export async function POST(req: NextRequest) {
   }
 
   // If outside perimeter → alert CEO
-  if (!geo.isInside) {
+  if (geo && !geo.isInside) {
     await notifyCeo(session.user.id, session.user.name || '—', eventType, store, geo.distanceMeters, event.id);
   }
 
   return NextResponse.json({
     event,
-    geofence: {
-      isInside: geo.isInside,
-      distanceMeters: geo.distanceMeters,
-      radiusMeters: store.geofence_radius_meters,
-    },
+    geofence: geo
+      ? { isInside: geo.isInside, distanceMeters: geo.distanceMeters, radiusMeters: store.geofence_radius_meters }
+      : null,
   }, { status: 201 });
 }
 

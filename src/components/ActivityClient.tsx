@@ -5,6 +5,7 @@ import AppLayout from './AppLayout';
 import InfoTooltip from './InfoTooltip';
 import { useLanguage } from './LanguageContext';
 import { usePreviewRole, useActiveUserId } from './PreviewRoleContext';
+import { useShift } from './ShiftContext';
 import { fmtDate } from '@/lib/i18n';
 import { ActivityEntry, CampaignType, effectivenessRate } from '@/lib/activity';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
@@ -44,6 +45,7 @@ export default function ActivityClient({ session }: { session: Session }) {
   const { t, lang } = useLanguage();
   const { previewUserName } = usePreviewRole();
   const { activeUserId, isPreviewMode } = useActiveUserId(session.user.id);
+  const { store: shiftStore, loading: shiftStoreLoading, shiftState } = useShift();
 
   // Fetch real user name from DB
   const [dbUserName, setDbUserName] = useState<string>(previewUserName ?? session.user.name ?? '');
@@ -85,35 +87,19 @@ export default function ActivityClient({ session }: { session: Session }) {
   const [success, setSuccess] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [incrementing, setIncrementing] = useState<string | null>(null);
-  const [draftRestored, setDraftRestored] = useState(false);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Active shift store (read-only source of truth)
-  const [shiftStoreName, setShiftStoreName] = useState<string | null>(null);
-  const [shiftStoreAddress, setShiftStoreAddress] = useState<string | null>(null);
-  const [shiftStoreLoading, setShiftStoreLoading] = useState(true);
+  // Active shift store — from global ShiftContext (single source of truth)
+  const shiftStoreName = shiftState !== 'idle' ? shiftStore?.name ?? null : null;
+  const shiftStoreAddress = shiftState !== 'idle' ? shiftStore?.address ?? null : null;
 
+  // Sync shift store into the activity form fields when shift is active
   useEffect(() => {
-    (async () => {
-      setShiftStoreLoading(true);
-      try {
-        const res = await fetch('/api/shift', { cache: 'no-store' });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.active && data.store) {
-            setShiftStoreName(data.store.name);
-            setShiftStoreAddress(data.store.address ?? '');
-            setStoreChain(data.store.name);
-            setStoreAddress(data.store.address ?? '');
-          } else {
-            setShiftStoreName(null);
-            setShiftStoreAddress(null);
-          }
-        }
-      } catch {}
-      setShiftStoreLoading(false);
-    })();
-  }, [activeUserId]);
+    if (shiftStoreName) {
+      setStoreChain(shiftStoreName);
+      setStoreAddress(shiftStoreAddress ?? '');
+    }
+  }, [shiftStoreName, shiftStoreAddress]);
 
   const loadEntry = useCallback(async (d: string) => {
     console.log('[Activity loadEntry]', { activeUserId, date: d, isPreviewMode });
@@ -182,7 +168,6 @@ export default function ActivityClient({ session }: { session: Session }) {
       setStoreChain(draft.storeChain ?? STORE_CHAINS[0]);
       setStoreAddress(draft.storeAddress ?? '');
       setCampaignType(draft.campaignType ?? 'D2D');
-      setDraftRestored(true);
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, todayEntry?.id, date, activeUserId, isPreviewMode]);
@@ -515,12 +500,6 @@ export default function ActivityClient({ session }: { session: Session }) {
                 {saveError && (
                   <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 text-red-700 dark:text-red-400 rounded-xl px-4 py-2.5 text-sm font-medium text-center">
                     ⚠ {saveError}
-                  </div>
-                )}
-                {draftRestored && (
-                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 rounded-xl px-4 py-2.5 text-sm flex items-center justify-between gap-2">
-                    <span>📋 {t('home.draftRestored')}</span>
-                    <button type="button" onClick={() => setDraftRestored(false)} className="text-[11px] underline opacity-70">OK</button>
                   </div>
                 )}
               </div>
