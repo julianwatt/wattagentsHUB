@@ -11,6 +11,7 @@ import { fmtDate, fmtDateTime } from '@/lib/i18n';
 import WattLogo from './WattLogo';
 import PreviewRoleSwitcher, { PreviewUser } from './PreviewRoleSwitcher';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
+import { usePushSubscription } from './usePushSubscription';
 
 interface Props {
   session: Session;
@@ -26,6 +27,7 @@ const BASE_NAV = [
   { href: '/simulator', icon: SimIcon, key: 'nav.simulator' },
   { href: '/dashboard', icon: DashIcon, key: 'nav.dashboard' },
 ];
+const SHIFT_NAV = { href: '/shift', icon: ShiftIcon, key: 'nav.shift', hideForAdmin: true };
 const TEAM_NAV = { href: '/team', icon: TeamIcon, key: 'nav.team' };
 const MANAGE_NAV = { href: '/manage/users', icon: AdminIcon, key: 'nav.manage' };
 const NOTIF_NAV = { href: '/notifications', icon: NotifNavIcon, key: 'admin.notifications' };
@@ -126,9 +128,13 @@ export default function AppLayout({ session, children }: Props) {
   const canSeeAdmin = role === 'admin' || role === 'ceo';
   const canSeeTeam = role === 'jr_manager' || role === 'sr_manager' || role === 'ceo';
   const isAdminReal = realRole === 'admin' || (realRole ?? session.user.role) === 'admin';
+  const isCeoReal = (realRole ?? session.user.role) === 'ceo';
+  const showBell = (isAdminReal || isCeoReal) && !previewRole;
+  const canSeeShift = !isAdminReal && !isCeoReal && role !== 'admin' && role !== 'ceo';
   const allNav = [
     HOME_NAV,
     ...BASE_NAV.filter((item) => !(item.hideForAdmin && isAdminReal && !previewRole)),
+    ...(canSeeShift ? [SHIFT_NAV] : []),
     ...(canSeeTeam ? [TEAM_NAV] : []),
     ...((isAdminReal && !previewRole) || role === 'ceo' ? [NOTIF_NAV] : []),
     ...(canSeeAdmin ? [MANAGE_NAV] : []),
@@ -172,7 +178,7 @@ export default function AppLayout({ session, children }: Props) {
   const pendingCount = notifItems.filter((n) => n.status === 'pending').length;
 
   const fetchNotifs = useCallback(async () => {
-    if (!isAdminReal || previewRole) return;
+    if (!showBell) return;
     try {
       const res = await fetch('/api/notifications');
       if (res.ok) {
@@ -180,11 +186,11 @@ export default function AppLayout({ session, children }: Props) {
         setNotifItems(data.notifications ?? []);
       }
     } catch {}
-  }, [isAdminReal, previewRole]);
+  }, [showBell]);
 
   useEffect(() => {
     fetchNotifs();
-    if (!isAdminReal || previewRole) return;
+    if (!showBell) return;
     const sb = getSupabaseBrowser();
     const channel = sb.channel('admin-notifs').on(
       'postgres_changes',
@@ -192,7 +198,7 @@ export default function AppLayout({ session, children }: Props) {
       () => { fetchNotifs(); },
     ).subscribe();
     return () => { sb.removeChannel(channel); };
-  }, [fetchNotifs, isAdminReal, previewRole]);
+  }, [fetchNotifs, showBell]);
 
   // Close bell dropdown on outside click
   useEffect(() => {
@@ -315,8 +321,8 @@ export default function AppLayout({ session, children }: Props) {
               {lang === 'es' ? 'EN' : 'ES'}
             </button>
 
-            {/* Notification bell (admin only) */}
-            {isAdminReal && !previewRole && (
+            {/* Notification bell (admin + CEO) */}
+            {showBell && (
               <div ref={bellRef} className="relative">
                 <button
                   onClick={() => setNotifOpen(!notifOpen)}
@@ -484,6 +490,9 @@ export default function AppLayout({ session, children }: Props) {
         </div>
       </div>
 
+      {/* Push notification opt-in banner (CEO / admin) */}
+      {showBell && <PushOptInBanner />}
+
       {/* Main content — bottom padding for tab bar (mobile + tablet) */}
       <main className="flex-1 pb-16 lg:pb-0 min-h-0">
         {children}
@@ -554,4 +563,43 @@ function HamburgerIcon({ className }: { className: string }) {
 }
 function CloseIcon({ className }: { className: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>;
+}
+function ShiftIcon({ className }: { className: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+}
+
+// ── Push notification opt-in banner for CEO / Admin ──
+function PushOptInBanner() {
+  const { t } = useLanguage();
+  const { isSupported, permission, isSubscribed, subscribe, loading } = usePushSubscription();
+  const [dismissed, setDismissed] = useState(false);
+
+  if (dismissed || isSubscribed || !isSupported || permission === 'denied') return null;
+
+  return (
+    <div className="bg-blue-50 dark:bg-blue-950/40 border-b border-blue-200 dark:border-blue-800 px-4 py-2.5 flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-lg flex-shrink-0">🔔</span>
+        <p className="text-xs text-blue-800 dark:text-blue-200 font-medium truncate">
+          {t('shift.pushPrompt')}
+        </p>
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <button
+          onClick={subscribe}
+          disabled={loading}
+          className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition-colors"
+        >
+          {loading ? t('shift.pushActivating') : t('shift.pushActivate')}
+        </button>
+        <button
+          onClick={() => setDismissed(true)}
+          className="text-blue-400 hover:text-blue-600 dark:hover:text-blue-300 transition-colors"
+          title="✕"
+        >
+          <CloseIcon className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
 }

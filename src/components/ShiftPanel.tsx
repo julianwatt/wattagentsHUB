@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePushSubscription } from './usePushSubscription';
+import { useLanguage } from './LanguageContext';
 
 // ── Types ──
 interface ShiftEvent {
@@ -27,8 +28,8 @@ interface Props {
 }
 
 // ── Helpers ──
-function fmtTimeShort(iso: string): string {
-  return new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+function fmtTimeShort(iso: string, lang: string): string {
+  return new Date(iso).toLocaleTimeString(lang === 'en' ? 'en-US' : 'es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
 function formatElapsed(ms: number): string {
@@ -39,13 +40,6 @@ function formatElapsed(ms: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-const EVENT_LABELS: Record<string, string> = {
-  clock_in: 'Inicio de turno',
-  lunch_start: 'Inicio de descanso',
-  lunch_end: 'Regreso de descanso',
-  clock_out: 'Fin de turno',
-};
-
 const EVENT_ICONS: Record<string, string> = {
   clock_in: '🟢',
   lunch_start: '🍽️',
@@ -53,8 +47,16 @@ const EVENT_ICONS: Record<string, string> = {
   clock_out: '🔴',
 };
 
+const EVENT_LABEL_KEYS: Record<string, string> = {
+  clock_in: 'shift.clockIn',
+  lunch_start: 'shift.lunchStart',
+  lunch_end: 'shift.lunchEnd',
+  clock_out: 'shift.clockOut',
+};
+
 // ── Component ──
 export default function ShiftPanel({ userId }: Props) {
+  const { t, lang } = useLanguage();
   const [state, setState] = useState<ShiftState>('idle');
   const [events, setEvents] = useState<ShiftEvent[]>([]);
   const [store, setStore] = useState<Store | null>(null);
@@ -127,10 +129,9 @@ export default function ShiftPanel({ userId }: Props) {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [state]);
 
-  // ── Continuous geofencing (Bloque 2) ──
+  // ── Continuous geofencing ──
   useEffect(() => {
     if (state !== 'active' || !store) {
-      // Stop watching when not active
       if (watchRef.current !== null) {
         navigator.geolocation.clearWatch(watchRef.current);
         watchRef.current = null;
@@ -144,7 +145,6 @@ export default function ShiftPanel({ userId }: Props) {
     watchRef.current = navigator.geolocation.watchPosition(
       async (pos) => {
         const { latitude, longitude } = pos.coords;
-        // Haversine inline (avoid importing server module)
         const R = 6_371_000;
         const dLat = ((store.latitude - latitude) * Math.PI) / 180;
         const dLng = ((store.longitude - longitude) * Math.PI) / 180;
@@ -153,11 +153,9 @@ export default function ShiftPanel({ userId }: Props) {
 
         if (dist > store.geofence_radius_meters) {
           const now = Date.now();
-          // Throttle: 3 minutes between alerts
           if (now - lastAlertRef.current > 3 * 60 * 1000) {
             lastAlertRef.current = now;
-            setGeofenceWarning(`Estás a ${dist}m de ${store.name}. El administrador ha sido notificado.`);
-            // Find the clock_in event for shiftLogId
+            setGeofenceWarning(t('shift.geofenceWarning').replace('{dist}', String(dist)).replace('{store}', store.name));
             const clockInEvt = events.find((e) => e.event_type === 'clock_in');
             try {
               await fetch('/api/shift/geofence-alert', {
@@ -176,7 +174,7 @@ export default function ShiftPanel({ userId }: Props) {
           setGeofenceWarning('');
         }
       },
-      () => { /* GPS error — ignore silently during watch */ },
+      () => {},
       { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 },
     );
 
@@ -186,30 +184,30 @@ export default function ShiftPanel({ userId }: Props) {
         watchRef.current = null;
       }
     };
-  }, [state, store, events]);
+  }, [state, store, events, t]);
 
   // ── Get GPS position ──
   const getPosition = useCallback((): Promise<{ latitude: number; longitude: number } | null> => {
     return new Promise((resolve) => {
       if (!('geolocation' in navigator)) {
-        setGpsStatus('GPS no disponible');
+        setGpsStatus(t('shift.gpsUnavailable'));
         resolve(null);
         return;
       }
-      setGpsStatus('Obteniendo ubicación...');
+      setGpsStatus(t('shift.gpsObtaining'));
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           setGpsStatus('');
           resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
         },
         () => {
-          setGpsStatus('No se pudo obtener ubicación');
+          setGpsStatus(t('shift.gpsFailed'));
           resolve(null);
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
       );
     });
-  }, []);
+  }, [t]);
 
   // ── Register shift event ──
   const handleEvent = useCallback(async (eventType: ShiftEvent['event_type']) => {
@@ -219,7 +217,7 @@ export default function ShiftPanel({ userId }: Props) {
 
     const storeId = store?.id || selectedStoreId;
     if (!storeId) {
-      setLastResult({ ok: false, message: 'Selecciona una tienda' });
+      setLastResult({ ok: false, message: t('shift.selectStore') });
       setActing(false);
       return;
     }
@@ -240,7 +238,7 @@ export default function ShiftPanel({ userId }: Props) {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        setLastResult({ ok: false, message: err.error || 'Error al registrar evento' });
+        setLastResult({ ok: false, message: err.error || t('shift.eventError') });
         setActing(false);
         return;
       }
@@ -253,7 +251,6 @@ export default function ShiftPanel({ userId }: Props) {
       if (eventType === 'clock_in') {
         clockInTime.current = new Date(newEvent.event_time).getTime();
         setState('active');
-        // Set the store from the response
         const selectedStore = stores.find((s) => s.id === storeId);
         if (selectedStore) setStore(selectedStore);
       } else if (eventType === 'lunch_start') {
@@ -266,46 +263,48 @@ export default function ShiftPanel({ userId }: Props) {
       }
 
       // Result message
+      const eventLabel = t(EVENT_LABEL_KEYS[eventType]);
+      const time = fmtTimeShort(newEvent.event_time, lang);
       if (!pos) {
-        setLastResult({ ok: true, message: `${EVENT_LABELS[eventType]} registrado a las ${fmtTimeShort(newEvent.event_time)}. No se pudo verificar la ubicación.` });
+        setLastResult({ ok: true, message: `${eventLabel} ${t('shift.registeredAt')} ${time}. ${t('shift.locationNotVerified')}` });
       } else if (data.geofence && !data.geofence.isInside) {
-        setLastResult({ ok: false, message: `${EVENT_LABELS[eventType]} registrado a las ${fmtTimeShort(newEvent.event_time)}. ⚠️ Estabas a ${data.geofence.distanceMeters}m de la tienda. El administrador fue notificado.` });
+        setLastResult({ ok: false, message: `${eventLabel} ${t('shift.registeredAt')} ${time}. ⚠️ ${t('shift.outsidePerimeter').replace('{dist}', String(data.geofence.distanceMeters))}` });
       } else {
-        setLastResult({ ok: true, message: `${EVENT_LABELS[eventType]} registrado a las ${fmtTimeShort(newEvent.event_time)}. ✓ Ubicación verificada.` });
+        setLastResult({ ok: true, message: `${eventLabel} ${t('shift.registeredAt')} ${time}. ✓ ${t('shift.locationVerified')}` });
       }
-    } catch (err) {
-      setLastResult({ ok: false, message: 'Error de conexión' });
+    } catch {
+      setLastResult({ ok: false, message: t('shift.connectionError') });
     }
 
     setActing(false);
-  }, [store, selectedStoreId, stores, getPosition]);
+  }, [store, selectedStoreId, stores, getPosition, t, lang]);
 
   // ── Status badge ──
   const statusConfig = {
-    idle: { label: 'Sin turno activo', color: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400', dot: 'bg-gray-400' },
-    active: { label: 'Turno en curso', color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300', dot: 'bg-green-500' },
-    break: { label: 'En descanso', color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300', dot: 'bg-amber-500' },
+    idle: { label: t('shift.statusIdle'), color: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400', dot: 'bg-gray-400' },
+    active: { label: t('shift.statusActive'), color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300', dot: 'bg-green-500' },
+    break: { label: t('shift.statusBreak'), color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300', dot: 'bg-amber-500' },
   };
   const status = statusConfig[state];
 
   if (loading) {
     return (
-      <div className="mb-5 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
         <div className="flex items-center gap-2 text-sm text-gray-400">
           <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-          Cargando turno...
+          {t('shift.loading')}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="mb-5 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
       {/* Header */}
       <div className="px-4 sm:px-5 py-3 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <span className="text-lg">⏱️</span>
-          <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">Control de Turno</h3>
+          <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">{t('shift.title')}</h3>
         </div>
         <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${status.color}`}>
           <span className={`w-2 h-2 rounded-full ${status.dot} ${state === 'active' ? 'animate-pulse' : ''}`} />
@@ -314,20 +313,20 @@ export default function ShiftPanel({ userId }: Props) {
       </div>
 
       <div className="px-4 sm:px-5 py-4 space-y-4">
-        {/* Chronometer — visible when shift active or on break */}
+        {/* Chronometer */}
         {(state === 'active' || state === 'break') && (
           <div className="text-center">
             <p className="text-4xl sm:text-5xl font-mono font-bold text-gray-900 dark:text-gray-100 tabular-nums tracking-wider">
               {formatElapsed(elapsed)}
             </p>
-            <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-wide">Tiempo transcurrido</p>
+            <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-wide">{t('shift.elapsed')}</p>
           </div>
         )}
 
         {/* Store selector — only when idle */}
         {state === 'idle' && (
           <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Tienda</label>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">{t('shift.storeLabel')}</label>
             <select
               value={selectedStoreId}
               onChange={(e) => setSelectedStoreId(e.target.value)}
@@ -338,7 +337,7 @@ export default function ShiftPanel({ userId }: Props) {
               ))}
             </select>
             {stores.length === 0 && (
-              <p className="text-xs text-gray-400 mt-1">No hay tiendas registradas</p>
+              <p className="text-xs text-gray-400 mt-1">{t('shift.noStores')}</p>
             )}
           </div>
         )}
@@ -376,7 +375,7 @@ export default function ShiftPanel({ userId }: Props) {
               className="w-full py-3 md:py-3.5 rounded-xl font-bold text-white text-sm transition-all active:scale-[0.98] disabled:opacity-50"
               style={{ backgroundColor: '#10b981' }}
             >
-              {acting ? 'Verificando ubicación...' : '🟢 Iniciar Turno'}
+              {acting ? t('shift.verifyingLocation') : `🟢 ${t('shift.btnClockIn')}`}
             </button>
           )}
 
@@ -387,14 +386,14 @@ export default function ShiftPanel({ userId }: Props) {
                 disabled={acting}
                 className="py-3 md:py-3.5 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50 bg-amber-500 text-white"
               >
-                {acting ? '...' : '🍽️ Descanso'}
+                {acting ? '...' : `🍽️ ${t('shift.btnLunchStart')}`}
               </button>
               <button
                 onClick={() => handleEvent('clock_out')}
                 disabled={acting}
                 className="py-3 md:py-3.5 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50 bg-red-500 text-white"
               >
-                {acting ? '...' : '🔴 Finalizar'}
+                {acting ? '...' : `🔴 ${t('shift.btnClockOut')}`}
               </button>
             </div>
           )}
@@ -406,7 +405,7 @@ export default function ShiftPanel({ userId }: Props) {
               className="w-full py-3 md:py-3.5 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50 text-white"
               style={{ backgroundColor: 'var(--primary)' }}
             >
-              {acting ? 'Verificando ubicación...' : '🔄 Regresar de Descanso'}
+              {acting ? t('shift.verifyingLocation') : `🔄 ${t('shift.btnLunchEnd')}`}
             </button>
           )}
         </div>
@@ -425,13 +424,13 @@ export default function ShiftPanel({ userId }: Props) {
         {/* Timeline */}
         {events.length > 0 && (
           <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">Eventos del turno</p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">{t('shift.timelineTitle')}</p>
             <div className="space-y-1.5">
               {events.map((evt) => (
                 <div key={evt.id} className="flex items-center gap-2.5 text-xs">
                   <span className="flex-shrink-0">{EVENT_ICONS[evt.event_type] || '⏺'}</span>
-                  <span className="font-medium text-gray-700 dark:text-gray-200">{EVENT_LABELS[evt.event_type] || evt.event_type}</span>
-                  <span className="text-gray-400 ml-auto tabular-nums">{fmtTimeShort(evt.event_time)}</span>
+                  <span className="font-medium text-gray-700 dark:text-gray-200">{t(EVENT_LABEL_KEYS[evt.event_type]) || evt.event_type}</span>
+                  <span className="text-gray-400 ml-auto tabular-nums">{fmtTimeShort(evt.event_time, lang)}</span>
                   {evt.is_at_location === false && (
                     <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300">
                       {evt.distance_meters}m
@@ -448,12 +447,12 @@ export default function ShiftPanel({ userId }: Props) {
           </div>
         )}
 
-        {/* Push subscription prompt (Bloque 3) */}
+        {/* Push subscription prompt */}
         {pushSupported && !pushSubscribed && pushPermission !== 'denied' && (
           <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
             <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
               <p className="text-xs text-blue-700 dark:text-blue-300">
-                🔔 Activa las notificaciones para recibir alertas importantes.
+                🔔 {t('shift.pushPrompt')}
               </p>
               <button
                 onClick={pushSubscribe}
@@ -461,7 +460,7 @@ export default function ShiftPanel({ userId }: Props) {
                 className="no-min-size flex-shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold text-white transition-colors disabled:opacity-50"
                 style={{ backgroundColor: 'var(--primary)' }}
               >
-                {pushLoading ? '...' : 'Activar'}
+                {pushLoading ? t('shift.pushActivating') : t('shift.pushActivate')}
               </button>
             </div>
           </div>

@@ -21,6 +21,7 @@ const es = {
     tenureWeeks: 'semanas en la empresa',
     tenureMonths: 'meses en la empresa',
     tenureYears: 'años en la empresa',
+    shift: 'Turno',
   },
   auth: {
     login: 'Iniciar Sesión',
@@ -418,6 +419,55 @@ const es = {
     rankSubBestInteractions: 'Basado en total de interacciones del período seleccionado',
     rankSubBestEffectiveness: 'Basado en promedio de conversión del período seleccionado',
   },
+  shift: {
+    title: 'Control de Turno',
+    loading: 'Cargando turno...',
+    noAccess: 'No tienes acceso a esta sección.',
+    // Status badges
+    statusIdle: 'Sin turno activo',
+    statusActive: 'Turno en curso',
+    statusBreak: 'En descanso',
+    // Event labels
+    clockIn: 'Inicio de turno',
+    lunchStart: 'Inicio de descanso',
+    lunchEnd: 'Regreso de descanso',
+    clockOut: 'Fin de turno',
+    // Chronometer
+    elapsed: 'Tiempo transcurrido',
+    // Store selector
+    storeLabel: 'Tienda',
+    noStores: 'No hay tiendas registradas',
+    selectStore: 'Selecciona una tienda',
+    // GPS
+    gpsUnavailable: 'GPS no disponible',
+    gpsObtaining: 'Obteniendo ubicación...',
+    gpsFailed: 'No se pudo obtener ubicación',
+    verifyingLocation: 'Verificando ubicación...',
+    // Buttons
+    btnClockIn: 'Iniciar Turno',
+    btnLunchStart: 'Descanso',
+    btnClockOut: 'Finalizar',
+    btnLunchEnd: 'Regresar de Descanso',
+    // Result messages
+    registeredAt: 'registrado a las',
+    locationVerified: 'Ubicación verificada.',
+    locationNotVerified: 'No se pudo verificar la ubicación.',
+    outsidePerimeter: 'Estabas a {dist}m de la tienda. El administrador fue notificado.',
+    // Geofence warning
+    geofenceWarning: 'Estás a {dist}m de {store}. El administrador ha sido notificado.',
+    // Timeline
+    timelineTitle: 'Eventos del turno',
+    // Push
+    pushPrompt: 'Activa las notificaciones para recibir alertas importantes.',
+    pushActivate: 'Activar',
+    pushActivating: 'Activando…',
+    // Connection error
+    connectionError: 'Error de conexión',
+    eventError: 'Error al registrar evento',
+    // Activity read-only store
+    activeStore: 'Tienda del turno activo',
+    noActiveShift: 'No hay turno activo en este momento',
+  },
 };
 
 const en: typeof es = {
@@ -441,6 +491,7 @@ const en: typeof es = {
     tenureWeeks: 'weeks at the company',
     tenureMonths: 'months at the company',
     tenureYears: 'years at the company',
+    shift: 'Shift',
   },
   auth: {
     login: 'Sign In',
@@ -836,6 +887,55 @@ const en: typeof es = {
     rankSubWorstSales: 'Based on lowest total sales in the selected period',
     rankSubBestInteractions: 'Based on total interactions in the selected period',
     rankSubBestEffectiveness: 'Based on average conversion in the selected period',
+  },
+  shift: {
+    title: 'Shift Control',
+    loading: 'Loading shift...',
+    noAccess: 'You don\'t have access to this section.',
+    // Status badges
+    statusIdle: 'No active shift',
+    statusActive: 'Shift in progress',
+    statusBreak: 'On break',
+    // Event labels
+    clockIn: 'Clock in',
+    lunchStart: 'Break start',
+    lunchEnd: 'Back from break',
+    clockOut: 'Clock out',
+    // Chronometer
+    elapsed: 'Elapsed time',
+    // Store selector
+    storeLabel: 'Store',
+    noStores: 'No stores registered',
+    selectStore: 'Select a store',
+    // GPS
+    gpsUnavailable: 'GPS unavailable',
+    gpsObtaining: 'Getting location...',
+    gpsFailed: 'Could not get location',
+    verifyingLocation: 'Verifying location...',
+    // Buttons
+    btnClockIn: 'Start Shift',
+    btnLunchStart: 'Break',
+    btnClockOut: 'End Shift',
+    btnLunchEnd: 'Return from Break',
+    // Result messages
+    registeredAt: 'registered at',
+    locationVerified: 'Location verified.',
+    locationNotVerified: 'Could not verify location.',
+    outsidePerimeter: 'You were {dist}m from the store. Admin has been notified.',
+    // Geofence warning
+    geofenceWarning: 'You are {dist}m from {store}. Admin has been notified.',
+    // Timeline
+    timelineTitle: 'Shift events',
+    // Push
+    pushPrompt: 'Enable notifications to receive important alerts.',
+    pushActivate: 'Enable',
+    pushActivating: 'Enabling…',
+    // Connection error
+    connectionError: 'Connection error',
+    eventError: 'Error registering event',
+    // Activity read-only store
+    activeStore: 'Active shift store',
+    noActiveShift: 'No active shift at the moment',
   },
 };
 

@@ -8,7 +8,6 @@ import { usePreviewRole, useActiveUserId } from './PreviewRoleContext';
 import { fmtDate } from '@/lib/i18n';
 import { ActivityEntry, CampaignType, effectivenessRate } from '@/lib/activity';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
-import ShiftPanel from './ShiftPanel';
 
 // Use local date (not UTC) — toISOString() shifts day when UTC > local date
 const today = () => new Date().toLocaleDateString('en-CA');
@@ -88,6 +87,33 @@ export default function ActivityClient({ session }: { session: Session }) {
   const [incrementing, setIncrementing] = useState<string | null>(null);
   const [draftRestored, setDraftRestored] = useState(false);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Active shift store (read-only source of truth)
+  const [shiftStoreName, setShiftStoreName] = useState<string | null>(null);
+  const [shiftStoreAddress, setShiftStoreAddress] = useState<string | null>(null);
+  const [shiftStoreLoading, setShiftStoreLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      setShiftStoreLoading(true);
+      try {
+        const res = await fetch('/api/shift');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.active && data.store) {
+            setShiftStoreName(data.store.name);
+            setShiftStoreAddress(data.store.address ?? '');
+            setStoreChain(data.store.name);
+            setStoreAddress(data.store.address ?? '');
+          } else {
+            setShiftStoreName(null);
+            setShiftStoreAddress(null);
+          }
+        }
+      } catch {}
+      setShiftStoreLoading(false);
+    })();
+  }, [activeUserId]);
 
   const loadEntry = useCallback(async (d: string) => {
     console.log('[Activity loadEntry]', { activeUserId, date: d, isPreviewMode });
@@ -344,11 +370,6 @@ export default function ActivityClient({ session }: { session: Session }) {
           </div>
         )}
 
-        {/* Shift Panel — Retail only, for agent/jr_manager/sr_manager */}
-        {campaignType === 'Retail' && !isPreviewMode && ['agent', 'jr_manager', 'sr_manager'].includes(session.user.role) && (
-          <ShiftPanel userId={activeUserId} />
-        )}
-
         <div className="grid md:grid-cols-5 gap-5">
           {/* ── Form ── */}
           <div className="md:col-span-2">
@@ -407,20 +428,26 @@ export default function ActivityClient({ session }: { session: Session }) {
                 </div>
               )}
               {campaignType === 'Retail' && (
-                <div className="mb-4 space-y-2">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1 uppercase tracking-wide">{t('activity.storeChain')}</label>
-                    <select value={storeChain} onChange={(e) => setStoreChain(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm">
-                      {STORE_CHAINS.map((c) => <option key={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1 uppercase tracking-wide">{t('activity.storeAddress')}</label>
-                    <input type="text" value={storeAddress} onChange={(e) => setStoreAddress(e.target.value)}
-                      placeholder={t('activity.storeAddressPlaceholder')}
-                      className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm placeholder-gray-400" />
-                  </div>
+                <div className="mb-4">
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">{t('shift.activeStore')}</label>
+                  {shiftStoreLoading ? (
+                    <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
+                      <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                      {t('shift.loading')}
+                    </div>
+                  ) : shiftStoreName ? (
+                    <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+                      <span className="text-sm">📍</span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{shiftStoreName}</p>
+                        {shiftStoreAddress && <p className="text-[10px] text-gray-400 truncate">{shiftStoreAddress}</p>}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="px-3 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                      <p className="text-xs text-amber-700 dark:text-amber-300">{t('shift.noActiveShift')}</p>
+                    </div>
+                  )}
                 </div>
               )}
 

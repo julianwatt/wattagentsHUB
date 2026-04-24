@@ -62,8 +62,9 @@ values (
 );
 
 -- =============================================================
--- RLS — Patrón existente: anon read-only, server bypasa con
--- service-role key. No se usa authenticated + auth.uid()
+-- RLS — Patrón existente: anon full CRUD (misma estrategia que
+-- activity_entries). Autorización se maneja en API routes con
+-- getServerSession(). No se usa authenticated + auth.uid()
 -- porque la app usa NextAuth (no Supabase Auth).
 -- =============================================================
 
@@ -72,15 +73,33 @@ alter table public.stores enable row level security;
 create policy "anon_select_stores" on public.stores
   for select to anon using (true);
 
--- shift_logs: lectura anon (realtime en dashboard)
+-- shift_logs: full CRUD anon (mismo patrón que activity_entries)
 alter table public.shift_logs enable row level security;
 create policy "anon_select_shift_logs" on public.shift_logs
   for select to anon using (true);
+create policy "anon_insert_shift_logs" on public.shift_logs
+  for insert to anon with check (true);
+create policy "anon_update_shift_logs" on public.shift_logs
+  for update to anon using (true);
+create policy "anon_delete_shift_logs" on public.shift_logs
+  for delete to anon using (true);
 
--- push_subscriptions: sin acceso anon (server-only)
+-- push_subscriptions: full CRUD anon
 alter table public.push_subscriptions enable row level security;
+create policy "anon_select_push_subscriptions" on public.push_subscriptions
+  for select to anon using (true);
+create policy "anon_insert_push_subscriptions" on public.push_subscriptions
+  for insert to anon with check (true);
+create policy "anon_update_push_subscriptions" on public.push_subscriptions
+  for update to anon using (true);
+create policy "anon_delete_push_subscriptions" on public.push_subscriptions
+  for delete to anon using (true);
 
--- geofence_alerts: lectura anon (realtime alertas en admin)
+-- geofence_alerts: select + insert + update anon
 alter table public.geofence_alerts enable row level security;
 create policy "anon_select_geofence_alerts" on public.geofence_alerts
   for select to anon using (true);
+create policy "anon_insert_geofence_alerts" on public.geofence_alerts
+  for insert to anon with check (true);
+create policy "anon_update_geofence_alerts" on public.geofence_alerts
+  for update to anon using (true);
