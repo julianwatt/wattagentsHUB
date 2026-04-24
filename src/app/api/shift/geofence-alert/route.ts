@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
 
   if (ceo) {
     try {
-      await sendPushToUser(ceo.id, { title, body, url: '/notifications' });
+      await sendPushToUser(ceo.id, { title, body, url: '/notifications' }, 'geofence_alert');
     } catch (err) {
       console.error('[geofence-alert] push error (alert was saved):', err);
     }

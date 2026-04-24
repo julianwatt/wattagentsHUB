@@ -150,6 +150,6 @@ async function notifyCeo(
       title,
       body,
       url: '/notifications',
-    });
+    }, 'shift_event');
   }
 }

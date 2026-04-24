@@ -593,10 +593,37 @@ function ReloadIcon({ className }: { className: string }) {
 // ── Push notification opt-in banner for CEO / Admin ──
 function PushOptInBanner() {
   const { t } = useLanguage();
-  const { isSupported, permission, isSubscribed, subscribe, loading } = usePushSubscription();
+  const { isSupported, permission, isSubscribed, subscribe, loading, isIOSSafariNoPWA } = usePushSubscription();
   const [dismissed, setDismissed] = useState(false);
 
-  if (dismissed || isSubscribed || !isSupported || permission === 'denied') return null;
+  if (dismissed || isSubscribed) return null;
+
+  // iOS Safari without PWA: show install instructions
+  if (isIOSSafariNoPWA) {
+    return (
+      <div className="bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-800 px-4 py-3 flex items-center justify-between gap-3">
+        <div className="flex items-start gap-2.5 min-w-0">
+          <span className="text-lg flex-shrink-0 mt-0.5">🔔</span>
+          <div className="min-w-0">
+            <p className="text-xs text-amber-900 dark:text-amber-100 font-semibold">
+              {t('push.iosInstallTitle')}
+            </p>
+            <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5 leading-snug">
+              {t('push.iosInstallBody')}
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => setDismissed(true)}
+          className="text-amber-400 hover:text-amber-600 dark:hover:text-amber-300 transition-colors flex-shrink-0"
+        >
+          <CloseIcon className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  }
+
+  if (!isSupported || permission === 'denied') return null;
 
   return (
     <div className="bg-blue-50 dark:bg-blue-950/40 border-b border-blue-200 dark:border-blue-800 px-4 py-2.5 flex items-center justify-between gap-3">

@@ -513,6 +513,10 @@ const es = {
     pushContinuousTitle: 'Agente fuera de perímetro',
     pushContinuousBody: '{name} salió del perímetro de {store} durante su turno ({dist})',
   },
+  push: {
+    iosInstallTitle: 'Instala la app para recibir notificaciones',
+    iosInstallBody: 'Toca el ícono de compartir (⎋) y selecciona "Agregar a pantalla de inicio" para activar las notificaciones push.',
+  },
 };
 
 const en: typeof es = {
@@ -1026,6 +1030,10 @@ const en: typeof es = {
     pushOutsideBody: '{name} registered "{event}" {dist} from {store}',
     pushContinuousTitle: 'Agent outside perimeter',
     pushContinuousBody: '{name} left the perimeter of {store} during shift ({dist})',
+  },
+  push: {
+    iosInstallTitle: 'Install the app to receive notifications',
+    iosInstallBody: 'Tap the share icon (⎋) and select "Add to Home Screen" to enable push notifications.',
   },
 };
 

@@ -11,16 +11,36 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 export interface PushState {
-  /** Browser supports push notifications */
   isSupported: boolean;
-  /** Current notification permission: 'default' | 'granted' | 'denied' */
   permission: NotificationPermission | 'unsupported';
-  /** User is already subscribed */
   isSubscribed: boolean;
-  /** Request permission, register SW, and save subscription */
   subscribe: () => Promise<boolean>;
-  /** Loading state during subscribe flow */
   loading: boolean;
+  isIOSSafariNoPWA: boolean;
+}
+
+function detectIOSSafariNoPWA(): boolean {
+  if (typeof window === 'undefined') return false;
+  const ua = navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (!isIOS) return false;
+  const nav = navigator as Navigator & { standalone?: boolean };
+  const isStandalone = nav.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+  return !isStandalone;
+}
+
+async function syncSubscription(): Promise<void> {
+  try {
+    const reg = await navigator.serviceWorker.getRegistration('/sw.js');
+    if (!reg) return;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return;
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription: sub.toJSON() }),
+    });
+  } catch {}
 }
 
 export function usePushSubscription(): PushState {
@@ -34,8 +54,8 @@ export function usePushSubscription(): PushState {
   );
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const isIOSSafariNoPWA = typeof window !== 'undefined' && detectIOSSafariNoPWA();
 
-  // Check existing subscription on mount
   useEffect(() => {
     if (!isSupported) return;
     (async () => {
@@ -43,7 +63,10 @@ export function usePushSubscription(): PushState {
         const reg = await navigator.serviceWorker.getRegistration('/sw.js');
         if (!reg) return;
         const sub = await reg.pushManager.getSubscription();
-        setIsSubscribed(!!sub);
+        if (sub) {
+          setIsSubscribed(true);
+          syncSubscription();
+        }
       } catch {}
     })();
   }, [isSupported]);
@@ -53,7 +76,6 @@ export function usePushSubscription(): PushState {
     setLoading(true);
 
     try {
-      // 1. Request permission
       const perm = await Notification.requestPermission();
       setPermission(perm);
       if (perm !== 'granted') {
@@ -61,11 +83,9 @@ export function usePushSubscription(): PushState {
         return false;
       }
 
-      // 2. Register service worker
       const reg = await navigator.serviceWorker.register('/sw.js');
       await navigator.serviceWorker.ready;
 
-      // 3. Subscribe to push
       const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
       if (!vapidKey) {
         console.error('[usePush] VAPID public key not available');
@@ -78,7 +98,6 @@ export function usePushSubscription(): PushState {
         applicationServerKey: urlBase64ToUint8Array(vapidKey).buffer as ArrayBuffer,
       });
 
-      // 4. Send subscription to server
       const res = await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -101,5 +120,5 @@ export function usePushSubscription(): PushState {
     }
   }, [isSupported]);
 
-  return { isSupported, permission, isSubscribed, subscribe, loading };
+  return { isSupported, permission, isSubscribed, subscribe, loading, isIOSSafariNoPWA };
 }
