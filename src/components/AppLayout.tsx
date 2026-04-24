@@ -93,7 +93,8 @@ export default function AppLayout({ session, children }: Props) {
     if (path.startsWith('/team')) return r !== 'agent';
     if (path.startsWith('/roster')) return false; // redirects to /manage/users
     if (path.startsWith('/notifications')) return r === 'ceo'; // ceo can access, others hidden in preview
-    if (path.startsWith('/activity')) return r !== 'admin' && r !== 'ceo'; // hidden for admin/ceo without preview
+    if (path.startsWith('/activity')) return r !== 'admin' && r !== 'ceo';
+    if (path.startsWith('/simulator')) return r !== 'admin' && r !== 'ceo';
     return true;
   };
 
@@ -134,10 +135,10 @@ export default function AppLayout({ session, children }: Props) {
   const allNav = [
     HOME_NAV,
     ...BASE_NAV.filter((item) => {
+      if (item.key === 'nav.simulator' && (role === 'ceo' || role === 'admin')) return false;
       if (!item.hideForAdmin) return true;
       if (isAdminReal && !previewRole) return false;
-      // Shift only for agent/jr_manager/sr_manager
-      if (item.key === 'nav.shift' && (role === 'ceo' || role === 'admin')) return false;
+      if (role === 'ceo' || role === 'admin') return false;
       return true;
     }),
     ...(canSeeTeam ? [TEAM_NAV] : []),

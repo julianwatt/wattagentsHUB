@@ -25,6 +25,12 @@ export default withAuth(
     if (pathname.startsWith('/team') && role === 'agent') {
       return NextResponse.redirect(new URL('/activity', req.url));
     }
+    if (pathname.startsWith('/simulator') && (role === 'admin' || role === 'ceo')) {
+      return NextResponse.redirect(new URL('/home', req.url));
+    }
+    if (pathname.startsWith('/activity') && (role === 'admin' || role === 'ceo')) {
+      return NextResponse.redirect(new URL('/home', req.url));
+    }
     return NextResponse.next();
   },
   {
