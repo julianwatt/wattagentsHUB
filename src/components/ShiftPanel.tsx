@@ -5,6 +5,14 @@ import { useLanguage } from './LanguageContext';
 import { useShift, ShiftEvent, ShiftStore } from './ShiftContext';
 import { fmtDistance } from '@/lib/geo';
 
+function HourglassIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 3h14M5 21h14M7 3v3a5 5 0 005 5 5 5 0 005-5V3M7 21v-3a5 5 0 015-5 5 5 0 015 5v3" />
+    </svg>
+  );
+}
+
 // ── Helpers ──
 function fmtTimeShort(iso: string, lang: string): string {
   return new Date(iso).toLocaleTimeString(lang === 'en' ? 'en-US' : 'es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -366,18 +374,18 @@ export default function ShiftPanel({ userId }: Props) {
             <button onClick={() => handleEvent('clock_in')} disabled={acting || !selectedStoreId}
               className="w-full py-3 md:py-3.5 rounded-xl font-bold text-white text-sm transition-all active:scale-[0.98] disabled:opacity-50"
               style={{ backgroundColor: '#10b981' }}>
-              {acting ? t('shift.verifyingLocation') : `🟢 ${t('shift.btnClockIn')}`}
+              {acting ? t('shift.verifyingLocation') : t('shift.btnClockIn')}
             </button>
           )}
           {state === 'active' && (
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => handleEvent('lunch_start')} disabled={acting}
                 className="py-3 md:py-3.5 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50 bg-amber-500 text-white">
-                {acting ? '...' : `🍽️ ${t('shift.btnLunchStart')}`}
+                {acting ? '...' : <span className="inline-flex items-center gap-1.5"><HourglassIcon className="w-4 h-4" />{t('shift.btnLunchStart')}</span>}
               </button>
               <button onClick={() => handleEvent('clock_out')} disabled={acting}
                 className="py-3 md:py-3.5 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50 bg-red-500 text-white">
-                {acting ? '...' : `🔴 ${t('shift.btnClockOut')}`}
+                {acting ? '...' : t('shift.btnClockOut')}
               </button>
             </div>
           )}
@@ -385,7 +393,7 @@ export default function ShiftPanel({ userId }: Props) {
             <button onClick={() => handleEvent('lunch_end')} disabled={acting}
               className="w-full py-3 md:py-3.5 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50 text-white"
               style={{ backgroundColor: 'var(--primary)' }}>
-              {acting ? t('shift.verifyingLocation') : `🔄 ${t('shift.btnLunchEnd')}`}
+              {acting ? t('shift.verifyingLocation') : t('shift.btnLunchEnd')}
             </button>
           )}
         </div>

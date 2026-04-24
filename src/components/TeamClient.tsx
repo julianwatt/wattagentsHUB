@@ -290,6 +290,7 @@ export default function TeamClient({ session }: { session: Session }) {
               {/* First/Last sale card — 20% desktop */}
               <div className="w-full lg:w-1/5">
                 <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5 h-full">
+                  <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm mb-4">{t('team.firstLastTitle')}</h3>
                   {todaysSales ? (
                     <div className="space-y-4">
                       <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/40 px-4 py-3">
@@ -402,20 +403,18 @@ function RankCard({ label, sub, name, value, accent, icon }: {
   label: string; sub?: string; name: string; value: string | number; accent: 'emerald' | 'rose' | 'sky' | 'violet'; icon: string;
 }) {
   const colors: Record<string, string> = {
-    emerald: 'from-emerald-500 to-teal-700',
-    rose: 'from-rose-500 to-red-700',
-    sky: 'from-sky-500 to-blue-700',
-    violet: 'from-violet-500 to-purple-700',
+    emerald: 'from-emerald-700 to-teal-900',
+    rose: 'from-rose-700 to-red-900',
+    sky: 'from-sky-700 to-blue-900',
+    violet: 'from-violet-700 to-purple-900',
   };
   return (
-    <div className={`bg-gradient-to-br ${colors[accent]} rounded-xl p-3 text-white shadow-sm flex-1 min-w-[120px]`}>
-      <div className="flex items-start justify-between mb-0.5">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-white/80">{label}</p>
-        <span className="text-2xl leading-none flex-shrink-0 ml-2">{icon}</span>
-      </div>
+    <div className={`bg-gradient-to-br ${colors[accent]} rounded-xl p-3 text-white shadow-sm flex-1 min-w-[120px] relative overflow-hidden`}>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-white/80 mb-0.5">{label}</p>
       {sub && <p className="text-[10px] text-white/60 leading-tight w-full">{sub}</p>}
       <p className="text-sm font-semibold mt-1 truncate">{name}</p>
       <p className="text-xl font-extrabold leading-tight">{value}</p>
+      <span className="absolute bottom-1.5 right-2 text-2xl leading-none opacity-40 pointer-events-none">{icon}</span>
     </div>
   );
 }
