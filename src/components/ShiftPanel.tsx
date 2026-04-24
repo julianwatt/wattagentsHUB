@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePushSubscription } from './usePushSubscription';
 import { useLanguage } from './LanguageContext';
 import { useShift, ShiftEvent, ShiftStore } from './ShiftContext';
+import { fmtDistance } from '@/lib/geo';
 
 // ── Helpers ──
 function fmtTimeShort(iso: string, lang: string): string {
@@ -114,7 +115,7 @@ export default function ShiftPanel({ userId }: Props) {
           const now = Date.now();
           if (now - lastAlertRef.current > 3 * 60 * 1000) {
             lastAlertRef.current = now;
-            setGeofenceWarning(t('shift.geofenceWarning').replace('{dist}', String(dist)).replace('{store}', store.name));
+            setGeofenceWarning(t('shift.geofenceWarning').replace('{dist}', fmtDistance(dist)).replace('{store}', store.name));
             const clockInEvt = events.find((e) => e.event_type === 'clock_in');
             try {
               await fetch('/api/shift/geofence-alert', {
@@ -261,7 +262,7 @@ export default function ShiftPanel({ userId }: Props) {
       if (!pos) {
         setLastResult({ ok: true, message: `${eventLabel} ${t('shift.registeredAt')} ${time}. ${t('shift.locationNotVerified')}` });
       } else if (data.geofence && !data.geofence.isInside) {
-        setLastResult({ ok: false, message: `${eventLabel} ${t('shift.registeredAt')} ${time}. ⚠️ ${t('shift.outsidePerimeter').replace('{dist}', String(data.geofence.distanceMeters))}` });
+        setLastResult({ ok: false, message: `${eventLabel} ${t('shift.registeredAt')} ${time}. ⚠️ ${t('shift.outsidePerimeter').replace('{dist}', fmtDistance(data.geofence.distanceMeters))}` });
       } else {
         setLastResult({ ok: true, message: `${eventLabel} ${t('shift.registeredAt')} ${time}. ✓ ${t('shift.locationVerified')}` });
       }
@@ -411,7 +412,7 @@ export default function ShiftPanel({ userId }: Props) {
                   <span className="font-medium text-gray-700 dark:text-gray-200">{t(EVENT_LABEL_KEYS[evt.event_type]) || evt.event_type}</span>
                   <span className="text-gray-400 ml-auto tabular-nums">{fmtTimeShort(evt.event_time, lang)}</span>
                   {evt.is_at_location === false && (
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300">{evt.distance_meters}m</span>
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300">{fmtDistance(evt.distance_meters ?? 0)}</span>
                   )}
                   {evt.is_at_location === true && (
                     <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-300">✓</span>

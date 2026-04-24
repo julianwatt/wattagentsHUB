@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { supabase } from '@/lib/supabase';
-import { checkGeofence } from '@/lib/geo';
+import { checkGeofence, fmtDistance } from '@/lib/geo';
 import { sendPushToUser } from '@/lib/push';
 
 // POST — register a shift event (clock_in, lunch_start, lunch_end, clock_out)
@@ -119,7 +119,7 @@ async function notifyCeo(
   });
 
   const title = '⚠️ Fuera de perímetro';
-  const body = `${name} registró "${eventLabel}" a ${distanceMeters}m de ${store.name}`;
+  const body = `${name} registró "${eventLabel}" a ${fmtDistance(distanceMeters)} de ${store.name}`;
 
   // In-app notification (admin_notifications)
   await supabase.from('admin_notifications').insert({

@@ -26,6 +26,17 @@ export interface GeofenceResult {
   distanceMeters: number;
 }
 
+/**
+ * Format distance for display:
+ * - < 1000 m → "243 m"
+ * - ≥ 1000 m → "1.2 mi"
+ */
+export function fmtDistance(meters: number): string {
+  if (meters < 1000) return `${Math.round(meters)} m`;
+  const miles = meters / 1609.344;
+  return `${miles.toFixed(1)} mi`;
+}
+
 /** Check if a point is within a store's geofence radius. */
 export function checkGeofence(
   userLat: number, userLng: number,

@@ -6,6 +6,7 @@ import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
 import { fmtDate, fmtDateTime } from '@/lib/i18n';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
+import { fmtDistance } from '@/lib/geo';
 
 // ── Shared types ──
 interface DailySummary {
@@ -204,7 +205,7 @@ export default function NotificationsClient({ session }: { session: Session }) {
       const alertType = d?.alert_type === 'outside_perimeter' ? t('notifications.geofenceOutsidePerimeter') : t('notifications.geofenceLocationMismatch');
       const eventLabel = d?.event_type ? ` (${EVENT_LABELS[d.event_type] || d.event_type})` : '';
       const storeName = d?.store_name ? ` \u2014 ${d.store_name}` : '';
-      const dist = d?.distance_meters ? ` a ${Math.round(d.distance_meters)}m` : '';
+      const dist = d?.distance_meters ? ` a ${fmtDistance(d.distance_meters)}` : '';
       return `${alertType}${eventLabel}${storeName}${dist}`;
     }
     return '';
@@ -752,7 +753,7 @@ export default function NotificationsClient({ session }: { session: Session }) {
                               <td className="px-4 py-2.5 text-gray-600 dark:text-gray-300">{log.stores?.name ?? '\u2014'}</td>
                               <td className="px-4 py-2.5 text-right tabular-nums">
                                 {log.distance_meters != null ? (
-                                  <span className={outside ? 'font-bold text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}>{Math.round(log.distance_meters)}m</span>
+                                  <span className={outside ? 'font-bold text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}>{fmtDistance(log.distance_meters)}</span>
                                 ) : (
                                   <span className="text-gray-300 dark:text-gray-600">{'\u2014'}</span>
                                 )}
@@ -795,7 +796,7 @@ export default function NotificationsClient({ session }: { session: Session }) {
                               <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">{'\u2713'}</span>
                             )}
                             {log.is_at_location === false && (
-                              <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300">{'\u26A0'} {Math.round(log.distance_meters ?? 0)}m</span>
+                              <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300">{'\u26A0'} {fmtDistance(log.distance_meters ?? 0)}</span>
                             )}
                           </div>
                           <div className="flex items-center gap-2 text-[11px]">

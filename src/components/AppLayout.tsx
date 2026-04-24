@@ -12,6 +12,7 @@ import WattLogo from './WattLogo';
 import PreviewRoleSwitcher, { PreviewUser } from './PreviewRoleSwitcher';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
 import { usePushSubscription } from './usePushSubscription';
+import { fmtDistance } from '@/lib/geo';
 
 interface Props {
   session: Session;
@@ -171,7 +172,7 @@ export default function AppLayout({ session, children }: Props) {
     if (n.type === 'geofence_alert') {
       const d = n.data;
       const store = d?.store_name ?? '';
-      const dist = d?.distance_meters ? `${d.distance_meters}m` : '';
+      const dist = d?.distance_meters ? fmtDistance(d.distance_meters) : '';
       return `🚨 ${n.user_name ?? '—'} fuera de perímetro${store ? ` — ${store}` : ''}${dist ? ` (${dist})` : ''}`;
     }
     return n.user_name ?? '—';

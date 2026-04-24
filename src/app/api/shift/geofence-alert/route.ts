@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { supabase } from '@/lib/supabase';
-import { checkGeofence } from '@/lib/geo';
+import { checkGeofence, fmtDistance } from '@/lib/geo';
 import { sendPushToUser } from '@/lib/push';
 
 // POST — report that the agent left the perimeter during an active shift
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
   }
 
   const title = '🚨 Agente fuera de perímetro';
-  const body = `${name} salió del perímetro de ${store.name} durante su turno (${geo.distanceMeters}m)`;
+  const body = `${name} salió del perímetro de ${store.name} durante su turno (${fmtDistance(geo.distanceMeters)})`;
 
   // In-app notification
   await supabase.from('admin_notifications').insert({

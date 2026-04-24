@@ -112,3 +112,6 @@ create policy "anon_insert_geofence_alerts" on public.geofence_alerts
   for insert to anon with check (true);
 create policy "anon_update_geofence_alerts" on public.geofence_alerts
   for update to anon using (true);
+
+-- ── Realtime: habilitar broadcast de cambios para shift_logs y geofence_alerts ──
+alter publication supabase_realtime add table shift_logs, geofence_alerts;
