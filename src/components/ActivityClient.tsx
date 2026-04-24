@@ -8,6 +8,7 @@ import { usePreviewRole, useActiveUserId } from './PreviewRoleContext';
 import { fmtDate } from '@/lib/i18n';
 import { ActivityEntry, CampaignType, effectivenessRate } from '@/lib/activity';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
+import ShiftPanel from './ShiftPanel';
 
 // Use local date (not UTC) — toISOString() shifts day when UTC > local date
 const today = () => new Date().toLocaleDateString('en-CA');
@@ -341,6 +342,11 @@ export default function ActivityClient({ session }: { session: Session }) {
             <span>🕐 {t('activity.lastActivity')}: <strong>{fmtTime(todayEntry.last_activity_at)}</strong></span>
             <span>{t('activity.typeLabel')}: <strong>{todayEntry.campaign_type}</strong></span>
           </div>
+        )}
+
+        {/* Shift Panel — Retail only, for agent/jr_manager/sr_manager */}
+        {campaignType === 'Retail' && !isPreviewMode && ['agent', 'jr_manager', 'sr_manager'].includes(session.user.role) && (
+          <ShiftPanel userId={activeUserId} />
         )}
 
         <div className="grid md:grid-cols-5 gap-5">
