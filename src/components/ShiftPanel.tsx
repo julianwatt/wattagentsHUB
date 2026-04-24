@@ -27,8 +27,12 @@ function formatElapsed(ms: number): string {
 }
 
 const EVENT_ICONS: Record<string, string> = {
-  clock_in: '🟢', lunch_start: '🍽️', lunch_end: '🔄', clock_out: '🔴',
+  clock_in: '🟢', lunch_start: '⏳', lunch_end: '🔄', clock_out: '🔴',
 };
+
+function fmtDateShort(iso: string, lang: string): string {
+  return new Date(iso).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-MX', { month: 'short', day: 'numeric' });
+}
 
 const EVENT_LABEL_KEYS: Record<string, string> = {
   clock_in: 'shift.clockIn', lunch_start: 'shift.lunchStart',
@@ -373,18 +377,18 @@ export default function ShiftPanel({ userId }: Props) {
           {state === 'idle' && (
             <button onClick={() => handleEvent('clock_in')} disabled={acting || !selectedStoreId}
               className="w-full py-3 md:py-3.5 rounded-xl font-bold text-white text-sm transition-all active:scale-[0.98] disabled:opacity-50"
-              style={{ backgroundColor: '#10b981' }}>
+              style={{ backgroundColor: '#059669' }}>
               {acting ? t('shift.verifyingLocation') : t('shift.btnClockIn')}
             </button>
           )}
           {state === 'active' && (
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => handleEvent('lunch_start')} disabled={acting}
-                className="py-3 md:py-3.5 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50 bg-amber-500 text-white">
-                {acting ? '...' : <span className="inline-flex items-center gap-1.5"><HourglassIcon className="w-4 h-4" />{t('shift.btnLunchStart')}</span>}
+                className="py-3 md:py-3.5 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50 bg-amber-700 text-white">
+                {acting ? '...' : t('shift.btnLunchStart')}
               </button>
               <button onClick={() => handleEvent('clock_out')} disabled={acting}
-                className="py-3 md:py-3.5 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50 bg-red-500 text-white">
+                className="py-3 md:py-3.5 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50 bg-red-700 text-white">
                 {acting ? '...' : t('shift.btnClockOut')}
               </button>
             </div>
@@ -409,24 +413,43 @@ export default function ShiftPanel({ userId }: Props) {
           </div>
         )}
 
-        {/* Timeline */}
+        {/* Timeline table */}
         {events.length > 0 && (
           <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">{t('shift.timelineTitle')}</p>
-            <div className="space-y-1.5">
-              {[...events].reverse().map((evt) => (
-                <div key={evt.id} className="flex items-center gap-2.5 text-xs">
-                  <span className="flex-shrink-0">{EVENT_ICONS[evt.event_type] || '⏺'}</span>
-                  <span className="font-medium text-gray-700 dark:text-gray-200">{t(EVENT_LABEL_KEYS[evt.event_type]) || evt.event_type}</span>
-                  <span className="text-gray-400 ml-auto tabular-nums">{fmtTimeShort(evt.event_time, lang)}</span>
-                  {evt.is_at_location === false && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300">{fmtDistance(evt.distance_meters ?? 0)}</span>
-                  )}
-                  {evt.is_at_location === true && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-300">✓</span>
-                  )}
-                </div>
-              ))}
+            <div className="overflow-x-auto -mx-1">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-[10px] font-bold uppercase tracking-wide text-gray-400 border-b border-gray-100 dark:border-gray-800">
+                    <th className="text-left py-1.5 px-1">{t('shift.colEvent')}</th>
+                    <th className="text-left py-1.5 px-1">{t('shift.colDate')}</th>
+                    <th className="text-left py-1.5 px-1">{t('shift.colTime')}</th>
+                    <th className="text-right py-1.5 px-1">{t('shift.colDistance')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
+                  {[...events].reverse().map((evt) => (
+                    <tr key={evt.id}>
+                      <td className="py-1.5 px-1">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="flex-shrink-0">{EVENT_ICONS[evt.event_type] || '⏺'}</span>
+                          <span className="font-medium text-gray-700 dark:text-gray-200">{t(EVENT_LABEL_KEYS[evt.event_type]) || evt.event_type}</span>
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-1 text-gray-500 tabular-nums">{fmtDateShort(evt.event_time, lang)}</td>
+                      <td className="py-1.5 px-1 text-gray-500 tabular-nums">{fmtTimeShort(evt.event_time, lang)}</td>
+                      <td className="py-1.5 px-1 text-right">
+                        {evt.is_at_location === true && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-300">✓</span>
+                        )}
+                        {evt.is_at_location === false && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300">{fmtDistance(evt.distance_meters ?? 0)}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}

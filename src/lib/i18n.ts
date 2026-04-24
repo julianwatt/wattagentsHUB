@@ -471,6 +471,10 @@ const es = {
     geofenceWarning: 'Tu ubicación actual no corresponde a {store} ({dist} de distancia).',
     // Timeline
     timelineTitle: 'Eventos del turno',
+    colEvent: 'Evento',
+    colDate: 'Fecha',
+    colTime: 'Hora',
+    colDistance: 'Distancia',
     // Push
     pushPrompt: 'Activa las notificaciones para recibir alertas importantes.',
     pushActivate: 'Activar',
@@ -481,6 +485,7 @@ const es = {
     // Activity read-only store
     activeStore: 'Tienda del turno activo',
     // Agent status panel
+    agentStatusTab: 'En tienda',
     agentStatusTitle: 'Estado de agentes en tienda',
     agentStatusActive: 'Turno en curso',
     agentStatusBreak: 'En descanso',
@@ -991,6 +996,10 @@ const en: typeof es = {
     geofenceWarning: 'Your current location does not match {store} ({dist} away).',
     // Timeline
     timelineTitle: 'Shift events',
+    colEvent: 'Event',
+    colDate: 'Date',
+    colTime: 'Time',
+    colDistance: 'Distance',
     // Push
     pushPrompt: 'Enable notifications to receive important alerts.',
     pushActivate: 'Enable',
@@ -1001,6 +1010,7 @@ const en: typeof es = {
     // Activity read-only store
     activeStore: 'Active shift store',
     // Agent status panel
+    agentStatusTab: 'At store',
     agentStatusTitle: 'Agent status at store',
     agentStatusActive: 'Shift in progress',
     agentStatusBreak: 'On break',

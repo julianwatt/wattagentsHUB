@@ -449,13 +449,13 @@ export default function NotificationsClient({ session }: { session: Session }) {
             const labels: Record<MainTab, string> = {
               notifications: t('notifications.title'),
               shifts: t('admin.tabShifts'),
-              status: t('shift.agentStatusTitle'),
+              status: t('shift.agentStatusTab'),
             };
             return (
               <button
                 key={tab}
                 onClick={() => setMainTab(tab)}
-                className={`px-4 sm:px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                className={`px-3 sm:px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors whitespace-nowrap flex items-center gap-1.5 ${
                   mainTab === tab
                     ? 'border-[var(--primary)] text-[var(--primary)]'
                     : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'

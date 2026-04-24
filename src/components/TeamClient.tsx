@@ -414,7 +414,7 @@ function RankCard({ label, sub, name, value, accent, icon }: {
       {sub && <p className="text-[10px] text-white/60 leading-tight w-full">{sub}</p>}
       <p className="text-sm font-semibold mt-1 truncate">{name}</p>
       <p className="text-xl font-extrabold leading-tight">{value}</p>
-      <span className="absolute bottom-1.5 right-2 text-2xl leading-none opacity-40 pointer-events-none">{icon}</span>
+      <span className="absolute bottom-1 right-1.5 text-4xl leading-none pointer-events-none">{icon}</span>
     </div>
   );
 }
