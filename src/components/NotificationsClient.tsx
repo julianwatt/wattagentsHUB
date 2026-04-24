@@ -22,17 +22,26 @@ interface DailySummary {
   rtl_agents: number;
 }
 
+interface NotifData {
+  actor_name?: string;
+  alert_type?: string;
+  store_name?: string;
+  distance_meters?: number;
+  event_type?: string;
+  shift_log_id?: string;
+}
+
 interface NotifItem {
   id: string;
   type: string;
   user_name: string | null;
   user_username: string | null;
-  data: { actor_name?: string } | null;
+  data: NotifData | null;
   status: string;
   created_at: string;
 }
 
-type FilterType = 'all' | 'password' | 'users';
+type FilterType = 'all' | 'password' | 'users' | 'geofence';
 
 export default function NotificationsClient({ session }: { session: Session }) {
   const { t, lang } = useLanguage();
@@ -94,11 +103,19 @@ export default function NotificationsClient({ session }: { session: Session }) {
     setNotifications((prev) => prev.map((n) => ({ ...n, status: 'done' })));
   };
 
+  const EVENT_LABELS: Record<string, string> = {
+    clock_in: 'Inicio de turno',
+    lunch_start: 'Inicio de descanso',
+    lunch_end: 'Regreso de descanso',
+    clock_out: 'Fin de turno',
+  };
+
   const notifLabel = (type: string) => {
     if (type === 'password_reset') return t('notifications.passwordReset');
     if (type === 'password_change') return t('notifications.passwordChange');
     if (type === 'user_deactivated') return t('notifications.userDeactivated');
     if (type === 'user_activated') return t('notifications.userActivated');
+    if (type === 'geofence_alert') return '⚠️ Alerta Geofence';
     return type;
   };
 
@@ -107,6 +124,7 @@ export default function NotificationsClient({ session }: { session: Session }) {
     if (type === 'password_change') return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300';
     if (type === 'user_deactivated') return 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300';
     if (type === 'user_activated') return 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300';
+    if (type === 'geofence_alert') return 'bg-red-200 dark:bg-red-900/50 text-red-700 dark:text-red-200 ring-1 ring-red-300 dark:ring-red-700';
     return 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300';
   };
 
@@ -121,6 +139,14 @@ export default function NotificationsClient({ session }: { session: Session }) {
       const actor = n.data?.actor_name;
       return actor ? t('notifications.descActivatedBy').replace('{actor}', actor) : t('notifications.descActivated');
     }
+    if (n.type === 'geofence_alert') {
+      const d = n.data;
+      const alertType = d?.alert_type === 'outside_perimeter' ? 'Salió del perímetro durante turno' : 'Ubicación incorrecta al registrar evento';
+      const eventLabel = d?.event_type ? ` (${EVENT_LABELS[d.event_type] || d.event_type})` : '';
+      const store = d?.store_name ? ` — ${d.store_name}` : '';
+      const dist = d?.distance_meters ? ` a ${d.distance_meters}m` : '';
+      return `${alertType}${eventLabel}${store}${dist}`;
+    }
     return '';
   };
 
@@ -134,6 +160,7 @@ export default function NotificationsClient({ session }: { session: Session }) {
   const filteredNotifs = notifications.filter((n) => {
     if (filterType === 'password') return n.type === 'password_reset' || n.type === 'password_change';
     if (filterType === 'users') return n.type === 'user_deactivated' || n.type === 'user_activated';
+    if (filterType === 'geofence') return n.type === 'geofence_alert';
     return true;
   });
 
@@ -148,8 +175,11 @@ export default function NotificationsClient({ session }: { session: Session }) {
 
   const pendingCount = notifications.filter((n) => n.status === 'pending').length;
 
-  const FILTERS: Array<{ key: FilterType; label: string }> = [
+  const geofenceCount = notifications.filter((n) => n.type === 'geofence_alert' && n.status === 'pending').length;
+
+  const FILTERS: Array<{ key: FilterType; label: string; badge?: number }> = [
     { key: 'all', label: t('notifications.filterAll') },
+    { key: 'geofence', label: '⚠️ Geofence', badge: geofenceCount },
     { key: 'password', label: t('notifications.filterPassword') },
     { key: 'users', label: t('notifications.filterUsers') },
   ];
@@ -271,7 +301,7 @@ export default function NotificationsClient({ session }: { session: Session }) {
                 <button
                   key={f.key}
                   onClick={() => setFilterType(f.key)}
-                  className={`text-[10px] font-semibold px-2.5 py-1 rounded-full transition-colors ${
+                  className={`text-[10px] font-semibold px-2.5 py-1 rounded-full transition-colors flex items-center gap-1 ${
                     filterType === f.key
                       ? 'text-white'
                       : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
@@ -279,6 +309,11 @@ export default function NotificationsClient({ session }: { session: Session }) {
                   style={filterType === f.key ? { backgroundColor: 'var(--primary)' } : {}}
                 >
                   {f.label}
+                  {f.badge && f.badge > 0 ? (
+                    <span className="w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center leading-none">
+                      {f.badge > 9 ? '9+' : f.badge}
+                    </span>
+                  ) : null}
                 </button>
               ))}
             </div>
@@ -300,7 +335,7 @@ export default function NotificationsClient({ session }: { session: Session }) {
                   {/* Notifs for this day */}
                   <div className="divide-y divide-gray-50 dark:divide-gray-800">
                     {groupedNotifs[day].map((n) => (
-                      <div key={n.id} className={`px-4 py-3 ${n.status === 'pending' ? 'bg-amber-50/50 dark:bg-amber-900/10' : ''}`}>
+                      <div key={n.id} className={`px-4 py-3 ${n.type === 'geofence_alert' && n.status === 'pending' ? 'bg-red-50/60 dark:bg-red-900/15 border-l-4 border-l-red-500' : n.status === 'pending' ? 'bg-amber-50/50 dark:bg-amber-900/10' : ''}`}>
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 mb-1 flex-wrap">

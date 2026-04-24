@@ -135,12 +135,14 @@ export default function AppLayout({ session, children }: Props) {
   ];
 
   // ── Notification bell (admin only) ──
-  interface NotifItem { id: string; type: string; user_name?: string; user_username?: string; data?: { actor_name?: string } | null; status: string; created_at: string; }
+  interface NotifData { actor_name?: string; alert_type?: string; store_name?: string; distance_meters?: number; event_type?: string; shift_log_id?: string; }
+  interface NotifItem { id: string; type: string; user_name?: string; user_username?: string; data?: NotifData | null; status: string; created_at: string; }
   const notifTypeLabel = (type: string) => {
     if (type === 'password_reset') return t('notifications.passwordReset');
     if (type === 'password_change') return t('notifications.passwordChange');
     if (type === 'user_deactivated') return t('notifications.userDeactivated');
     if (type === 'user_activated') return t('notifications.userActivated');
+    if (type === 'geofence_alert') return '⚠️ Geofence';
     return type;
   };
   const notifBadgeColor = (type: string) => {
@@ -148,6 +150,7 @@ export default function AppLayout({ session, children }: Props) {
     if (type === 'password_change') return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300';
     if (type === 'user_deactivated') return 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300';
     if (type === 'user_activated') return 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300';
+    if (type === 'geofence_alert') return 'bg-red-200 dark:bg-red-900/50 text-red-700 dark:text-red-200 ring-1 ring-red-300 dark:ring-red-700';
     return 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300';
   };
   const notifPreviewText = (n: NotifItem) => {
@@ -155,6 +158,12 @@ export default function AppLayout({ session, children }: Props) {
     if (n.type === 'password_change') return `${n.user_name ?? '—'} ${t('admin.notifPreviewChange')}`;
     if (n.type === 'user_deactivated') return `${n.user_name ?? '—'} ${t('admin.notifPreviewDeactivated')}`;
     if (n.type === 'user_activated') return `${n.user_name ?? '—'} ${t('admin.notifPreviewActivated')}`;
+    if (n.type === 'geofence_alert') {
+      const d = n.data;
+      const store = d?.store_name ?? '';
+      const dist = d?.distance_meters ? `${d.distance_meters}m` : '';
+      return `🚨 ${n.user_name ?? '—'} fuera de perímetro${store ? ` — ${store}` : ''}${dist ? ` (${dist})` : ''}`;
+    }
     return n.user_name ?? '—';
   };
   const [notifItems, setNotifItems] = useState<NotifItem[]>([]);
