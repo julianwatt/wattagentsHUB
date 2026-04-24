@@ -59,9 +59,15 @@
   ::-webkit-scrollbar-thumb { border-radius: 4px; background: rgba(0,0,0,0.2); }
 }
 
-/* Safe area for iPad home indicator + notch devices */
+/* Safe area for notch devices + home indicator */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
 .safe-area-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.mb-safe-bottom {
+  margin-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 @media print {

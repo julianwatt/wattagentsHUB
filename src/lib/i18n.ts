@@ -22,6 +22,7 @@ const es = {
     tenureMonths: 'meses en la empresa',
     tenureYears: 'años en la empresa',
     shift: 'Turno',
+    reload: 'Actualizar',
   },
   auth: {
     login: 'Iniciar Sesión',
@@ -536,6 +537,7 @@ const en: typeof es = {
     tenureMonths: 'months at the company',
     tenureYears: 'years at the company',
     shift: 'Shift',
+    reload: 'Reload',
   },
   auth: {
     login: 'Sign In',

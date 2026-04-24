@@ -13,6 +13,7 @@ import PreviewRoleSwitcher, { PreviewUser } from './PreviewRoleSwitcher';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
 import { usePushSubscription } from './usePushSubscription';
 import { fmtDistance } from '@/lib/geo';
+import { useIsStandaloneIOS } from './useStandalone';
 
 interface Props {
   session: Session;
@@ -132,6 +133,7 @@ export default function AppLayout({ session, children }: Props) {
   const isAdminReal = realRole === 'admin' || (realRole ?? session.user.role) === 'admin';
   const isCeoReal = (realRole ?? session.user.role) === 'ceo';
   const showBell = (isAdminReal || isCeoReal) && !previewRole;
+  const isStandalone = useIsStandaloneIOS();
   const allNav = [
     HOME_NAV,
     ...BASE_NAV.filter((item) => {
@@ -258,7 +260,7 @@ export default function AppLayout({ session, children }: Props) {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col transition-colors">
       {/* Preview-mode banner (admin only, when previewing as another role) */}
       {realIsAdmin && previewRole && (
-        <div className="sticky top-0 z-50 bg-amber-400 text-amber-950 text-xs font-bold px-3 sm:px-6 py-1.5 flex items-center justify-between gap-3 shadow-sm">
+        <div className="sticky top-0 z-50 bg-amber-400 text-amber-950 text-xs font-bold px-3 sm:px-6 py-1.5 flex items-center justify-between gap-3 shadow-sm safe-area-top">
           <span className="flex items-center gap-2 truncate">
             <span aria-hidden>👁️</span>
             <span className="truncate">
@@ -276,7 +278,7 @@ export default function AppLayout({ session, children }: Props) {
       )}
 
       {/* Top navbar */}
-      <header className="sticky z-40 shadow-sm" style={{ backgroundColor: 'var(--dark)', top: realIsAdmin && previewRole ? '32px' : 0 }}>
+      <header className={`sticky z-40 shadow-sm ${!(realIsAdmin && previewRole) ? 'safe-area-top' : ''}`} style={{ backgroundColor: 'var(--dark)', top: realIsAdmin && previewRole ? '32px' : 0 }}>
         <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-2">
           {/* Logo */}
           <div className="flex items-center flex-shrink-0" style={{ height: '36px' }}>
@@ -317,6 +319,17 @@ export default function AppLayout({ session, children }: Props) {
                 previewUsers={previewUsers}
                 onChange={handlePreviewChange}
               />
+            )}
+
+            {/* iOS standalone reload button */}
+            {isStandalone && (
+              <button
+                onClick={() => router.refresh()}
+                title={t('nav.reload') ?? 'Reload'}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <ReloadIcon className="w-4 h-4" />
+              </button>
             )}
 
             {/* Language toggle */}
@@ -500,7 +513,7 @@ export default function AppLayout({ session, children }: Props) {
       {showBell && <PushOptInBanner />}
 
       {/* Main content — bottom padding for tab bar (mobile + tablet) */}
-      <main className="flex-1 pb-16 lg:pb-0 min-h-0">
+      <main className="flex-1 pb-16 lg:pb-0 min-h-0 mb-safe-bottom">
         {children}
       </main>
 
@@ -572,6 +585,9 @@ function CloseIcon({ className }: { className: string }) {
 }
 function ShiftIcon({ className }: { className: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+}
+function ReloadIcon({ className }: { className: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>;
 }
 
 // ── Push notification opt-in banner for CEO / Admin ──

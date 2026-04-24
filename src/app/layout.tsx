@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter, Playfair_Display } from 'next/font/google';
 import { cookies } from 'next/headers';
 import './globals.css';
@@ -7,6 +7,13 @@ import { getThemeById, themeToCSS, DEFAULT_THEME_ID } from '@/lib/themes';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 export const playfair = Playfair_Display({ subsets: ['latin'], weight: ['700', '800'], variable: '--font-playfair' });
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#0b182b',
+};
 
 export const metadata: Metadata = {
   title: 'Watt Distributors — Bill Simulator',
@@ -22,8 +29,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="es" className="h-full" suppressHydrationWarning>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-        <meta name="theme-color" content="#0b182b" />
         <link rel="manifest" href="/manifest.json" />
         <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png" />
