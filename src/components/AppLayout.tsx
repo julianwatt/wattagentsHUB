@@ -153,7 +153,7 @@ export default function AppLayout({ session, children }: Props) {
     if (type === 'password_change') return t('notifications.passwordChange');
     if (type === 'user_deactivated') return t('notifications.userDeactivated');
     if (type === 'user_activated') return t('notifications.userActivated');
-    if (type === 'geofence_alert') return '⚠️ Geofence';
+    if (type === 'geofence_alert') return `⚠️ ${t('notifications.geofenceFilterLabel')}`;
     return type;
   };
   const notifBadgeColor = (type: string) => {
@@ -173,7 +173,7 @@ export default function AppLayout({ session, children }: Props) {
       const d = n.data;
       const store = d?.store_name ?? '';
       const dist = d?.distance_meters ? fmtDistance(d.distance_meters) : '';
-      return `🚨 ${n.user_name ?? '—'} fuera de perímetro${store ? ` — ${store}` : ''}${dist ? ` (${dist})` : ''}`;
+      return `🚨 ${n.user_name ?? '—'} ${t('notifications.geofenceBellOutside')}${store ? ` — ${store}` : ''}${dist ? ` (${dist})` : ''}`;
     }
     return n.user_name ?? '—';
   };

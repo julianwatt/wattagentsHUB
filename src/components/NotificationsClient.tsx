@@ -165,10 +165,10 @@ export default function NotificationsClient({ session }: { session: Session }) {
   };
 
   const EVENT_LABELS: Record<string, string> = {
-    clock_in: 'Inicio de turno',
-    lunch_start: 'Inicio de descanso',
-    lunch_end: 'Regreso de descanso',
-    clock_out: 'Fin de turno',
+    clock_in: t('shift.clockIn'),
+    lunch_start: t('shift.lunchStart'),
+    lunch_end: t('shift.lunchEnd'),
+    clock_out: t('shift.clockOut'),
   };
 
   const notifLabel = (type: string) => {
@@ -237,7 +237,7 @@ export default function NotificationsClient({ session }: { session: Session }) {
 
   const FILTERS: Array<{ key: FilterType; label: string; badge?: number }> = [
     { key: 'all', label: t('notifications.filterAll') },
-    { key: 'geofence', label: '\u26A0\uFE0F Geofence', badge: geofenceCount },
+    { key: 'geofence', label: `\u26A0\uFE0F ${t('notifications.geofenceFilterLabel')}`, badge: geofenceCount },
     { key: 'password', label: t('notifications.filterPassword') },
     { key: 'users', label: t('notifications.filterUsers') },
   ];
@@ -667,7 +667,7 @@ export default function NotificationsClient({ session }: { session: Session }) {
                 <span>{'\u23F1\uFE0F'}</span>
                 {t('shift.adminTitle')}
               </h2>
-              <span className="text-xs text-gray-400">{shiftTotal} {lang === 'es' ? 'registros' : 'records'}</span>
+              <span className="text-xs text-gray-400">{shiftTotal} {t('notifications.records')}</span>
             </div>
 
             {/* Filters */}
@@ -849,7 +849,7 @@ export default function NotificationsClient({ session }: { session: Session }) {
                 {t('shift.agentStatusTitle')}
               </h2>
               <span className="text-xs text-gray-400">
-                {agentStatuses.length} {lang === 'es' ? 'agentes hoy' : 'agents today'}
+                {agentStatuses.length} {t('notifications.agentsToday')}
               </span>
             </div>
 

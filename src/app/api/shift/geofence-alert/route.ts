@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { supabase } from '@/lib/supabase';
 import { checkGeofence, fmtDistance } from '@/lib/geo';
 import { sendPushToUser } from '@/lib/push';
+import { getT } from '@/lib/i18n';
 
 // POST — report that the agent left the perimeter during an active shift
 export async function POST(req: NextRequest) {
@@ -68,8 +69,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: alertErr.message }, { status: 500 });
   }
 
-  const title = '🚨 Agente fuera de perímetro';
-  const body = `${name} salió del perímetro de ${store.name} durante su turno (${fmtDistance(geo.distanceMeters)})`;
+  const t = getT('es');
+  const title = `🚨 ${t('shift.pushContinuousTitle')}`;
+  const body = t('shift.pushContinuousBody').replace('{name}', name).replace('{store}', store.name).replace('{dist}', fmtDistance(geo.distanceMeters));
 
   // In-app notification
   const { error: notifErr } = await supabase.from('admin_notifications').insert({

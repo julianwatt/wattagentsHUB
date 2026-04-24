@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { supabase } from '@/lib/supabase';
 import { checkGeofence, fmtDistance } from '@/lib/geo';
 import { sendPushToUser } from '@/lib/push';
+import { getT } from '@/lib/i18n';
 
 // POST — register a shift event (clock_in, lunch_start, lunch_end, clock_out)
 export async function POST(req: NextRequest) {
@@ -91,13 +92,14 @@ async function notifyCeo(
   const name = agentData?.name || agentName;
   const username = agentData?.username || '—';
 
-  const eventLabels: Record<string, string> = {
-    clock_in: 'Inicio de turno',
-    lunch_start: 'Inicio de descanso',
-    lunch_end: 'Regreso de descanso',
-    clock_out: 'Fin de turno',
+  const t = getT('es');
+  const eventLabelKeys: Record<string, string> = {
+    clock_in: 'shift.clockIn',
+    lunch_start: 'shift.lunchStart',
+    lunch_end: 'shift.lunchEnd',
+    clock_out: 'shift.clockOut',
   };
-  const eventLabel = eventLabels[eventType] || eventType;
+  const eventLabel = t(eventLabelKeys[eventType] || eventType);
 
   // Find CEO user
   const { data: ceo } = await supabase
@@ -118,8 +120,8 @@ async function notifyCeo(
     shift_log_id: shiftLogId,
   });
 
-  const title = '⚠️ Fuera de perímetro';
-  const body = `${name} registró "${eventLabel}" a ${fmtDistance(distanceMeters)} de ${store.name}`;
+  const title = `⚠️ ${t('shift.pushOutsideTitle')}`;
+  const body = t('shift.pushOutsideBody').replace('{name}', name).replace('{event}', eventLabel).replace('{dist}', fmtDistance(distanceMeters)).replace('{store}', store.name);
 
   // In-app notification (admin_notifications)
   const { error: notifErr } = await supabase.from('admin_notifications').insert({

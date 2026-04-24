@@ -344,6 +344,10 @@ const es = {
     geofenceAlertLabel: 'Alerta Geofence',
     geofenceOutsidePerimeter: 'Fuera del perímetro durante turno',
     geofenceLocationMismatch: 'Ubicación incorrecta al registrar evento',
+    geofenceFilterLabel: 'Geofence',
+    geofenceBellOutside: 'fuera de perímetro',
+    records: 'registros',
+    agentsToday: 'agentes hoy',
   },
   common: {
     loading: 'Cargando...',
@@ -459,9 +463,9 @@ const es = {
     registeredAt: 'registrado a las',
     locationVerified: 'Ubicación verificada.',
     locationNotVerified: 'No se pudo verificar la ubicación.',
-    outsidePerimeter: 'Tu ubicación no corresponde a la tienda registrada ({dist}m de distancia).',
+    outsidePerimeter: 'Tu ubicación no corresponde a la tienda registrada ({dist} de distancia).',
     // Geofence warning
-    geofenceWarning: 'Tu ubicación actual no corresponde a {store} ({dist}m de distancia).',
+    geofenceWarning: 'Tu ubicación actual no corresponde a {store} ({dist} de distancia).',
     // Timeline
     timelineTitle: 'Eventos del turno',
     // Push
@@ -502,6 +506,11 @@ const es = {
     adminStore: 'Tienda',
     adminFilters: 'Filtros',
     adminClearFilters: 'Limpiar filtros',
+    // Push notification templates (server-side)
+    pushOutsideTitle: 'Fuera de perímetro',
+    pushOutsideBody: '{name} registró "{event}" a {dist} de {store}',
+    pushContinuousTitle: 'Agente fuera de perímetro',
+    pushContinuousBody: '{name} salió del perímetro de {store} durante su turno ({dist})',
   },
 };
 
@@ -848,6 +857,10 @@ const en: typeof es = {
     geofenceAlertLabel: 'Geofence Alert',
     geofenceOutsidePerimeter: 'Outside perimeter during shift',
     geofenceLocationMismatch: 'Incorrect location when registering event',
+    geofenceFilterLabel: 'Geofence',
+    geofenceBellOutside: 'outside perimeter',
+    records: 'records',
+    agentsToday: 'agents today',
   },
   common: {
     loading: 'Loading...',
@@ -963,9 +976,9 @@ const en: typeof es = {
     registeredAt: 'registered at',
     locationVerified: 'Location verified.',
     locationNotVerified: 'Could not verify location.',
-    outsidePerimeter: 'Your location does not match the registered store ({dist}m away).',
+    outsidePerimeter: 'Your location does not match the registered store ({dist} away).',
     // Geofence warning
-    geofenceWarning: 'Your current location does not match {store} ({dist}m away).',
+    geofenceWarning: 'Your current location does not match {store} ({dist} away).',
     // Timeline
     timelineTitle: 'Shift events',
     // Push
@@ -1006,6 +1019,11 @@ const en: typeof es = {
     adminStore: 'Store',
     adminFilters: 'Filters',
     adminClearFilters: 'Clear filters',
+    // Push notification templates (server-side)
+    pushOutsideTitle: 'Outside perimeter',
+    pushOutsideBody: '{name} registered "{event}" {dist} from {store}',
+    pushContinuousTitle: 'Agent outside perimeter',
+    pushContinuousBody: '{name} left the perimeter of {store} during shift ({dist})',
   },
 };
 
