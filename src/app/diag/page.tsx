@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
-import { getSupabaseBrowser } from '@/lib/supabase-browser';
+import { createClient } from '@supabase/supabase-js';
 
 interface LogEntry { time: string; msg: string; type: 'info' | 'ok' | 'err' }
 
@@ -18,13 +18,25 @@ export default function DiagPage() {
     if (ran.current) return;
     ran.current = true;
 
-    const sb = getSupabaseBrowser();
-
     // 1. Check env vars
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    log(`SUPABASE_URL: ${url ? url.substring(0, 30) + '...' : 'MISSING'}`, url ? 'ok' : 'err');
+    log(`SUPABASE_URL: ${url || 'MISSING'}`, url ? 'ok' : 'err');
     log(`ANON_KEY: ${key ? key.substring(0, 10) + '...' + key.substring(key.length - 5) : 'MISSING'}`, key ? 'ok' : 'err');
+
+    if (!url || !key) {
+      log('Cannot proceed without SUPABASE_URL and ANON_KEY', 'err');
+      return;
+    }
+
+    // Create a FRESH client (not the app singleton) to isolate the test
+    log('Creating fresh Supabase client (not app singleton)...');
+    const sb = createClient(url, key, {
+      auth: { persistSession: false },
+    });
+
+    // Expose on window for manual inspection
+    (window as any).__diagSb = sb;
 
     // 2. Subscribe to a test channel on shift_logs
     log('Creating channel "diag-test" on shift_logs...');
@@ -33,7 +45,7 @@ export default function DiagPage() {
         log(`REALTIME EVENT received: ${payload.eventType} on shift_logs (id: ${(payload as any).new?.id?.substring(0, 8) || 'n/a'})`, 'ok');
       })
       .subscribe((status, err) => {
-        log(`Channel status: ${status}${err ? ' | Error: ' + err.message : ''}`, status === 'SUBSCRIBED' ? 'ok' : status === 'CHANNEL_ERROR' ? 'err' : 'info');
+        log(`Channel status: ${status}${err ? ' | Error: ' + JSON.stringify(err.message) : ''}`, status === 'SUBSCRIBED' ? 'ok' : status === 'CHANNEL_ERROR' ? 'err' : 'info');
         setWsState(status);
       });
 
@@ -43,16 +55,21 @@ export default function DiagPage() {
         log(`REALTIME EVENT received: ${payload.eventType} on admin_notifications`, 'ok');
       })
       .subscribe((status, err) => {
-        log(`Notifs channel status: ${status}${err ? ' | Error: ' + err.message : ''}`, status === 'SUBSCRIBED' ? 'ok' : status === 'CHANNEL_ERROR' ? 'err' : 'info');
+        log(`Notifs channel status: ${status}${err ? ' | Error: ' + JSON.stringify(err.message) : ''}`, status === 'SUBSCRIBED' ? 'ok' : status === 'CHANNEL_ERROR' ? 'err' : 'info');
       });
 
-    // 4. Check channels after 2s
+    // 4. Check channels after 4s
     setTimeout(() => {
       const ch = sb.getChannels();
       const names = ch.map((c: any) => `${c.topic} (${c.state})`);
       setChannels(names);
       log(`Active channels (${ch.length}): ${names.join(', ')}`, ch.length > 0 ? 'ok' : 'err');
-    }, 2000);
+
+      // Also log the realtime connection state
+      const rt = (sb as any).realtime;
+      log(`Realtime endpoint: ${rt?.endPoint || rt?.socketAdapter?.endPoint || 'unknown'}`, 'info');
+      log(`Realtime state: ${rt?.socketAdapter?.readyState ?? rt?.conn?.readyState ?? 'unknown'}`, 'info');
+    }, 4000);
 
     return () => {
       sb.removeChannel(channel);
