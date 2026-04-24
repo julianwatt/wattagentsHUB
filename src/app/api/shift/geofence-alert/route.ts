@@ -98,11 +98,11 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (ceo) {
-    await sendPushToUser(ceo.id, {
-      title,
-      body,
-      url: '/notifications',
-    });
+    try {
+      await sendPushToUser(ceo.id, { title, body, url: '/notifications' });
+    } catch (err) {
+      console.error('[geofence-alert] push error (alert was saved):', err);
+    }
   }
 
   return NextResponse.json({ alert: true, data: alert, distanceMeters: geo.distanceMeters }, { status: 201 });

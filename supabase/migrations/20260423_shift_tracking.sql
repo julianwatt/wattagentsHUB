@@ -113,8 +113,15 @@ create policy "anon_insert_geofence_alerts" on public.geofence_alerts
 create policy "anon_update_geofence_alerts" on public.geofence_alerts
   for update to anon using (true);
 
--- ── Realtime: habilitar broadcast de cambios para shift_logs y geofence_alerts ──
+-- ── Realtime: habilitar broadcast de cambios ──
 alter publication supabase_realtime add table shift_logs, geofence_alerts;
+-- activity_entries added separately (already in publication)
+
+-- ── Replica identity FULL: requerido por Supabase Realtime cuando RLS está habilitado ──
+alter table public.admin_notifications replica identity full;
+alter table public.shift_logs replica identity full;
+alter table public.geofence_alerts replica identity full;
+alter table public.users replica identity full;
 
 -- ── Ampliar CHECK constraint de admin_notifications para incluir geofence_alert ──
 alter table public.admin_notifications drop constraint if exists admin_notifications_type_check;

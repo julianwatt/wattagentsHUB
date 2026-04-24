@@ -60,9 +60,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: insertErr.message }, { status: 500 });
   }
 
-  // If outside perimeter → alert CEO
+  // If outside perimeter → alert CEO (never block event registration)
   if (geo && !geo.isInside) {
-    await notifyCeo(session.user.id, session.user.name || '—', eventType, store, geo.distanceMeters, event.id);
+    try {
+      await notifyCeo(session.user.id, session.user.name || '—', eventType, store, geo.distanceMeters, event.id);
+    } catch (err) {
+      console.error('[shift/event] notifyCeo error (event was registered successfully):', err);
+    }
   }
 
   return NextResponse.json({
