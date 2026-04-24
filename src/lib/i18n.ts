@@ -52,6 +52,7 @@ const es = {
     confirmPassword: 'Confirmar nueva contraseña',
     errorMinLength: 'La contraseña debe tener al menos 6 caracteres',
     errorMismatch: 'Las contraseñas no coinciden',
+    errorGeneric: 'Error al cambiar la contraseña',
   },
   simulator: {
     title: 'Simulador de Bill',
@@ -572,6 +573,7 @@ const en: typeof es = {
     confirmPassword: 'Confirm new password',
     errorMinLength: 'Password must be at least 6 characters',
     errorMismatch: 'Passwords do not match',
+    errorGeneric: 'Error changing password',
   },
   simulator: {
     title: 'Bill Simulator',

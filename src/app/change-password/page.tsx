@@ -59,12 +59,12 @@ export default function ChangePasswordPage() {
       setTimeout(() => { router.replace(dest); }, 2000);
     } else {
       const d = await res.json().catch(() => ({}));
-      setError(d.error || 'Error al cambiar la contraseña');
+      setError(d.error || t('auth.errorGeneric'));
     }
   }
 
   if (status === 'loading') {
-    return <div className="min-h-screen flex items-center justify-center text-gray-400">Cargando...</div>;
+    return <div className="min-h-screen flex items-center justify-center text-gray-400">{t('common.loading')}</div>;
   }
 
   return (
