@@ -24,10 +24,10 @@ function HomeIcon({ className }: { className: string }) {
 const HOME_NAV = { href: '/home', icon: HomeIcon, key: 'nav.home' };
 const BASE_NAV = [
   { href: '/activity', icon: ActivityIcon, key: 'nav.activity', hideForAdmin: true },
+  { href: '/shift', icon: ShiftIcon, key: 'nav.shift', hideForAdmin: true },
   { href: '/simulator', icon: SimIcon, key: 'nav.simulator' },
   { href: '/dashboard', icon: DashIcon, key: 'nav.dashboard' },
 ];
-const SHIFT_NAV = { href: '/shift', icon: ShiftIcon, key: 'nav.shift', hideForAdmin: true };
 const TEAM_NAV = { href: '/team', icon: TeamIcon, key: 'nav.team' };
 const MANAGE_NAV = { href: '/manage/users', icon: AdminIcon, key: 'nav.manage' };
 const NOTIF_NAV = { href: '/notifications', icon: NotifNavIcon, key: 'admin.notifications' };
@@ -130,11 +130,15 @@ export default function AppLayout({ session, children }: Props) {
   const isAdminReal = realRole === 'admin' || (realRole ?? session.user.role) === 'admin';
   const isCeoReal = (realRole ?? session.user.role) === 'ceo';
   const showBell = (isAdminReal || isCeoReal) && !previewRole;
-  const canSeeShift = !isAdminReal && !isCeoReal && role !== 'admin' && role !== 'ceo';
   const allNav = [
     HOME_NAV,
-    ...BASE_NAV.filter((item) => !(item.hideForAdmin && isAdminReal && !previewRole)),
-    ...(canSeeShift ? [SHIFT_NAV] : []),
+    ...BASE_NAV.filter((item) => {
+      if (!item.hideForAdmin) return true;
+      if (isAdminReal && !previewRole) return false;
+      // Shift only for agent/jr_manager/sr_manager
+      if (item.key === 'nav.shift' && (role === 'ceo' || role === 'admin')) return false;
+      return true;
+    }),
     ...(canSeeTeam ? [TEAM_NAV] : []),
     ...((isAdminReal && !previewRole) || role === 'ceo' ? [NOTIF_NAV] : []),
     ...(canSeeAdmin ? [MANAGE_NAV] : []),
