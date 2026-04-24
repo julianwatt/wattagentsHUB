@@ -1,45 +1,47 @@
-import webpush from 'web-push';
 import { supabase } from '@/lib/supabase';
 
-/** Normalize a Base64 key to URL-safe, no-padding format */
 function normalizeKey(raw: string | undefined): string {
   if (!raw) return '';
   return raw.trim().replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-const VAPID_PUBLIC = normalizeKey(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY);
-const VAPID_PRIVATE = normalizeKey(process.env.VAPID_PRIVATE_KEY);
-const VAPID_EMAIL = (() => {
-  const e = (process.env.VAPID_CONTACT_EMAIL || 'mailto:admin@wattdistributors.com').trim();
-  return e.startsWith('mailto:') || e.startsWith('https:') ? e : `mailto:${e}`;
-})();
+let _webpush: typeof import('web-push') | null = null;
 
-let configured = false;
-function ensureVapid() {
-  if (configured) return true;
-  if (!VAPID_PUBLIC || !VAPID_PRIVATE) {
+async function getWebPush() {
+  if (_webpush) return _webpush;
+  const mod = await import('web-push');
+  _webpush = mod.default ?? mod;
+
+  const pub = normalizeKey(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY);
+  const priv = normalizeKey(process.env.VAPID_PRIVATE_KEY);
+  const email = (() => {
+    const e = (process.env.VAPID_CONTACT_EMAIL || 'mailto:admin@wattdistributors.com').trim();
+    return e.startsWith('mailto:') || e.startsWith('https:') ? e : `mailto:${e}`;
+  })();
+
+  if (!pub || !priv) {
     console.warn('[push] VAPID keys missing — push disabled');
-    return false;
+    _webpush = null;
+    return null;
   }
+
   try {
-    webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC, VAPID_PRIVATE);
-    configured = true;
-    return true;
+    _webpush.setVapidDetails(email, pub, priv);
   } catch (err) {
-    console.error('[push] VAPID config error:', err, `| pubLen=${VAPID_PUBLIC.length} privLen=${VAPID_PRIVATE.length} email=${VAPID_EMAIL}`);
-    return false;
+    console.error('[push] VAPID config error:', err, `| pubLen=${pub.length} privLen=${priv.length} email=${email}`);
+    _webpush = null;
+    return null;
   }
+
+  return _webpush;
 }
 
-/**
- * Send a push notification to a user. Safe to call even if the user
- * has no subscription — it just returns { sent: false }.
- */
 export async function sendPushToUser(
   userId: string,
   payload: { title: string; body?: string; url?: string },
 ): Promise<{ sent: boolean; error?: string }> {
-  if (!ensureVapid()) return { sent: false, error: 'VAPID not configured' };
+  const wp = await getWebPush();
+  if (!wp) return { sent: false, error: 'VAPID not configured' };
 
   const { data: sub } = await supabase
     .from('push_subscriptions')
@@ -50,11 +52,10 @@ export async function sendPushToUser(
   if (!sub) return { sent: false, error: 'No subscription' };
 
   try {
-    await webpush.sendNotification(sub.subscription, JSON.stringify(payload));
+    await wp.sendNotification(sub.subscription, JSON.stringify(payload));
     return { sent: true };
   } catch (err: unknown) {
     const pushErr = err as { statusCode?: number; message?: string };
-    // Subscription expired — clean up silently
     if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
       await supabase.from('push_subscriptions').delete().eq('user_id', userId);
       return { sent: false, error: 'Subscription expired' };
