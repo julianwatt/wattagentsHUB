@@ -444,7 +444,7 @@ export default function NotificationsClient({ session }: { session: Session }) {
         </div>
 
         {/* ── Main tab switcher ── */}
-        <div className="flex gap-0 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
+        <div className="flex gap-0 border-b border-gray-200 dark:border-gray-700">
           {(['notifications', 'shifts', 'status'] as MainTab[]).map((tab) => {
             const labels: Record<MainTab, string> = {
               notifications: t('notifications.title'),
