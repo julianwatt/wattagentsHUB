@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
   const body = `${name} salió del perímetro de ${store.name} durante su turno (${fmtDistance(geo.distanceMeters)})`;
 
   // In-app notification
-  await supabase.from('admin_notifications').insert({
+  const { error: notifErr } = await supabase.from('admin_notifications').insert({
     type: 'geofence_alert',
     user_id: session.user.id,
     user_name: name,
@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
     },
     status: 'pending',
   });
+  if (notifErr) console.error('[geofence-alert] admin_notifications insert error:', notifErr);
 
   // Push notification to CEO
   const { data: ceo } = await supabase

@@ -115,3 +115,8 @@ create policy "anon_update_geofence_alerts" on public.geofence_alerts
 
 -- ── Realtime: habilitar broadcast de cambios para shift_logs y geofence_alerts ──
 alter publication supabase_realtime add table shift_logs, geofence_alerts;
+
+-- ── Ampliar CHECK constraint de admin_notifications para incluir geofence_alert ──
+alter table public.admin_notifications drop constraint if exists admin_notifications_type_check;
+alter table public.admin_notifications add constraint admin_notifications_type_check
+  check (type in ('password_reset','password_change','user_deactivated','user_activated','daily_summary','geofence_alert'));

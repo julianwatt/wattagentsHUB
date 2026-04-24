@@ -122,7 +122,7 @@ async function notifyCeo(
   const body = `${name} registró "${eventLabel}" a ${fmtDistance(distanceMeters)} de ${store.name}`;
 
   // In-app notification (admin_notifications)
-  await supabase.from('admin_notifications').insert({
+  const { error: notifErr } = await supabase.from('admin_notifications').insert({
     type: 'geofence_alert',
     user_id: agentUserId,
     user_name: name,
@@ -136,6 +136,7 @@ async function notifyCeo(
     },
     status: 'pending',
   });
+  if (notifErr) console.error('[notifyCeo] admin_notifications insert error:', notifErr);
 
   // Push notification to CEO
   if (ceo) {
