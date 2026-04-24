@@ -19,8 +19,8 @@ export default function DiagPage() {
     ran.current = true;
 
     // 1. Check env vars
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
+    const key = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
     log(`SUPABASE_URL: ${url || 'MISSING'}`, url ? 'ok' : 'err');
     log(`ANON_KEY: ${key ? key.substring(0, 10) + '...' + key.substring(key.length - 5) : 'MISSING'}`, key ? 'ok' : 'err');
 

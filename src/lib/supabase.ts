@@ -5,10 +5,8 @@ let _client: SupabaseClient | null = null;
 
 export function getSupabase(): SupabaseClient {
   if (!_client) {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-    // Prefer service-role key (server-only, bypasses RLS) over anon key.
-    // Falls back to anon key for dev environments without service-role configured.
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '').trim();
+    const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
     if (!url || !key) throw new Error('Supabase env vars not set');
     _client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   }
@@ -26,8 +24,8 @@ export const supabase = new Proxy({} as SupabaseClient, {
 let _admin: SupabaseClient | null = null;
 export function getSupabaseAdmin(): SupabaseClient | null {
   if (_admin) return _admin;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '').trim();
+  const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
   console.log('[supabaseAdmin] init', {
     hasUrl: !!url,
     hasServiceKey: !!serviceKey,
