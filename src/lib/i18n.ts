@@ -341,6 +341,9 @@ const es = {
     filterPassword: 'Contraseñas',
     filterUsers: 'Usuarios',
     viewUser: 'Ver usuario',
+    geofenceAlertLabel: 'Alerta Geofence',
+    geofenceOutsidePerimeter: 'Fuera del perímetro durante turno',
+    geofenceLocationMismatch: 'Ubicación incorrecta al registrar evento',
   },
   common: {
     loading: 'Cargando...',
@@ -842,6 +845,9 @@ const en: typeof es = {
     filterPassword: 'Passwords',
     filterUsers: 'Users',
     viewUser: 'View user',
+    geofenceAlertLabel: 'Geofence Alert',
+    geofenceOutsidePerimeter: 'Outside perimeter during shift',
+    geofenceLocationMismatch: 'Incorrect location when registering event',
   },
   common: {
     loading: 'Loading...',

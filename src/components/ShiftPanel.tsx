@@ -405,7 +405,7 @@ export default function ShiftPanel({ userId }: Props) {
           <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">{t('shift.timelineTitle')}</p>
             <div className="space-y-1.5">
-              {events.map((evt) => (
+              {[...events].reverse().map((evt) => (
                 <div key={evt.id} className="flex items-center gap-2.5 text-xs">
                   <span className="flex-shrink-0">{EVENT_ICONS[evt.event_type] || '⏺'}</span>
                   <span className="font-medium text-gray-700 dark:text-gray-200">{t(EVENT_LABEL_KEYS[evt.event_type]) || evt.event_type}</span>

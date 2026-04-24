@@ -128,6 +128,7 @@ async function notifyCeo(
     user_name: name,
     user_username: username,
     data: {
+      alert_type: 'location_mismatch',
       event_type: eventType,
       store_name: store.name,
       distance_meters: distanceMeters,

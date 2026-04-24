@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const dateFrom = searchParams.get('dateFrom');
   const dateTo = searchParams.get('dateTo');
   const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
-  const pageSize = 50;
+  const pageSize = Math.min(500, Math.max(1, parseInt(searchParams.get('pageSize') || '50')));
 
   let query = supabase
     .from('shift_logs')

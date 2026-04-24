@@ -175,7 +175,7 @@ export default function NotificationsClient({ session }: { session: Session }) {
     if (type === 'password_change') return t('notifications.passwordChange');
     if (type === 'user_deactivated') return t('notifications.userDeactivated');
     if (type === 'user_activated') return t('notifications.userActivated');
-    if (type === 'geofence_alert') return '\u26A0\uFE0F Alerta Geofence';
+    if (type === 'geofence_alert') return `\u26A0\uFE0F ${t('notifications.geofenceAlertLabel')}`;
     return type;
   };
 
@@ -201,11 +201,11 @@ export default function NotificationsClient({ session }: { session: Session }) {
     }
     if (n.type === 'geofence_alert') {
       const d = n.data;
-      const alertType = d?.alert_type === 'outside_perimeter' ? 'Fuera del per\u00EDmetro durante turno' : 'Ubicaci\u00F3n incorrecta al registrar evento';
+      const alertType = d?.alert_type === 'outside_perimeter' ? t('notifications.geofenceOutsidePerimeter') : t('notifications.geofenceLocationMismatch');
       const eventLabel = d?.event_type ? ` (${EVENT_LABELS[d.event_type] || d.event_type})` : '';
-      const store = d?.store_name ? ` \u2014 ${d.store_name}` : '';
-      const dist = d?.distance_meters ? ` a ${d.distance_meters}m` : '';
-      return `${alertType}${eventLabel}${store}${dist}`;
+      const storeName = d?.store_name ? ` \u2014 ${d.store_name}` : '';
+      const dist = d?.distance_meters ? ` a ${Math.round(d.distance_meters)}m` : '';
+      return `${alertType}${eventLabel}${storeName}${dist}`;
     }
     return '';
   };
@@ -362,7 +362,7 @@ export default function NotificationsClient({ session }: { session: Session }) {
   const fetchAgentStatus = useCallback(async () => {
     try {
       const todayStr = new Date().toISOString().split('T')[0];
-      const res = await fetch(`/api/shift/logs?dateFrom=${todayStr}&dateTo=${todayStr}&page=1`, { cache: 'no-store' });
+      const res = await fetch(`/api/shift/logs?dateFrom=${todayStr}&dateTo=${todayStr}&page=1&pageSize=500`, { cache: 'no-store' });
       if (!res.ok) return;
       const data = await res.json();
       const logs: ShiftLog[] = data.logs ?? [];
@@ -410,6 +410,17 @@ export default function NotificationsClient({ session }: { session: Session }) {
       fetchAgentStatus();
     }
   }, [mainTab, fetchAgentStatus]);
+
+  // Dedicated Realtime subscription for agent status updates
+  useEffect(() => {
+    const sb = getSupabaseBrowser();
+    const channel = sb.channel('agent-status-realtime').on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'shift_logs' },
+      () => { fetchAgentStatus(); },
+    ).subscribe();
+    return () => { sb.removeChannel(channel); };
+  }, [fetchAgentStatus]);
 
   // ══════════════════════════════════════════════════════════
   // ── RENDER ──
