@@ -513,12 +513,15 @@ export default function AppLayout({ session, children }: Props) {
       {showBell && <PushOptInBanner />}
 
       {/* Main content — bottom padding for tab bar (mobile + tablet) */}
-      <main className="flex-1 pb-16 lg:pb-0 min-h-0 mb-safe-bottom">
+      <main className="flex-1 pb-[68px] lg:pb-0 min-h-0 mb-safe-bottom">
         {children}
       </main>
 
       {/* Bottom tab bar — mobile + iPad portrait */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-40" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      <nav
+        className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-40"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      >
         <div className="flex">
           {allNav.map((item) => {
             const Icon = item.icon;
@@ -527,12 +530,12 @@ export default function AppLayout({ session, children }: Props) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex-1 flex flex-col items-center justify-center py-2.5 md:py-3 gap-0.5 text-[10px] md:text-xs font-semibold transition-colors ${
+                className={`flex-1 flex flex-col items-center justify-center min-h-[52px] gap-0.5 text-[10px] md:text-xs font-semibold transition-colors ${
                   active ? '' : 'text-gray-400 dark:text-gray-500'
                 }`}
                 style={active ? { color: 'var(--primary)' } : {}}
               >
-                <Icon className="w-5 h-5 md:w-6 md:h-6" />
+                <Icon className="w-6 h-6 md:w-7 md:h-7" />
                 <span>{t(item.key)}</span>
               </Link>
             );
