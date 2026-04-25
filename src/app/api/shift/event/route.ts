@@ -60,13 +60,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: insertErr.message }, { status: 500 });
   }
 
-  // If outside perimeter → alert CEO (never block event registration)
-  if (geo && !geo.isInside) {
-    try {
-      await notifyCeo(session.user.id, session.user.name || '—', eventType, store, geo.distanceMeters, event.id);
-    } catch (err) {
-      console.error('[shift/event] notifyCeo error (event was registered successfully):', err);
-    }
+  console.info(`[shift/event] saved id=${event.id} user=${session.user.id} type=${eventType} store=${store.id}`);
+
+  // Always notify CEO for every shift event (never block event registration).
+  // Outside-perimeter events get an additional high-priority geofence alert.
+  try {
+    await notifyShiftEvent(
+      session.user.id,
+      session.user.name || '—',
+      eventType,
+      store,
+      geo,
+      event.id,
+    );
+  } catch (err) {
+    console.error('[shift/event] notify error (event was saved):', err);
   }
 
   return NextResponse.json({
@@ -77,13 +85,14 @@ export async function POST(req: NextRequest) {
   }, { status: 201 });
 }
 
-// ── Notify CEO: push + in-app notification ──
-async function notifyCeo(
+// ── Notify CEO of every shift event (push + in-app notification) ──
+// Outside-perimeter events also generate a geofence alert with higher priority.
+async function notifyShiftEvent(
   agentUserId: string,
   agentName: string,
   eventType: string,
   store: { id: string; name: string },
-  distanceMeters: number,
+  geo: { isInside: boolean; distanceMeters: number } | null,
   shiftLogId: string,
 ) {
   // Get agent username for notification
@@ -113,43 +122,63 @@ async function notifyCeo(
     .eq('is_active', true)
     .single();
 
-  // Insert geofence alert
-  await supabase.from('geofence_alerts').insert({
-    user_id: agentUserId,
-    store_id: store.id,
-    alert_type: 'location_mismatch',
-    latitude: null,
-    longitude: null,
-    distance_meters: distanceMeters,
-    shift_log_id: shiftLogId,
-  });
+  const isOutside = geo !== null && !geo.isInside;
 
-  const title = `⚠️ ${t('shift.pushOutsideTitle')}`;
-  const body = t('shift.pushOutsideBody').replace('{name}', name).replace('{event}', eventLabel).replace('{dist}', fmtDistance(distanceMeters)).replace('{store}', store.name);
-
-  // In-app notification (admin_notifications)
-  const { error: notifErr } = await supabase.from('admin_notifications').insert({
-    type: 'geofence_alert',
-    user_id: agentUserId,
-    user_name: name,
-    user_username: username,
-    data: {
+  // Insert geofence alert only when outside perimeter
+  if (isOutside) {
+    await supabase.from('geofence_alerts').insert({
+      user_id: agentUserId,
+      store_id: store.id,
       alert_type: 'location_mismatch',
-      event_type: eventType,
-      store_name: store.name,
-      distance_meters: distanceMeters,
+      latitude: null,
+      longitude: null,
+      distance_meters: geo!.distanceMeters,
       shift_log_id: shiftLogId,
-    },
-    status: 'pending',
-  });
-  if (notifErr) console.error('[notifyCeo] admin_notifications insert error:', notifErr);
+    });
+  }
 
-  // Push notification to CEO
+  // Build push title/body — different urgency for outside vs inside
+  const eventEmoji: Record<string, string> = {
+    clock_in: '🟢', lunch_start: '⏳', lunch_end: '🔄', clock_out: '🔴',
+  };
+  const emoji = eventEmoji[eventType] || '⏺';
+
+  const title = isOutside
+    ? `⚠️ ${t('shift.pushOutsideTitle')}`
+    : `${emoji} ${eventLabel}`;
+  const body = isOutside
+    ? t('shift.pushOutsideBody').replace('{name}', name).replace('{event}', eventLabel).replace('{dist}', fmtDistance(geo!.distanceMeters)).replace('{store}', store.name)
+    : `${name} · ${store.name}`;
+
+  // In-app notification (bell) — only for outside-perimeter alerts to avoid noise.
+  // Regular shift events get a push to the CEO but no entry in the bell.
+  if (isOutside) {
+    const { error: notifErr } = await supabase.from('admin_notifications').insert({
+      type: 'geofence_alert',
+      user_id: agentUserId,
+      user_name: name,
+      user_username: username,
+      data: {
+        alert_type: 'location_mismatch',
+        event_type: eventType,
+        store_name: store.name,
+        distance_meters: geo!.distanceMeters,
+        shift_log_id: shiftLogId,
+      },
+      status: 'pending',
+    });
+    if (notifErr) console.error('[notifyShiftEvent] admin_notifications insert error:', notifErr);
+  }
+
+  // Push to CEO for EVERY shift event (logged unconditionally in lib/push.ts)
   if (ceo) {
-    await sendPushToUser(ceo.id, {
+    const result = await sendPushToUser(ceo.id, {
       title,
       body,
-      url: '/notifications',
-    }, 'shift_event');
+      url: isOutside ? '/notifications' : '/notifications',
+    }, isOutside ? 'geofence_alert' : 'shift_event');
+    console.info(`[notifyShiftEvent] push to CEO ceo=${ceo.id} agent=${agentUserId} event=${eventType} sent=${result.sent}${result.error ? ` error=${result.error}` : ''}`);
+  } else {
+    console.warn(`[notifyShiftEvent] no active CEO found — push skipped agent=${agentUserId} event=${eventType}`);
   }
 }

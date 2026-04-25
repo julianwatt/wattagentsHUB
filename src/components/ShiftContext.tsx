@@ -105,7 +105,7 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
         setEvents(data.events);
         setStore(data.store ?? null);
 
-        // Determine state from last event
+        // Determine state from last event of current shift
         const lastEvt = data.events[data.events.length - 1];
         if (lastEvt.event_type === 'lunch_start') {
           setShiftState('break');
@@ -113,12 +113,20 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
           setShiftState('active');
         }
 
-        // Clock-in time for chronometer
+        // Use the FIRST clock_in of the current shift as the canonical start.
+        // The API already restricts events to the current shift only.
         const clockIn = data.events.find((e: ShiftEvent) => e.event_type === 'clock_in');
-        if (clockIn) setClockInTime(new Date(clockIn.event_time).getTime());
+        if (clockIn) {
+          setClockInTime(new Date(clockIn.event_time).getTime());
+        } else {
+          // No clock_in in current shift events (corrupted data) — fall back
+          // to the first event's time so the chronometer shows something
+          // sensible instead of 1970.
+          setClockInTime(new Date(data.events[0].event_time).getTime());
+        }
       } else {
         setShiftState('idle');
-        setEvents(data.events ?? []);
+        setEvents([]);
         setStore(null);
         setClockInTime(null);
       }
@@ -141,14 +149,19 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
     setFetched(false);
   }, [userId]);
 
-  // Re-fetch when tab becomes visible (handles browser tab switching + PWA resume)
+  // Re-fetch on tab visibility + window focus (handles tab switch, PWA resume, alt-tab)
   useEffect(() => {
     if (!userId || !isShiftRole) return;
     const onVisible = () => {
       if (document.visibilityState === 'visible') refresh();
     };
+    const onFocus = () => refresh();
     document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [userId, isShiftRole, refresh]);
 
   const pushEvent = useCallback((event: ShiftEvent, newState: ShiftState, newStore?: ShiftStore | null) => {
