@@ -87,6 +87,27 @@ html, body {
   padding-bottom: env(safe-area-inset-bottom, 0px); /* iOS 11.2+ */
 }
 
+/* Causa D fix — iOS PWA standalone places `position: fixed; bottom: 0` at the
+   top of the safe-area-inset-bottom band, NOT at the physical screen bottom.
+   `padding-bottom` only grows the box upward, it never extends past `bottom`.
+   So in PWA mode there's a strip of body background visible between the nav's
+   bottom edge and the home indicator. This pseudo-element extends the nav's
+   background colour down by exactly env(safe-area-inset-bottom) so the strip
+   is filled regardless of how iOS resolves `bottom: 0`. In iOS Safari browser
+   (where bottom: 0 IS the physical bottom) the pseudo falls off-screen and is
+   invisible. On Android env() is typically 0, so the pseudo has 0 height. */
+.bottom-nav::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: constant(safe-area-inset-bottom);
+  height: env(safe-area-inset-bottom, 0px);
+  background-color: inherit;
+  pointer-events: none;
+}
+
 /* Main content padding to clear bottom nav + safe area */
 .main-bottom-nav {
   padding-bottom: calc(76px + constant(safe-area-inset-bottom));
