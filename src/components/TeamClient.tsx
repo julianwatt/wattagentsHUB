@@ -237,7 +237,7 @@ export default function TeamClient({ session }: { session: Session }) {
                   {ranking && (
                     <div className="space-y-4">
                       {/* Row 1: 4 rank cards */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                         <RankCard
                           label={`${t('team.bestAgent')} · ${t('team.metricSales')}`}
                           sub={t('team.rankSubBestSales')}
@@ -278,7 +278,7 @@ export default function TeamClient({ session }: { session: Session }) {
                         <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
                       </div>
                       {/* Row 2: Top month, day, year */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         <TopRepCard label={`🏆 ${t('team.topDay')}`} entry={topRep.day} />
                         <TopRepCard label={`🏆 ${t('team.topMonth')}`} entry={topRep.month} />
                         <TopRepCard label={`🏆 ${t('team.topYear')}`} entry={topRep.year} />

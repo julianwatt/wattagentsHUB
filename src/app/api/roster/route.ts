@@ -20,7 +20,7 @@ export async function GET() {
   return NextResponse.json(users ?? []);
 }
 
-const TOGGLE_ROLES = new Set(['admin', 'jr_manager', 'sr_manager']);
+const TOGGLE_ROLES = new Set(['admin', 'ceo', 'jr_manager', 'sr_manager']);
 
 // PATCH — toggle active/inactive
 export async function PATCH(req: NextRequest) {
@@ -35,7 +35,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   // Managers can only toggle users in their hierarchy
-  if (session.user.role !== 'admin') {
+  if (session.user.role !== 'admin' && session.user.role !== 'ceo') {
     const visibleIds = await getVisibleUserIds(session.user.id, session.user.role as UserRole);
     if (!visibleIds.includes(id) || id === session.user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

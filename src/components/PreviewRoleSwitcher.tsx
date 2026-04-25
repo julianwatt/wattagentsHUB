@@ -8,6 +8,7 @@ interface Props {
   previewRole: string | null;
   previewUserId: string | null;
   previewUsers: PreviewUser[];
+  realRole?: string;
   onChange: (value: string) => void;
   onExit?: () => void;
 }
@@ -17,6 +18,7 @@ export default function PreviewRoleSwitcher({
   previewRole,
   previewUserId,
   previewUsers,
+  realRole,
   onChange,
   onExit,
 }: Props) {
@@ -24,6 +26,13 @@ export default function PreviewRoleSwitcher({
   const value = previewUserId ? `user:${previewUserId}` : (previewRole ?? '');
   const rolesGroupLabel = lang === 'es' ? '— Roles —' : '— Roles —';
   const usersGroupLabel = lang === 'es' ? '— Usuarios —' : '— Users —';
+
+  const roles: { value: string; label: string }[] = [
+    { value: 'agent', label: t('admin.roleAgent') },
+    { value: 'jr_manager', label: t('admin.roleJrManager') },
+    { value: 'sr_manager', label: t('admin.roleSrManager') },
+    { value: 'ceo', label: t('admin.roleCeo') },
+  ].filter((r) => r.value !== realRole);
 
   if (mode === 'desktop') {
     return (
@@ -37,10 +46,9 @@ export default function PreviewRoleSwitcher({
           👁️ {t('admin.viewAs')}
         </option>
         <optgroup label={rolesGroupLabel} className="text-gray-900">
-          <option value="agent" className="text-gray-900">{t('admin.roleAgent')}</option>
-          <option value="jr_manager" className="text-gray-900">{t('admin.roleJrManager')}</option>
-          <option value="sr_manager" className="text-gray-900">{t('admin.roleSrManager')}</option>
-          <option value="ceo" className="text-gray-900">{t('admin.roleCeo')}</option>
+          {roles.map((r) => (
+            <option key={r.value} value={r.value} className="text-gray-900">{r.label}</option>
+          ))}
         </optgroup>
         {previewUsers.length > 0 && (
           <optgroup label={usersGroupLabel} className="text-gray-900">
@@ -64,10 +72,9 @@ export default function PreviewRoleSwitcher({
       >
         <option value="">👁️ {t('admin.viewAs')}</option>
         <optgroup label={rolesGroupLabel}>
-          <option value="agent">{t('admin.roleAgent')}</option>
-          <option value="jr_manager">{t('admin.roleJrManager')}</option>
-          <option value="sr_manager">{t('admin.roleSrManager')}</option>
-          <option value="ceo">{t('admin.roleCeo')}</option>
+          {roles.map((r) => (
+            <option key={r.value} value={r.value}>{r.label}</option>
+          ))}
         </optgroup>
         {previewUsers.length > 0 && (
           <optgroup label={usersGroupLabel}>

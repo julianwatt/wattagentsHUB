@@ -27,6 +27,7 @@ const PreviewRoleContext = createContext<Ctx>({
 const STORAGE_KEY = 'wattPreviewRole';
 const STORAGE_USER_KEY = 'wattPreviewUser';
 const VALID_PREVIEW: Role[] = ['agent', 'jr_manager', 'sr_manager', 'ceo'];
+const CAN_PREVIEW: Role[] = ['admin', 'ceo'];
 
 export function PreviewRoleProvider({ children }: { children: ReactNode }) {
   const { data: session } = useSession();
@@ -35,9 +36,11 @@ export function PreviewRoleProvider({ children }: { children: ReactNode }) {
   const [previewUserId, setPreviewUserId] = useState<string | null>(null);
   const [previewUserName, setPreviewUserName] = useState<string | null>(null);
 
-  // Restore preview from localStorage when the actual viewer is admin
+  const canPreview = realRole !== null && (CAN_PREVIEW as string[]).includes(realRole);
+
+  // Restore preview from localStorage when the actual viewer can preview
   useEffect(() => {
-    if (realRole !== 'admin') {
+    if (!canPreview) {
       setPreviewRoleState(null);
       setPreviewUserId(null);
       setPreviewUserName(null);
@@ -62,7 +65,7 @@ export function PreviewRoleProvider({ children }: { children: ReactNode }) {
   }, [realRole]);
 
   const setPreviewRole = (r: Role | null) => {
-    if (realRole !== 'admin') return;
+    if (!canPreview) return;
     setPreviewRoleState(r);
     setPreviewUserId(null);
     setPreviewUserName(null);
@@ -74,7 +77,7 @@ export function PreviewRoleProvider({ children }: { children: ReactNode }) {
   };
 
   const setPreviewUser = (userId: string | null, role: Role | null, name: string | null) => {
-    if (realRole !== 'admin') return;
+    if (!canPreview) return;
     setPreviewUserId(userId);
     setPreviewRoleState(role);
     setPreviewUserName(name);
@@ -90,7 +93,7 @@ export function PreviewRoleProvider({ children }: { children: ReactNode }) {
   };
 
   const effectiveRole: Role | null =
-    realRole === 'admin' && previewRole ? previewRole : realRole;
+    canPreview && previewRole ? previewRole : realRole;
 
   return (
     <PreviewRoleContext.Provider value={{ realRole, previewRole, previewUserId, previewUserName, effectiveRole, setPreviewRole, setPreviewUser }}>

@@ -64,7 +64,8 @@ export default function AppLayout({ session, children }: Props) {
   // Fetch active users for "Ver como" individual selection
   const [previewUsers, setPreviewUsers] = useState<PreviewUser[]>([]);
   useEffect(() => {
-    if (realRole !== 'admin' && (realRole ?? session.user.role) !== 'admin') return;
+    const r = realRole ?? session.user.role;
+    if (r !== 'admin' && r !== 'ceo') return;
     (async () => {
       try {
         const res = await fetch('/api/users');
@@ -104,7 +105,7 @@ export default function AppLayout({ session, children }: Props) {
     if (!value) {
       setPreviewUser(null, null, null);
       setPreviewRole(null);
-      router.push('/admin');
+      router.push(realIsAdmin ? '/admin' : '/home');
       return;
     }
     let targetRole: string;
@@ -132,6 +133,7 @@ export default function AppLayout({ session, children }: Props) {
   const canSeeTeam = role === 'jr_manager' || role === 'sr_manager' || role === 'ceo';
   const isAdminReal = realRole === 'admin' || (realRole ?? session.user.role) === 'admin';
   const isCeoReal = (realRole ?? session.user.role) === 'ceo';
+  const canPreview = isAdminReal || isCeoReal;
   const showBell = (isAdminReal || isCeoReal) && !previewRole;
   const isStandalone = useIsStandaloneIOS();
   const allNav = [
@@ -258,8 +260,8 @@ export default function AppLayout({ session, children }: Props) {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col transition-colors">
-      {/* Preview-mode banner (admin only, when previewing as another role) */}
-      {realIsAdmin && previewRole && (
+      {/* Preview-mode banner (admin/CEO, when previewing as another role) */}
+      {canPreview && previewRole && (
         <div className="sticky top-0 z-50 bg-amber-400 text-amber-950 text-xs font-bold px-3 sm:px-6 py-1.5 flex items-center justify-between gap-3 shadow-sm safe-area-top">
           <span className="flex items-center gap-2 truncate">
             <span aria-hidden>👁️</span>
@@ -278,7 +280,7 @@ export default function AppLayout({ session, children }: Props) {
       )}
 
       {/* Top navbar */}
-      <header className={`sticky z-40 shadow-sm ${!(realIsAdmin && previewRole) ? 'safe-area-top' : ''}`} style={{ backgroundColor: 'var(--dark)', top: realIsAdmin && previewRole ? '32px' : 0 }}>
+      <header className={`sticky z-40 shadow-sm ${!(canPreview && previewRole) ? 'safe-area-top' : ''}`} style={{ backgroundColor: 'var(--dark)', top: canPreview && previewRole ? '32px' : 0 }}>
         <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-2">
           {/* Logo */}
           <div className="flex items-center flex-shrink-0" style={{ height: '36px' }}>
@@ -310,13 +312,14 @@ export default function AppLayout({ session, children }: Props) {
 
           {/* Controls */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            {/* Preview-as selector — admin only, desktop only */}
-            {realIsAdmin && (
+            {/* Preview-as selector — admin/CEO, desktop only */}
+            {canPreview && (
               <PreviewRoleSwitcher
                 mode="desktop"
                 previewRole={previewRole}
                 previewUserId={previewUserId}
                 previewUsers={previewUsers}
+                realRole={realRole ?? session.user.role}
                 onChange={handlePreviewChange}
               />
             )}
@@ -461,13 +464,14 @@ export default function AppLayout({ session, children }: Props) {
           )}
         </div>
 
-        {/* "Ver como" selector — admin only, inside hamburger */}
-        {realIsAdmin && (
+        {/* "Ver como" selector — admin/CEO, inside hamburger */}
+        {canPreview && (
           <PreviewRoleSwitcher
             mode="mobile"
             previewRole={previewRole}
             previewUserId={previewUserId}
             previewUsers={previewUsers}
+            realRole={realRole ?? session.user.role}
             onChange={(v) => { handlePreviewChange(v); setMenuOpen(false); }}
             onExit={() => { handlePreviewChange(''); setMenuOpen(false); }}
           />
@@ -513,14 +517,13 @@ export default function AppLayout({ session, children }: Props) {
       {showBell && <PushOptInBanner />}
 
       {/* Main content — bottom padding for tab bar (mobile + tablet) */}
-      <main className="flex-1 pb-[68px] lg:pb-0 min-h-0 mb-safe-bottom">
+      <main className="flex-1 pb-[76px] lg:pb-0 min-h-0">
         {children}
       </main>
 
       {/* Bottom tab bar — mobile + iPad portrait */}
       <nav
-        className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-40"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-40 safe-area-bottom"
       >
         <div className="flex">
           {allNav.map((item) => {
@@ -530,12 +533,12 @@ export default function AppLayout({ session, children }: Props) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex-1 flex flex-col items-center justify-center min-h-[52px] gap-0.5 text-[10px] md:text-xs font-semibold transition-colors ${
+                className={`flex-1 flex flex-col items-center justify-center min-h-[56px] gap-0.5 text-[10px] md:text-xs font-semibold transition-colors ${
                   active ? '' : 'text-gray-400 dark:text-gray-500'
                 }`}
                 style={active ? { color: 'var(--primary)' } : {}}
               >
-                <Icon className="w-6 h-6 md:w-7 md:h-7" />
+                <Icon className="w-7 h-7 md:w-8 md:h-8" />
                 <span>{t(item.key)}</span>
               </Link>
             );
