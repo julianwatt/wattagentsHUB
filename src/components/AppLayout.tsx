@@ -517,13 +517,13 @@ export default function AppLayout({ session, children }: Props) {
       {showBell && <PushOptInBanner />}
 
       {/* Main content — bottom padding for tab bar (mobile + tablet) */}
-      <main className="flex-1 pb-[76px] lg:pb-0 min-h-0">
+      <main className="flex-1 min-h-0 main-bottom-nav">
         {children}
       </main>
 
       {/* Bottom tab bar — mobile + iPad portrait */}
       <nav
-        className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-40 safe-area-bottom"
+        className="lg:hidden bottom-nav bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800"
       >
         <div className="flex">
           {allNav.map((item) => {

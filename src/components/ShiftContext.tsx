@@ -1,5 +1,5 @@
 'use client';
-import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { useSession } from 'next-auth/react';
 
 // ── Types ──
@@ -37,6 +37,8 @@ interface ShiftContextValue {
   pushEvent: (event: ShiftEvent, newState: ShiftState, store?: ShiftStore | null) => void;
   /** Clock-in timestamp for chronometer */
   clockInTime: number | null;
+  /** Total completed break time in ms (for chronometer offset) */
+  totalBreakMs: number;
 }
 
 const ShiftCtx = createContext<ShiftContextValue>({
@@ -47,10 +49,25 @@ const ShiftCtx = createContext<ShiftContextValue>({
   refresh: async () => {},
   pushEvent: () => {},
   clockInTime: null,
+  totalBreakMs: 0,
 });
 
 export function useShift() {
   return useContext(ShiftCtx);
+}
+
+// ── Helper: compute total completed break time from events ──
+function computeBreakMs(events: ShiftEvent[]): number {
+  let total = 0;
+  for (let i = 0; i < events.length; i++) {
+    if (events[i].event_type === 'lunch_start') {
+      const endEvt = events.slice(i + 1).find((e) => e.event_type === 'lunch_end');
+      if (endEvt) {
+        total += new Date(endEvt.event_time).getTime() - new Date(events[i].event_time).getTime();
+      }
+    }
+  }
+  return total;
 }
 
 // ── Provider ──
@@ -61,13 +78,16 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
   const [store, setStore] = useState<ShiftStore | null>(null);
   const [loading, setLoading] = useState(true);
   const [clockInTime, setClockInTime] = useState<number | null>(null);
-  const fetchedRef = useRef(false);
+  const [fetched, setFetched] = useState(false);
 
   const userId = session?.user?.id;
   const role = (session?.user?.role as string) ?? '';
 
   // Only fetch for roles that have shifts
   const isShiftRole = ['agent', 'jr_manager', 'sr_manager'].includes(role);
+
+  // Memoize total break time from events
+  const totalBreakMs = useMemo(() => computeBreakMs(events), [events]);
 
   const refresh = useCallback(async () => {
     if (!userId || !isShiftRole) {
@@ -85,7 +105,7 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
         setEvents(data.events);
         setStore(data.store ?? null);
 
-        // Determine state
+        // Determine state from last event
         const lastEvt = data.events[data.events.length - 1];
         if (lastEvt.event_type === 'lunch_start') {
           setShiftState('break');
@@ -108,15 +128,20 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, [userId, isShiftRole]);
 
-  // Fetch on mount
+  // Always fetch from DB on mount / when userId becomes available
   useEffect(() => {
     if (!userId) return;
-    if (fetchedRef.current) return;
-    fetchedRef.current = true;
+    if (fetched) return;
+    setFetched(true);
     refresh();
-  }, [userId, refresh]);
+  }, [userId, refresh, fetched]);
 
-  // Re-fetch when tab becomes visible (handles browser tab switching)
+  // Reset fetched flag when userId changes (logout → login as different user)
+  useEffect(() => {
+    setFetched(false);
+  }, [userId]);
+
+  // Re-fetch when tab becomes visible (handles browser tab switching + PWA resume)
   useEffect(() => {
     if (!userId || !isShiftRole) return;
     const onVisible = () => {
@@ -139,7 +164,7 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <ShiftCtx.Provider value={{ shiftState, events, store, loading, refresh, pushEvent, clockInTime }}>
+    <ShiftCtx.Provider value={{ shiftState, events, store, loading, refresh, pushEvent, clockInTime, totalBreakMs }}>
       {children}
     </ShiftCtx.Provider>
   );

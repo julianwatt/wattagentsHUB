@@ -68,10 +68,32 @@ html, body {
   padding-top: env(safe-area-inset-top, 0px);
 }
 .safe-area-bottom {
+  padding-bottom: constant(safe-area-inset-bottom); /* iOS 11.0-11.1 */
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 .mb-safe-bottom {
   margin-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Bottom navigation bar — unconditional safe area, no media queries, no JS */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  border-top-width: 1px;
+  padding-bottom: constant(safe-area-inset-bottom); /* iOS 11.0-11.1 */
+  padding-bottom: env(safe-area-inset-bottom, 0px); /* iOS 11.2+ */
+}
+
+/* Main content padding to clear bottom nav + safe area */
+.main-bottom-nav {
+  padding-bottom: calc(76px + constant(safe-area-inset-bottom));
+  padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 1024px) {
+  .main-bottom-nav { padding-bottom: 0; }
 }
 
 @media print {

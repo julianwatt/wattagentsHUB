@@ -56,7 +56,7 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification(title, {
       body,
       icon: icon || '/icons/icon-192x192.png',
-      badge: '/icons/icon-96x96.png',
+      badge: '/icons/badge-96x96.png',
       tag: tag || 'watt-notification',
       requireInteraction: true,
       data: { url: url || '/' },

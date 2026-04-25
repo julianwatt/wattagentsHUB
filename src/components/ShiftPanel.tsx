@@ -44,7 +44,7 @@ interface Props { userId: string; }
 // ── Component ──
 export default function ShiftPanel({ userId }: Props) {
   const { t, lang } = useLanguage();
-  const { shiftState: state, events, store, loading, pushEvent, clockInTime, refresh } = useShift();
+  const { shiftState: state, events, store, loading, pushEvent, clockInTime, totalBreakMs, refresh } = useShift();
 
   // Local-only UI state (not shared)
   const [stores, setStores] = useState<ShiftStore[]>([]);
@@ -90,18 +90,27 @@ export default function ShiftPanel({ userId }: Props) {
     if (store) setSelectedStoreId(store.id);
   }, [store]);
 
-  // ── Chronometer ──
+  // ── Chronometer (excludes break time, freezes during break) ──
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current);
-    if ((state === 'active' || state === 'break') && clockInTime) {
-      const update = () => setElapsed(Date.now() - (clockInTime || Date.now()));
+
+    if (state === 'active' && clockInTime) {
+      // Active: count up, subtracting all completed break time
+      const update = () => setElapsed(Date.now() - clockInTime - totalBreakMs);
       update();
       timerRef.current = setInterval(update, 1000);
+    } else if (state === 'break' && clockInTime) {
+      // Break: freeze at the moment the break started
+      const lastBreakStart = [...events].reverse().find((e) => e.event_type === 'lunch_start');
+      if (lastBreakStart) {
+        const breakStartTime = new Date(lastBreakStart.event_time).getTime();
+        setElapsed(breakStartTime - clockInTime - totalBreakMs);
+      }
     } else {
       setElapsed(0);
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [state, clockInTime]);
+  }, [state, clockInTime, totalBreakMs, events]);
 
   // ── Continuous geofencing ──
   useEffect(() => {
