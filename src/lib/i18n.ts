@@ -67,6 +67,37 @@ const es = {
     statusCompleted: 'Completada',
     statusIncomplete: 'No completada',
     statusCancelled: 'Cancelada',
+
+    // ── Agent cards ──────────────────────────────────────────────────────
+    cardPendingTitle: 'Tienes una asignación pendiente',
+    cardActiveTitleToday: 'Tu turno de hoy',
+    cardActiveTitleFuture: 'Próximo turno · {date}',
+    cardDate: 'Fecha',
+    cardStartTime: 'Entrada',
+    cardDuration: 'Duración',
+    cardAssignedBy: 'Asignado por',
+    cardDistance: 'Distancia',
+    cardDistanceUnavailable: 'No disponible',
+    cardOpenMaps: 'Cómo llegar',
+    acceptBtn: 'Aceptar',
+    rejectBtn: 'Rechazar',
+    actionError: 'No se pudo procesar la acción. Intenta de nuevo.',
+
+    // ── Reject modal ─────────────────────────────────────────────────────
+    rejectModalTitle: '¿Rechazar esta asignación?',
+    rejectModalBody: 'Tu CEO recibirá una notificación. Puedes indicar un motivo opcional.',
+    rejectReasonLabel: 'Motivo',
+    rejectReasonPlaceholder: 'Ej. tengo cita médica, ya tengo otro compromiso, etc.',
+    confirmRejectBtn: 'Rechazar asignación',
+
+    // ── Countdown ────────────────────────────────────────────────────────
+    cdRemaining: 'Faltan {time} para tu turno',
+    cdAgo: 'Hora de entrada: hace {time}',
+    cdNow: 'Es la hora de tu turno',
+
+    // ── Waiting ──────────────────────────────────────────────────────────
+    waitingTitle: 'Esperando una nueva asignación',
+    waitingBody: 'Rechazaste tu asignación más reciente. Tu CEO está procesando una nueva.',
   },
   auth: {
     login: 'Iniciar Sesión',
@@ -394,6 +425,7 @@ const es = {
     geofenceBellOutside: 'fuera de perímetro',
     records: 'registros',
     agentsToday: 'agentes hoy',
+    assignmentNeedsReassign: 'requiere reasignación',
   },
   common: {
     loading: 'Cargando...',
@@ -407,6 +439,7 @@ const es = {
     sales: 'ventas',
     closings: 'cierres',
     alreadyExists: 'ya existe',
+    optional: 'opcional',
   },
   home: {
     todayActivity: 'Actividad de hoy',
@@ -640,6 +673,37 @@ const en: typeof es = {
     statusCompleted: 'Completed',
     statusIncomplete: 'Incomplete',
     statusCancelled: 'Cancelled',
+
+    // ── Agent cards ──────────────────────────────────────────────────────
+    cardPendingTitle: 'You have a pending assignment',
+    cardActiveTitleToday: "Today's shift",
+    cardActiveTitleFuture: 'Upcoming shift · {date}',
+    cardDate: 'Date',
+    cardStartTime: 'Start',
+    cardDuration: 'Duration',
+    cardAssignedBy: 'Assigned by',
+    cardDistance: 'Distance',
+    cardDistanceUnavailable: 'Not available',
+    cardOpenMaps: 'Get directions',
+    acceptBtn: 'Accept',
+    rejectBtn: 'Reject',
+    actionError: "Couldn't process the action. Please try again.",
+
+    // ── Reject modal ─────────────────────────────────────────────────────
+    rejectModalTitle: 'Reject this assignment?',
+    rejectModalBody: 'Your CEO will be notified. You can include an optional reason.',
+    rejectReasonLabel: 'Reason',
+    rejectReasonPlaceholder: 'e.g. I have a medical appointment, prior commitment, etc.',
+    confirmRejectBtn: 'Reject assignment',
+
+    // ── Countdown ────────────────────────────────────────────────────────
+    cdRemaining: '{time} until your shift',
+    cdAgo: 'Start time: {time} ago',
+    cdNow: "It's your shift time",
+
+    // ── Waiting ──────────────────────────────────────────────────────────
+    waitingTitle: 'Waiting for a new assignment',
+    waitingBody: 'You rejected your most recent assignment. Your CEO is processing a new one.',
   },
   auth: {
     login: 'Sign In',
@@ -966,6 +1030,7 @@ const en: typeof es = {
     geofenceBellOutside: 'outside perimeter',
     records: 'records',
     agentsToday: 'agents today',
+    assignmentNeedsReassign: 'needs reassignment',
   },
   common: {
     loading: 'Loading...',
@@ -979,6 +1044,7 @@ const en: typeof es = {
     sales: 'sales',
     closings: 'closings',
     alreadyExists: 'already exists',
+    optional: 'optional',
   },
   home: {
     todayActivity: "Today's Activity",

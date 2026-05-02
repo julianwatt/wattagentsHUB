@@ -16,6 +16,7 @@ import { fmtDistance } from '@/lib/geo';
 import { useIsStandaloneIOS } from './useStandalone';
 import { isLegacyShiftPanelEnabled } from '@/lib/flags';
 import { canManageAssignments } from '@/lib/permissions';
+import AssignmentCards from './AssignmentCards';
 
 interface Props {
   session: Session;
@@ -159,7 +160,7 @@ export default function AppLayout({ session, children }: Props) {
   ];
 
   // ── Notification bell (admin only) ──
-  interface NotifData { actor_name?: string; alert_type?: string; store_name?: string; distance_meters?: number; event_type?: string; shift_log_id?: string; }
+  interface NotifData { actor_name?: string; alert_type?: string; store_name?: string; distance_meters?: number; event_type?: string; shift_log_id?: string; assignment_id?: string; shift_date?: string; scheduled_start_time?: string; rejection_reason?: string; }
   interface NotifItem { id: string; type: string; user_name?: string; user_username?: string; data?: NotifData | null; status: string; created_at: string; }
   const notifTypeLabel = (type: string) => {
     if (type === 'password_reset') return t('notifications.passwordReset');
@@ -167,6 +168,8 @@ export default function AppLayout({ session, children }: Props) {
     if (type === 'user_deactivated') return t('notifications.userDeactivated');
     if (type === 'user_activated') return t('notifications.userActivated');
     if (type === 'geofence_alert') return `⚠️ ${t('notifications.geofenceFilterLabel')}`;
+    if (type === 'assignment_accepted') return `✅ ${t('assignments.statusAccepted')}`;
+    if (type === 'assignment_rejected') return `❌ ${t('assignments.statusRejected')}`;
     return type;
   };
   const notifBadgeColor = (type: string) => {
@@ -175,6 +178,8 @@ export default function AppLayout({ session, children }: Props) {
     if (type === 'user_deactivated') return 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300';
     if (type === 'user_activated') return 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300';
     if (type === 'geofence_alert') return 'bg-red-200 dark:bg-red-900/50 text-red-700 dark:text-red-200 ring-1 ring-red-300 dark:ring-red-700';
+    if (type === 'assignment_accepted') return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300';
+    if (type === 'assignment_rejected') return 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300';
     return 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300';
   };
   const notifPreviewText = (n: NotifItem) => {
@@ -187,6 +192,18 @@ export default function AppLayout({ session, children }: Props) {
       const store = d?.store_name ?? '';
       const dist = d?.distance_meters ? fmtDistance(d.distance_meters) : '';
       return `🚨 ${n.user_name ?? '—'} ${t('notifications.geofenceBellOutside')}${store ? ` — ${store}` : ''}${dist ? ` (${dist})` : ''}`;
+    }
+    if (n.type === 'assignment_accepted') {
+      const d = n.data;
+      const store = d?.store_name ?? '';
+      const date = d?.shift_date ?? '';
+      const time = d?.scheduled_start_time ?? '';
+      return `${n.user_name ?? '—'} · ${store}${date ? ` · ${date}` : ''}${time ? ` · ${time}` : ''}`;
+    }
+    if (n.type === 'assignment_rejected') {
+      const d = n.data;
+      const reason = d?.rejection_reason ? ` — "${d.rejection_reason}"` : '';
+      return `${n.user_name ?? '—'} · ${t('notifications.assignmentNeedsReassign')}${reason}`;
     }
     return n.user_name ?? '—';
   };
@@ -523,6 +540,11 @@ export default function AppLayout({ session, children }: Props) {
 
       {/* Push notification opt-in banner (CEO / admin) */}
       {showBell && <PushOptInBanner />}
+
+      {/* Agent assignment cards — visible across the whole platform while
+          the agent has a pending or active assignment. The component
+          self-gates on role and renders nothing for non-agents. */}
+      <AssignmentCards role={role} />
 
       {/* Main content — bottom padding for tab bar (mobile + tablet) */}
       <main className="flex-1 min-h-0 main-bottom-nav">
