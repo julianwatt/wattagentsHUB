@@ -1,5 +1,5 @@
-import AssignmentsPlaceholder from '@/components/AssignmentsPlaceholder';
+import AssignmentsTodayClient from '@/components/AssignmentsTodayClient';
 
 export default function AssignmentsTodayPage() {
-  return <AssignmentsPlaceholder messageKey="assignments.placeholderToday" />;
+  return <AssignmentsTodayClient />;
 }
