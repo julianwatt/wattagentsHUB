@@ -170,6 +170,10 @@ export default function AppLayout({ session, children }: Props) {
     if (type === 'geofence_alert') return `⚠️ ${t('notifications.geofenceFilterLabel')}`;
     if (type === 'assignment_accepted') return `✅ ${t('assignments.statusAccepted')}`;
     if (type === 'assignment_rejected') return `❌ ${t('assignments.statusRejected')}`;
+    if (type === 'assignment_arrived') return `✅ ${t('assignments.bellArrived')}`;
+    if (type === 'assignment_exited_warn') return `⚠️ ${t('assignments.bellExitedWarn')}`;
+    if (type === 'assignment_exited_final') return `🛑 ${t('assignments.bellExitedFinal')}`;
+    if (type === 'assignment_reentered') return `🔄 ${t('assignments.bellReentered')}`;
     return type;
   };
   const notifBadgeColor = (type: string) => {
@@ -180,6 +184,10 @@ export default function AppLayout({ session, children }: Props) {
     if (type === 'geofence_alert') return 'bg-red-200 dark:bg-red-900/50 text-red-700 dark:text-red-200 ring-1 ring-red-300 dark:ring-red-700';
     if (type === 'assignment_accepted') return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300';
     if (type === 'assignment_rejected') return 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300';
+    if (type === 'assignment_arrived') return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300';
+    if (type === 'assignment_exited_warn') return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300';
+    if (type === 'assignment_exited_final') return 'bg-red-200 dark:bg-red-900/50 text-red-700 dark:text-red-200 ring-1 ring-red-300 dark:ring-red-700';
+    if (type === 'assignment_reentered') return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300';
     return 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300';
   };
   const notifPreviewText = (n: NotifItem) => {
@@ -204,6 +212,17 @@ export default function AppLayout({ session, children }: Props) {
       const d = n.data;
       const reason = d?.rejection_reason ? ` — "${d.rejection_reason}"` : '';
       return `${n.user_name ?? '—'} · ${t('notifications.assignmentNeedsReassign')}${reason}`;
+    }
+    if (
+      n.type === 'assignment_arrived' ||
+      n.type === 'assignment_exited_warn' ||
+      n.type === 'assignment_exited_final' ||
+      n.type === 'assignment_reentered'
+    ) {
+      const d = n.data;
+      const store = d?.store_name ? ` · ${d.store_name}` : '';
+      const dist = d?.distance_meters ? ` (${fmtDistance(d.distance_meters)})` : '';
+      return `${n.user_name ?? '—'}${store}${dist}`;
     }
     return n.user_name ?? '—';
   };

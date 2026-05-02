@@ -98,6 +98,17 @@ const es = {
     // ── Waiting ──────────────────────────────────────────────────────────
     waitingTitle: 'Esperando una nueva asignación',
     waitingBody: 'Rechazaste tu asignación más reciente. Tu CEO está procesando una nueva.',
+
+    // ── Tracker ──────────────────────────────────────────────────────────
+    keepAppOpenHint: 'Mantén la app abierta durante tu turno para que el rastreo de ubicación funcione.',
+    locationPermissionTitle: 'Permiso de ubicación denegado',
+    locationPermissionBody: 'Necesitamos tu ubicación para registrar entrada y salida de la tienda. Habilita el permiso en la configuración del navegador.',
+
+    // ── Bell labels for geofence event types (CEO side) ─────────────────
+    bellArrived: 'Llegó a tienda',
+    bellExitedWarn: 'Salida temporal',
+    bellExitedFinal: 'Fin de turno (>300m)',
+    bellReentered: 'Regresó al perímetro',
   },
   auth: {
     login: 'Iniciar Sesión',
@@ -704,6 +715,17 @@ const en: typeof es = {
     // ── Waiting ──────────────────────────────────────────────────────────
     waitingTitle: 'Waiting for a new assignment',
     waitingBody: 'You rejected your most recent assignment. Your CEO is processing a new one.',
+
+    // ── Tracker ──────────────────────────────────────────────────────────
+    keepAppOpenHint: 'Keep the app open during your shift so location tracking works.',
+    locationPermissionTitle: 'Location permission denied',
+    locationPermissionBody: "We need your location to register store entry and exit. Please enable it in your browser settings.",
+
+    // ── Bell labels for geofence event types (CEO side) ─────────────────
+    bellArrived: 'Arrived at store',
+    bellExitedWarn: 'Temporary exit',
+    bellExitedFinal: 'Shift ended (>300m)',
+    bellReentered: 'Back inside',
   },
   auth: {
     login: 'Sign In',

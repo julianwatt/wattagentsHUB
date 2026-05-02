@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useLanguage } from './LanguageContext';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
 import { haversineMeters, fmtDistance } from '@/lib/geo';
+import AssignmentTracker from './AssignmentTracker';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface MyAssignment {
@@ -386,6 +387,22 @@ export default function AssignmentCards({ role }: Props) {
               >
                 🗺️ {t('assignments.cardOpenMaps')}
               </button>
+
+              {/* Keep-app-open reminder + tracker controller (today only) */}
+              {isToday && a.store && (
+                <>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 text-center leading-snug">
+                    💡 {t('assignments.keepAppOpenHint')}
+                  </p>
+                  <AssignmentTracker
+                    assignment={{
+                      id: a.id,
+                      shift_date: a.shift_date,
+                      store: { latitude: a.store.latitude, longitude: a.store.longitude },
+                    }}
+                  />
+                </>
+              )}
             </div>
           </div>
         );
