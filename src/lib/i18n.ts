@@ -34,6 +34,39 @@ const es = {
     placeholderToday: 'El panel de agentes activos en tiempo real se construirá en la próxima sesión.',
     placeholderNew: 'El formulario de nueva asignación se construirá en la próxima sesión.',
     placeholderHistory: 'El historial de asignaciones se construirá en la próxima sesión.',
+
+    // ── Form ─────────────────────────────────────────────────────────────
+    formTitle: 'Crear nueva asignación',
+    fieldAgent: 'Agente',
+    agentChoose: 'Selecciona un agente',
+    agentSearchPlaceholder: 'Buscar agente por nombre o usuario…',
+    alreadyAssigned: 'ya asignado',
+    alreadyAssignedHint: 'Este agente ya tiene una asignación activa para esa fecha.',
+    fieldStore: 'Tienda',
+    storeChoose: 'Selecciona una tienda',
+    fieldDate: 'Fecha',
+    fieldStartTime: 'Hora de entrada',
+    fieldDuration: 'Duración mínima',
+    submitBtn: 'Crear asignación',
+    submitting: 'Creando…',
+    successCreated: 'Asignación creada para {agent}. Notificación enviada.',
+    errorRequired: 'Todos los campos son obligatorios.',
+    errorAlreadyAssigned: 'El agente ya tiene una asignación activa para esa fecha.',
+    errorGeneric: 'No se pudo crear la asignación. Intenta de nuevo.',
+
+    // ── Recent list ──────────────────────────────────────────────────────
+    recentTitle: 'Asignaciones de hoy',
+    recentEmpty: 'Aún no has creado asignaciones hoy.',
+    reassignBtn: 'Reasignar',
+
+    // ── Status labels ────────────────────────────────────────────────────
+    statusPending: 'Pendiente',
+    statusAccepted: 'Aceptada',
+    statusRejected: 'Rechazada',
+    statusInProgress: 'En curso',
+    statusCompleted: 'Completada',
+    statusIncomplete: 'No completada',
+    statusCancelled: 'Cancelada',
   },
   auth: {
     login: 'Iniciar Sesión',
@@ -574,6 +607,39 @@ const en: typeof es = {
     placeholderToday: 'The live active-agents panel will be built in the next session.',
     placeholderNew: 'The new-assignment form will be built in the next session.',
     placeholderHistory: 'The assignment history will be built in the next session.',
+
+    // ── Form ─────────────────────────────────────────────────────────────
+    formTitle: 'Create new assignment',
+    fieldAgent: 'Agent',
+    agentChoose: 'Select an agent',
+    agentSearchPlaceholder: 'Search agent by name or username…',
+    alreadyAssigned: 'already assigned',
+    alreadyAssignedHint: 'This agent already has an active assignment for that date.',
+    fieldStore: 'Store',
+    storeChoose: 'Select a store',
+    fieldDate: 'Date',
+    fieldStartTime: 'Start time',
+    fieldDuration: 'Minimum duration',
+    submitBtn: 'Create assignment',
+    submitting: 'Creating…',
+    successCreated: 'Assignment created for {agent}. Notification sent.',
+    errorRequired: 'All fields are required.',
+    errorAlreadyAssigned: 'The agent already has an active assignment for that date.',
+    errorGeneric: 'Could not create the assignment. Please try again.',
+
+    // ── Recent list ──────────────────────────────────────────────────────
+    recentTitle: "Today's assignments",
+    recentEmpty: "You haven't created any assignments today yet.",
+    reassignBtn: 'Reassign',
+
+    // ── Status labels ────────────────────────────────────────────────────
+    statusPending: 'Pending',
+    statusAccepted: 'Accepted',
+    statusRejected: 'Rejected',
+    statusInProgress: 'In progress',
+    statusCompleted: 'Completed',
+    statusIncomplete: 'Incomplete',
+    statusCancelled: 'Cancelled',
   },
   auth: {
     login: 'Sign In',

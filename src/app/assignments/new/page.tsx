@@ -1,5 +1,5 @@
-import AssignmentsPlaceholder from '@/components/AssignmentsPlaceholder';
+import AssignmentsNewClient from '@/components/AssignmentsNewClient';
 
 export default function AssignmentsNewPage() {
-  return <AssignmentsPlaceholder messageKey="assignments.placeholderNew" />;
+  return <AssignmentsNewClient />;
 }
