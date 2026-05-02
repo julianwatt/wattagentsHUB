@@ -1,12 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, FormEvent, useCallback } from 'react';
-import usePlacesAutocomplete, { getDetails } from 'use-places-autocomplete';
 import { useLanguage } from './LanguageContext';
-
-// Texas filtering is enforced client-side by the regex in PlacesAddressInput.
-// We don't pass `bounds`/`strictBounds` to the legacy AutocompleteService —
-// Google deprecated those for predictions in May 2023 and the wrapper
-// silently drops them.
 
 export interface StoreInitial {
   id: string;
@@ -26,15 +20,54 @@ interface Props {
 
 const PLACES_SCRIPT_ID = 'google-maps-places-script';
 
-interface GoogleMapsGlobal { maps?: { places?: unknown } }
-declare global { interface Window { google?: GoogleMapsGlobal } }
+// Texas bounding box used by the new Places API as a locationRestriction:
+//   SW corner: 25.84°N, -106.65°W
+//   NE corner: 36.50°N,  -93.51°W
+const TEXAS_LOCATION_RESTRICTION = {
+  south: 25.84, west: -106.65, north: 36.50, east: -93.51,
+};
+
+// ── Minimal type shims for the new Places API surface we use. We avoid
+// pulling in @types/google.maps just for one component. The shapes here
+// match google.maps.places.AutocompleteSuggestion and Place from
+// https://developers.google.com/maps/documentation/javascript/reference/places.
+// ──────────────────────────────────────────────────────────────────────────
+interface PlaceLocation { lat: () => number; lng: () => number }
+interface PlaceLike {
+  id?: string;
+  location?: PlaceLocation;
+  formattedAddress?: string;
+  fetchFields(req: { fields: string[] }): Promise<unknown>;
+}
+interface PlaceConstructor { new (opts: { id: string }): PlaceLike }
+interface PlacePrediction {
+  placeId: string;
+  text: { text: string };
+  toPlace(): PlaceLike;
+}
+interface AutocompleteSuggestionResult {
+  suggestions: { placePrediction?: PlacePrediction }[];
+}
+interface AutocompleteSuggestionStatic {
+  fetchAutocompleteSuggestions(req: Record<string, unknown>): Promise<AutocompleteSuggestionResult>;
+}
+interface PlacesNamespace {
+  AutocompleteSuggestion?: AutocompleteSuggestionStatic;
+  Place?: PlaceConstructor;
+}
+interface MapsNamespace {
+  places?: PlacesNamespace;
+  importLibrary?: (lib: 'places') => Promise<unknown>;
+}
+interface GoogleNamespace { maps?: MapsNamespace }
+declare global { interface Window { google?: GoogleNamespace } }
 
 /**
- * Loads the Google Maps + Places JS SDK exactly once per page-load. We
- * mount the <script> on the first hook call and any subsequent mount just
- * waits for window.google to appear. Status surfaces through the form so
- * the CEO sees a clear banner when autocomplete isn't usable and can fall
- * back to manual entry.
+ * Loads the Google Maps + Places JS SDK exactly once per page-load and
+ * waits for the new Places library (window.google.maps.places.Place +
+ * AutocompleteSuggestion) to be ready. With loading=async the outer
+ * bundle's onload fires before the places library streams in, so we poll
+ * for it until it appears or we hit an 8s timeout.
  */
 type PlacesStatus = 'loading' | 'ready' | 'no-key' | 'error';
 
@@ -42,85 +75,50 @@ function usePlacesScript(): PlacesStatus {
   const [status, setStatus] = useState<PlacesStatus>('loading');
   useEffect(() => {
     const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!key) {
-      console.warn('[stores] NEXT_PUBLIC_GOOGLE_MAPS_API_KEY missing — autocomplete disabled');
-      setStatus('no-key');
-      return;
-    }
+    if (!key) { setStatus('no-key'); return; }
     if (typeof window === 'undefined') return;
-    if (window.google?.maps?.places) { setStatus('ready'); return; }
+
+    const placesReady = () =>
+      !!(window.google?.maps?.places?.AutocompleteSuggestion && window.google?.maps?.places?.Place);
+
+    if (placesReady()) { setStatus('ready'); return; }
+
+    const startPolling = () => {
+      const poll = setInterval(() => {
+        if (placesReady()) { setStatus('ready'); clearInterval(poll); clearTimeout(timeout); }
+      }, 100);
+      const timeout = setTimeout(() => { clearInterval(poll); setStatus('error'); }, 8000);
+      return () => { clearInterval(poll); clearTimeout(timeout); };
+    };
 
     const existing = document.getElementById(PLACES_SCRIPT_ID) as HTMLScriptElement | null;
-    if (existing) {
-      const check = setInterval(() => {
-        if (window.google?.maps?.places) { setStatus('ready'); clearInterval(check); }
-      }, 100);
-      const timeout = setTimeout(() => {
-        clearInterval(check);
-        console.warn('[stores] Maps SDK never reported window.google.maps.places after 8s');
-        setStatus('error');
-      }, 8000);
-      return () => { clearInterval(check); clearTimeout(timeout); };
-    }
+    if (existing) return startPolling();
 
     const s = document.createElement('script');
     s.id = PLACES_SCRIPT_ID;
-    // loading=async is the parameter Google now requires to silence the
-    // "loaded directly without loading=async" performance warning. Combined
-    // with the script's async/defer attrs, it gives Google's loader the
-    // freedom to schedule its parsing work during browser idle time.
     s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&loading=async&v=weekly`;
     s.async = true;
     s.defer = true;
-    let pollHandle: ReturnType<typeof setInterval> | null = null;
-    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
-    const stopPolling = () => {
-      if (pollHandle) clearInterval(pollHandle);
-      if (timeoutHandle) clearTimeout(timeoutHandle);
-      pollHandle = null;
-      timeoutHandle = null;
-    };
 
+    let stopPoll: (() => void) | null = null;
     s.onload = () => {
-      // With loading=async, Google's outer bundle loads first and the
-      // places library streams in afterwards. s.onload fires before
-      // window.google.maps.places is populated, so we poll until it is.
-      if (window.google?.maps?.places) {
-        console.info('[stores] Maps SDK loaded — places library ready');
-        setStatus('ready');
-        return;
-      }
-      pollHandle = setInterval(() => {
-        if (window.google?.maps?.places) {
-          console.info('[stores] Maps SDK places library became ready');
-          setStatus('ready');
-          stopPolling();
-        }
-      }, 100);
-      timeoutHandle = setTimeout(() => {
-        console.warn('[stores] places library never became ready after 8s');
-        setStatus('error');
-        stopPolling();
-      }, 8000);
+      // Eagerly request the places library — with loading=async this is the
+      // canonical way to await it (s.onload fires on outer bundle only).
+      const importLib = window.google?.maps?.importLibrary;
+      if (importLib) importLib('places').catch(() => { /* poll will catch failure */ });
+      stopPoll = startPolling() ?? null;
     };
-    s.onerror = (ev) => {
-      console.warn('[stores] Maps SDK script failed to load (network/CSP/referrer block):', ev);
-      setStatus('error');
-    };
+    s.onerror = () => setStatus('error');
     document.head.appendChild(s);
-    return () => {
-      stopPolling();
-      /* keep script in DOM for reuse across mounts */
-    };
+    return () => { if (stopPoll) stopPoll(); /* keep script in DOM for reuse */ };
   }, []);
   return status;
 }
 
 /**
- * Google's Places SDK surfaces auth/quota failures via window.gm_authFailure
- * (no key, restricted referer, billing off, daily quota exceeded). We swap
- * the form into "manual entry" mode and log a generic warning — never the
- * env-var name or the literal Google error.
+ * gm_authFailure fires when the loaded SDK rejects the key (referrer
+ * restriction, billing, etc.). We swap the form into manual-entry mode in
+ * that case. No env-var name surfaces to the end user.
  */
 function useGmAuthFailureWatch(onFail: () => void) {
   useEffect(() => {
@@ -128,23 +126,21 @@ function useGmAuthFailureWatch(onFail: () => void) {
     type W = Window & { gm_authFailure?: () => void };
     const w = window as W;
     const prev = w.gm_authFailure;
-    w.gm_authFailure = () => {
-      console.warn('[stores] Maps SDK auth failure (gm_authFailure) — likely API restriction or billing/quota issue');
-      onFail();
-      if (typeof prev === 'function') prev();
-    };
+    w.gm_authFailure = () => { onFail(); if (typeof prev === 'function') prev(); };
     return () => { w.gm_authFailure = prev; };
   }, [onFail]);
 }
 
 /**
- * Inner Places combobox — only mounted when the SDK is `ready` so the
- * usePlacesAutocomplete hook can call AutocompleteService immediately.
+ * Places combobox using the NEW Places API (March 2025).
  *
- * Renders our own dropdown driven by predictions returned from Google's
- * AutocompleteService (not the legacy widget). This avoids the widget's
- * positioning/z-index issues inside our fixed-position modal AND surfaces
- * any prediction-fetch errors directly to the console.
+ *   AutocompleteSuggestion.fetchAutocompleteSuggestions → list of
+ *   PlacePrediction. Selecting one builds a Place from the placeId and
+ *   fetchFields(['location','formattedAddress']) gives lat/lng + address.
+ *
+ * Replaces the legacy AutocompleteService + PlacesService pair, which
+ * Google flagged as "not available to new customers" as of March 1 2025
+ * and which silently ignored bounds/strictBounds.
  */
 function PlacesAddressInput({
   value,
@@ -159,57 +155,53 @@ function PlacesAddressInput({
   placeholder: string;
   hint: string;
 }) {
-  const {
-    ready,
-    value: q,
-    setValue,
-    suggestions: { status: predStatus, data: predictions, loading: predLoading },
-    clearSuggestions,
-  } = usePlacesAutocomplete({
-    requestOptions: {
-      // Layer 1 (server-side): country=us drops non-US results outright.
-      // The legacy AutocompleteService used here ignores `bounds` /
-      // `strictBounds` for predictions silently (deprecated since May 2023
-      // — those params survive only on the new Places API), so we don't
-      // bother sending them. Texas filtering is enforced in layer 2 below.
-      componentRestrictions: { country: 'us' },
-      types: ['address'],
-    },
-    debounce: 250,
-  });
-
-  // Layer 2 (client-side, the actual gate): drop any prediction whose
-  // description doesn't end with ", TX[, USA]" or ", Texas[, USA]". The
-  // AutocompletePrediction.description is what Google would show, so the
-  // state suffix is reliably present for US street addresses.
-  const filteredPredictions = predictions.filter((p) => {
-    const desc = p.description ?? '';
-    // Match ", TX" or ", Texas" followed by end-of-string, comma, or
-    // whitespace+ZIP. Google's autocomplete formats US street addresses as
-    // "<street>, <city>, <STATE> <ZIP>, USA" so the comma+state needle is
-    // reliable when present.
-    return /,\s*(TX|Texas)(\s+\d|\s*,|$)/i.test(desc);
-  });
-
-  // Sync external value (e.g. when initialStore loads in edit mode) into
-  // the hook's internal state. We only push when the parent's text differs
-  // so we don't loop with the user's typing.
-  useEffect(() => {
-    if (value !== q) setValue(value, false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
-
-  // Log non-OK statuses so production debugging is possible without
-  // having to change code. ZERO_RESULTS for very short queries is normal.
-  useEffect(() => {
-    if (predStatus && predStatus !== 'OK' && predStatus !== '' && predStatus !== 'ZERO_RESULTS') {
-      console.warn('[stores] Places AutocompleteService status:', predStatus);
-    }
-  }, [predStatus]);
-
+  const [q, setQ] = useState(value);
+  const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
   const [showList, setShowList] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
+  // Keep external value in sync (e.g. initialStore in edit mode).
+  useEffect(() => { setQ(value); }, [value]);
+
+  // Debounced fetch from the new AutocompleteSuggestion API.
+  useEffect(() => {
+    const trimmed = q.trim();
+    if (trimmed.length < 3) { setPredictions([]); return; }
+    let cancelled = false;
+    const handle = setTimeout(async () => {
+      const ac = window.google?.maps?.places?.AutocompleteSuggestion;
+      if (!ac) return;
+      try {
+        const res = await ac.fetchAutocompleteSuggestions({
+          input: trimmed,
+          // Two layers of Texas-only filtering. country=us drops non-US
+          // results upstream; locationRestriction tells the new API to
+          // refuse predictions whose geometry isn't inside the Texas box.
+          // Both layers are still defended client-side by the regex below
+          // because experiments show locationRestriction can return
+          // out-of-box predictions for ambiguous matches.
+          includedPrimaryTypes: ['street_address', 'premise', 'subpremise', 'route'],
+          includedRegionCodes: ['us'],
+          locationRestriction: { rectangle: TEXAS_LOCATION_RESTRICTION },
+        });
+        if (cancelled) return;
+        const list = (res?.suggestions ?? [])
+          .map((s) => s.placePrediction)
+          .filter((p): p is PlacePrediction => !!p)
+          // Defense in depth: only addresses ending with ", TX" / ", Texas"
+          // (optionally followed by a ZIP) are shown.
+          .filter((p) => /,\s*(TX|Texas)(\s+\d|\s*,|$)/i.test(p.text?.text ?? ''));
+        setPredictions(list);
+      } catch (err) {
+        // Network or auth failure surfaces as an empty dropdown + hint.
+        console.error('Places fetchAutocompleteSuggestions failed:', err);
+        if (!cancelled) setPredictions([]);
+      }
+    }, 250);
+    return () => { cancelled = true; clearTimeout(handle); };
+  }, [q]);
+
+  // Close the dropdown when clicking outside.
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       if (!wrapRef.current?.contains(e.target as Node)) setShowList(false);
@@ -218,36 +210,24 @@ function PlacesAddressInput({
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [showList]);
 
-  const handlePick = async (placeId: string, description: string) => {
-    setValue(description, false);
-    onChangeText(description);
+  const handlePick = async (p: PlacePrediction) => {
+    const desc = p.text?.text ?? '';
+    setQ(desc);
+    onChangeText(desc);
     setShowList(false);
-    clearSuggestions();
+    setPredictions([]);
+    const PlaceCtor = window.google?.maps?.places?.Place;
+    if (!PlaceCtor) return;
     try {
-      // Use Places Details (already-enabled Places API) instead of the
-      // separate Geocoding API. Asking for `geometry` + `formatted_address`
-      // explicitly is required — without it Google returns the row without
-      // those fields to save quota, and lat/lng would be undefined.
-      const detail = await getDetails({
-        placeId,
-        fields: ['geometry', 'formatted_address'],
-      });
-      if (typeof detail === 'string') {
-        // Some failure paths return a status string instead of a result.
-        console.warn('[stores] getDetails returned status string:', detail);
-        return;
-      }
-      const loc = detail?.geometry?.location;
-      if (!loc) {
-        console.warn('[stores] getDetails returned no geometry.location');
-        return;
-      }
-      // The result's lat/lng can be a function (legacy LatLng) or numbers.
+      const place = new PlaceCtor({ id: p.placeId });
+      await place.fetchFields({ fields: ['location', 'formattedAddress'] });
+      const loc = place.location;
+      if (!loc) return;
       const lat = typeof loc.lat === 'function' ? loc.lat() : (loc.lat as unknown as number);
       const lng = typeof loc.lng === 'function' ? loc.lng() : (loc.lng as unknown as number);
-      onSelect(detail.formatted_address ?? description, lat, lng);
+      onSelect(place.formattedAddress ?? desc, lat, lng);
     } catch (err) {
-      console.warn('[stores] getDetails failed:', err);
+      console.error('Place.fetchFields failed:', err);
     }
   };
 
@@ -256,9 +236,8 @@ function PlacesAddressInput({
       <input
         type="text"
         value={q}
-        disabled={!ready}
         onChange={(e) => {
-          setValue(e.target.value);
+          setQ(e.target.value);
           onChangeText(e.target.value);
           setShowList(true);
         }}
@@ -267,27 +246,21 @@ function PlacesAddressInput({
         autoComplete="off"
         className="w-full max-w-full box-border px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm"
       />
-      {showList && filteredPredictions.length > 0 && (
+      {showList && predictions.length > 0 && (
         <div className="absolute left-0 right-0 mt-1 z-30 max-h-72 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg">
-          {filteredPredictions.map((p) => (
+          {predictions.map((p) => (
             <button
-              key={p.place_id}
+              key={p.placeId}
               type="button"
-              onClick={() => handlePick(p.place_id, p.description)}
+              onClick={() => handlePick(p)}
               className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-b border-gray-50 dark:border-gray-800 last:border-0"
             >
-              <span className="font-medium">{p.structured_formatting?.main_text ?? p.description}</span>
-              {p.structured_formatting?.secondary_text && (
-                <span className="block text-[10px] text-gray-400 truncate">{p.structured_formatting.secondary_text}</span>
-              )}
+              {p.text?.text ?? ''}
             </button>
           ))}
         </div>
       )}
-      {showList && q.trim().length >= 3 && !predLoading && filteredPredictions.length === 0 && (
-        <p className="text-[10px] text-gray-400 mt-1">{hint}</p>
-      )}
-      {ready && q.trim().length < 3 && (
+      {showList && q.trim().length >= 3 && predictions.length === 0 && (
         <p className="text-[10px] text-gray-400 mt-1">{hint}</p>
       )}
     </div>
@@ -316,10 +289,8 @@ export default function StoreFormModal({ onClose, onSaved, initialStore }: Props
     String(initialStore?.geofence_radius_meters ?? 200)
   );
 
-  // Coords are "locked" right after the user picks a Places suggestion.
-  // The lat/lng inputs become read-only with an "Edit manually" button.
-  // In edit mode we start unlocked so existing coords stay editable; in
-  // create mode we also start unlocked because nothing's filled yet.
+  // Coords are "locked" right after the user picks a Places suggestion. The
+  // lat/lng inputs become read-only until the CEO clicks "Edit manually".
   const [coordsLocked, setCoordsLocked] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
@@ -353,7 +324,6 @@ export default function StoreFormModal({ onClose, onSaved, initialStore }: Props
         longitude: lng,
         geofence_radius_meters: radNum,
       };
-
       const res = isEdit
         ? await fetch('/api/stores', {
             method: 'PATCH',
@@ -365,7 +335,6 @@ export default function StoreFormModal({ onClose, onSaved, initialStore }: Props
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           });
-
       if (!res.ok) {
         setFormError(t(isEdit ? 'stores.errorUpdate' : 'stores.errorCreate'));
         setSubmitting(false);
@@ -402,7 +371,6 @@ export default function StoreFormModal({ onClose, onSaved, initialStore }: Props
 
         {/* Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          {/* Places-status banner */}
           {placesStatus === 'no-key' && (
             <p className="text-[11px] rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-amber-800 dark:text-amber-200 leading-snug">
               ⚠️ {t('stores.placesNoKey')}
@@ -429,7 +397,7 @@ export default function StoreFormModal({ onClose, onSaved, initialStore }: Props
             />
           </div>
 
-          {/* Address with Places autocomplete */}
+          {/* Address */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
               {t('stores.fieldAddress')}
@@ -547,7 +515,7 @@ export default function StoreFormModal({ onClose, onSaved, initialStore }: Props
           )}
         </form>
 
-        {/* Footer actions — always visible */}
+        {/* Footer actions */}
         <div className="flex gap-2 px-5 py-3 border-t border-gray-100 dark:border-gray-800 flex-shrink-0">
           <button
             type="button"
