@@ -21,6 +21,7 @@ export default function StoresClient() {
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [editingStore, setEditingStore] = useState<Store | null>(null);
 
   const fetchStores = useCallback(async () => {
     setLoading(true);
@@ -56,8 +57,9 @@ export default function StoresClient() {
     setToggling(null);
   };
 
-  const handleCreated = () => {
+  const handleSaved = () => {
     setShowAdd(false);
+    setEditingStore(null);
     fetchStores();
   };
 
@@ -125,6 +127,12 @@ export default function StoresClient() {
 
               <div className="flex items-center justify-between gap-2 mt-1">
                 <button
+                  onClick={() => setEditingStore(s)}
+                  className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"
+                >
+                  ✎ {t('stores.editBtn')}
+                </button>
+                <button
                   onClick={() => toggle(s)}
                   disabled={toggling === s.id}
                   className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-colors disabled:opacity-50 ${
@@ -144,7 +152,22 @@ export default function StoresClient() {
       {showAdd && (
         <StoreFormModal
           onClose={() => setShowAdd(false)}
-          onCreated={handleCreated}
+          onSaved={handleSaved}
+        />
+      )}
+
+      {editingStore && (
+        <StoreFormModal
+          onClose={() => setEditingStore(null)}
+          onSaved={handleSaved}
+          initialStore={{
+            id: editingStore.id,
+            name: editingStore.name,
+            address: editingStore.address,
+            latitude: editingStore.latitude,
+            longitude: editingStore.longitude,
+            geofence_radius_meters: editingStore.geofence_radius_meters,
+          }}
         />
       )}
     </div>

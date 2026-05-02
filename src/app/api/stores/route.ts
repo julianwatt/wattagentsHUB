@@ -120,6 +120,16 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'no valid fields to update' }, { status: 400 });
   }
 
+  // Validate coord ranges if either is being patched. (Same rule as POST.)
+  const newLat = patch.latitude as number | undefined;
+  const newLng = patch.longitude as number | undefined;
+  if (newLat !== undefined && (newLat < -90 || newLat > 90)) {
+    return NextResponse.json({ error: 'latitude out of valid range' }, { status: 400 });
+  }
+  if (newLng !== undefined && (newLng < -180 || newLng > 180)) {
+    return NextResponse.json({ error: 'longitude out of valid range' }, { status: 400 });
+  }
+
   const { data, error } = await supabase
     .from('stores')
     .update(patch)

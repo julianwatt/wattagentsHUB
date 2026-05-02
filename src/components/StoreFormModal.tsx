@@ -2,9 +2,20 @@
 import { useEffect, useRef, useState, FormEvent, useCallback } from 'react';
 import { useLanguage } from './LanguageContext';
 
+export interface StoreInitial {
+  id: string;
+  name: string;
+  address: string | null;
+  latitude: number;
+  longitude: number;
+  geofence_radius_meters: number | null;
+}
+
 interface Props {
   onClose: () => void;
-  onCreated: () => void;
+  onSaved: () => void;
+  /** When provided, the modal opens in edit mode; otherwise create mode. */
+  initialStore?: StoreInitial;
 }
 
 const PLACES_SCRIPT_ID = 'google-maps-places-script';
@@ -25,6 +36,7 @@ interface GoogleMapsGlobal {
     places?: {
       Autocomplete: new (input: HTMLInputElement, opts?: Record<string, unknown>) => AutocompleteInstance;
     };
+    event?: { clearInstanceListeners: (instance: unknown) => void };
   };
 }
 
@@ -33,14 +45,11 @@ declare global {
 }
 
 /**
- * Loads the Google Maps + Places JS SDK once per page-load. Returns:
- *   - 'loading' while the script is being fetched
- *   - 'ready' once window.google.maps.places is available
- *   - 'no-key' if NEXT_PUBLIC_GOOGLE_MAPS_API_KEY isn't configured
- *   - 'error' if the script failed to load
- *
- * The form falls back to manual lat/lng entry when the SDK isn't ready,
- * so the CEO can still create stores without the API.
+ * Loads the Google Maps + Places JS SDK exactly once per page-load. We
+ * mount the <script> on the first hook call and any subsequent mount just
+ * waits for window.google to appear. Status surfaces through the form so
+ * the CEO sees a clear banner when autocomplete isn't usable and can fall
+ * back to manual entry.
  */
 type PlacesStatus = 'loading' | 'ready' | 'no-key' | 'error';
 
@@ -54,7 +63,6 @@ function usePlacesScript(): PlacesStatus {
 
     const existing = document.getElementById(PLACES_SCRIPT_ID) as HTMLScriptElement | null;
     if (existing) {
-      // Another mount is already loading the script — wait for window.google
       const check = setInterval(() => {
         if (window.google?.maps?.places) { setStatus('ready'); clearInterval(check); }
       }, 100);
@@ -70,20 +78,62 @@ function usePlacesScript(): PlacesStatus {
     s.onload = () => setStatus('ready');
     s.onerror = () => setStatus('error');
     document.head.appendChild(s);
-    return () => { /* keep script in DOM for reuse */ };
+    return () => { /* keep script in DOM for reuse across mounts */ };
   }, []);
   return status;
 }
 
-export default function StoreFormModal({ onClose, onCreated }: Props) {
-  const { t } = useLanguage();
-  const placesStatus = usePlacesScript();
+/**
+ * Google's Places SDK surfaces auth/quota failures via window.gm_authFailure
+ * (no key, restricted referer, billing off, daily quota exceeded). We swap
+ * the form into "manual entry" mode and log a generic warning — never the
+ * env-var name or the literal Google error.
+ */
+function useGmAuthFailureWatch(onFail: () => void) {
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    type W = Window & { gm_authFailure?: () => void };
+    const w = window as W;
+    const prev = w.gm_authFailure;
+    w.gm_authFailure = () => {
+      console.warn('[stores] Maps SDK auth failure — falling back to manual entry');
+      onFail();
+      if (typeof prev === 'function') prev();
+    };
+    return () => { w.gm_authFailure = prev; };
+  }, [onFail]);
+}
 
-  const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
-  const [latitude, setLatitude] = useState('');
-  const [longitude, setLongitude] = useState('');
-  const [radius, setRadius] = useState('200');
+export default function StoreFormModal({ onClose, onSaved, initialStore }: Props) {
+  const { t } = useLanguage();
+  const placesStatusRaw = usePlacesScript();
+
+  // Local override that lets gm_authFailure flip the status to 'error'
+  // even after the script reported 'ready' (auth fails after script load).
+  const [forcedError, setForcedError] = useState(false);
+  const placesStatus: PlacesStatus = forcedError ? 'error' : placesStatusRaw;
+  useGmAuthFailureWatch(useCallback(() => setForcedError(true), []));
+
+  const isEdit = !!initialStore;
+
+  const [name, setName] = useState(initialStore?.name ?? '');
+  const [address, setAddress] = useState(initialStore?.address ?? '');
+  const [latitude, setLatitude] = useState(
+    initialStore ? String(initialStore.latitude) : ''
+  );
+  const [longitude, setLongitude] = useState(
+    initialStore ? String(initialStore.longitude) : ''
+  );
+  const [radius, setRadius] = useState(
+    String(initialStore?.geofence_radius_meters ?? 200)
+  );
+
+  // Coords are "locked" right after the user picks a Places suggestion:
+  // the inputs become read-only and a button lets them unlock for manual
+  // tweaks. In edit mode they start unlocked so the existing coords are
+  // editable; in create mode they start unlocked because nothing's filled
+  // yet (and locking only kicks in on suggestion selection).
+  const [coordsLocked, setCoordsLocked] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -92,8 +142,8 @@ export default function StoreFormModal({ onClose, onCreated }: Props) {
   const autocompleteRef = useRef<AutocompleteInstance | null>(null);
 
   // Wire the Places Autocomplete onto the address input when the SDK is
-  // ready. The user gets dropdown suggestions and selecting one fills the
-  // lat/lng inputs automatically.
+  // ready. Selecting a suggestion fills lat/lng and locks them — the user
+  // can unlock to override manually if Places returned a slightly off pin.
   useEffect(() => {
     if (placesStatus !== 'ready') return;
     if (!addressInputRef.current || autocompleteRef.current) return;
@@ -109,10 +159,19 @@ export default function StoreFormModal({ onClose, onCreated }: Props) {
       if (p.geometry?.location) {
         setLatitude(p.geometry.location.lat().toFixed(7));
         setLongitude(p.geometry.location.lng().toFixed(7));
+        setCoordsLocked(true);
       }
       if (p.formatted_address) setAddress(p.formatted_address);
     });
     autocompleteRef.current = ac;
+
+    return () => {
+      const evt = window.google?.maps?.event;
+      if (evt && autocompleteRef.current) {
+        try { evt.clearInstanceListeners(autocompleteRef.current); } catch { /* noop */ }
+      }
+      autocompleteRef.current = null;
+    };
   }, [placesStatus]);
 
   const handleSubmit = useCallback(async (e: FormEvent) => {
@@ -136,29 +195,39 @@ export default function StoreFormModal({ onClose, onCreated }: Props) {
 
     setSubmitting(true);
     try {
-      const res = await fetch('/api/stores', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: trimmedName,
-          address: address.trim() || null,
-          latitude: lat,
-          longitude: lng,
-          geofence_radius_meters: radNum,
-        }),
-      });
+      const payload = {
+        name: trimmedName,
+        address: address.trim() || null,
+        latitude: lat,
+        longitude: lng,
+        geofence_radius_meters: radNum,
+      };
+
+      const res = isEdit
+        ? await fetch('/api/stores', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: initialStore!.id, ...payload }),
+          })
+        : await fetch('/api/stores', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setFormError(data?.error ?? t('stores.errorCreate'));
+        // Never expose raw server messages — they may leak schema names or
+        // env-var hints. Map to a localized generic error.
+        setFormError(t(isEdit ? 'stores.errorUpdate' : 'stores.errorCreate'));
         setSubmitting(false);
         return;
       }
-      onCreated();
+      onSaved();
     } catch {
-      setFormError(t('stores.errorCreate'));
+      setFormError(t(isEdit ? 'stores.errorUpdate' : 'stores.errorCreate'));
     }
     setSubmitting(false);
-  }, [name, address, latitude, longitude, radius, t, onCreated]);
+  }, [name, address, latitude, longitude, radius, t, onSaved, isEdit, initialStore]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-0 sm:px-4">
@@ -166,8 +235,12 @@ export default function StoreFormModal({ onClose, onCreated }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
           <div>
-            <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">{t('stores.addTitle')}</h3>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400">{t('stores.addSubtitle')}</p>
+            <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">
+              {t(isEdit ? 'stores.editTitle' : 'stores.addTitle')}
+            </h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400">
+              {t(isEdit ? 'stores.editSubtitle' : 'stores.addSubtitle')}
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -216,7 +289,13 @@ export default function StoreFormModal({ onClose, onCreated }: Props) {
               ref={addressInputRef}
               type="text"
               value={address}
-              onChange={(e) => setAddress(e.target.value)}
+              onChange={(e) => {
+                setAddress(e.target.value);
+                // Typing freely unlocks coords so manual entry stays
+                // possible (and the coords don't appear "stuck" once the
+                // user starts modifying the address text).
+                if (coordsLocked) setCoordsLocked(false);
+              }}
               placeholder={t('stores.addressPlaceholder')}
               autoComplete="off"
               className="w-full max-w-full box-border px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm"
@@ -224,43 +303,67 @@ export default function StoreFormModal({ onClose, onCreated }: Props) {
             {placesStatus === 'loading' && (
               <p className="text-[10px] text-gray-400 mt-1">{t('stores.placesLoading')}</p>
             )}
-            {placesStatus === 'ready' && (
+            {placesStatus === 'ready' && !coordsLocked && (
               <p className="text-[10px] text-gray-400 mt-1">{t('stores.placesHint')}</p>
             )}
           </div>
 
           {/* Coords row */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
-                {t('stores.fieldLat')}
-              </label>
-              <input
-                type="number"
-                value={latitude}
-                onChange={(e) => setLatitude(e.target.value)}
-                step="any"
-                required
-                placeholder="32.83867"
-                className="w-full max-w-full box-border px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm tabular-nums"
-                style={{ minWidth: 0 }}
-              />
+          <div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+                  {t('stores.fieldLat')}
+                </label>
+                <input
+                  type="number"
+                  value={latitude}
+                  onChange={(e) => setLatitude(e.target.value)}
+                  step="any"
+                  required
+                  readOnly={coordsLocked}
+                  placeholder="32.83867"
+                  className={`w-full max-w-full box-border px-3 py-2 rounded-xl border bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm tabular-nums ${
+                    coordsLocked
+                      ? 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400'
+                      : 'border-gray-200 dark:border-gray-700'
+                  }`}
+                  style={{ minWidth: 0 }}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+                  {t('stores.fieldLng')}
+                </label>
+                <input
+                  type="number"
+                  value={longitude}
+                  onChange={(e) => setLongitude(e.target.value)}
+                  step="any"
+                  required
+                  readOnly={coordsLocked}
+                  placeholder="-97.01237"
+                  className={`w-full max-w-full box-border px-3 py-2 rounded-xl border bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm tabular-nums ${
+                    coordsLocked
+                      ? 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400'
+                      : 'border-gray-200 dark:border-gray-700'
+                  }`}
+                  style={{ minWidth: 0 }}
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
-                {t('stores.fieldLng')}
-              </label>
-              <input
-                type="number"
-                value={longitude}
-                onChange={(e) => setLongitude(e.target.value)}
-                step="any"
-                required
-                placeholder="-97.01237"
-                className="w-full max-w-full box-border px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm tabular-nums"
-                style={{ minWidth: 0 }}
-              />
-            </div>
+            {coordsLocked && (
+              <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-gray-500 dark:text-gray-400">
+                <span className="flex-1 leading-snug">🔒 {t('stores.coordsLocked')}</span>
+                <button
+                  type="button"
+                  onClick={() => setCoordsLocked(false)}
+                  className="text-[10px] font-bold text-[var(--primary)] underline underline-offset-2 hover:opacity-80 whitespace-nowrap flex-shrink-0"
+                >
+                  {t('stores.editCoordsManually')}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Radius */}
@@ -304,7 +407,9 @@ export default function StoreFormModal({ onClose, onCreated }: Props) {
             className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-colors disabled:opacity-60"
             style={{ backgroundColor: 'var(--primary)' }}
           >
-            {submitting ? t('stores.creating') : t('stores.createBtn')}
+            {submitting
+              ? t(isEdit ? 'stores.saving' : 'stores.creating')
+              : t(isEdit ? 'stores.saveBtn' : 'stores.createBtn')}
           </button>
         </div>
       </div>
