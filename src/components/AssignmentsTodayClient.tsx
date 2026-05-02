@@ -74,7 +74,14 @@ export default function AssignmentsTodayClient() {
   const [loaded, setLoaded] = useState(false);
   const [acting, setActing] = useState<string | null>(null);
 
-  // Per-row "live now" tick (every 30s) to refresh the in-progress effective time
+  // Timestamp (ms epoch) of the last successful fetch. Cards extrapolate
+  // in-progress effective time by adding (Date.now() - fetchedAt) to the
+  // server's effective_ms_now. Stored as state so it triggers re-renders
+  // when refetched, and so the per-minute tick below sees a fresh value.
+  const [fetchedAt, setFetchedAt] = useState<number>(() => Date.now());
+
+  // Per-minute "live now" tick: bumps `tick` so in-progress cards re-render
+  // and re-evaluate (Date.now() - fetchedAt).
   const [tick, setTick] = useState(0);
 
   // Highlight tracker — set of currently-highlighted assignment IDs. Stored
@@ -107,6 +114,7 @@ export default function AssignmentsTodayClient() {
       if (res.ok) {
         const j = await res.json();
         const next: TodayAssignment[] = j.assignments ?? [];
+        setFetchedAt(Date.now());
         // Detect changes vs current items to fire highlight animations
         setItems((prev) => {
           if (prev.length > 0) {
@@ -142,9 +150,11 @@ export default function AssignmentsTodayClient() {
     return () => { sb.removeChannel(channel); };
   }, [fetchToday]);
 
-  // 30s tick to refresh in-progress live time
+  // Per-minute tick to roll the live elapsed-time display on in-progress
+  // cards. We don't refetch from the server here — the live value is
+  // computed locally as effective_ms_now + (Date.now() - fetchedAt).
   useEffect(() => {
-    const id = setInterval(() => setTick((n) => n + 1), 30_000);
+    const id = setInterval(() => setTick((n) => n + 1), 60_000);
     return () => clearInterval(id);
   }, []);
 
@@ -257,6 +267,7 @@ export default function AssignmentsTodayClient() {
               key={a.id}
               a={a}
               tick={tick}
+              fetchedAt={fetchedAt}
               highlighted={highlighted.has(a.id)}
               acting={acting === a.id}
               lang={lang}
@@ -276,6 +287,7 @@ export default function AssignmentsTodayClient() {
               key={a.id}
               a={a}
               tick={tick}
+              fetchedAt={fetchedAt}
               highlighted={highlighted.has(a.id)}
               acting={acting === a.id}
               lang={lang}
@@ -295,6 +307,7 @@ export default function AssignmentsTodayClient() {
               key={a.id}
               a={a}
               tick={tick}
+              fetchedAt={fetchedAt}
               highlighted={highlighted.has(a.id)}
               acting={acting === a.id}
               lang={lang}
@@ -314,6 +327,7 @@ export default function AssignmentsTodayClient() {
               key={a.id}
               a={a}
               tick={tick}
+              fetchedAt={fetchedAt}
               highlighted={highlighted.has(a.id)}
               acting={acting === a.id}
               lang={lang}
@@ -389,7 +403,11 @@ function Section({
 
 interface CardProps {
   a: TodayAssignment;
+  /** Bumped by the parent's per-minute timer; we read it only as a render
+   *  trigger so the Date.now() call in liveMs picks up a fresh value. */
   tick: number;
+  /** Epoch ms of the last successful /api/assignments/today fetch. */
+  fetchedAt: number;
   highlighted: boolean;
   acting: boolean;
   lang: 'es' | 'en';
@@ -398,14 +416,15 @@ interface CardProps {
   onCancel: (id: string) => void;
 }
 
-const Card = function Card({ a, tick, highlighted, acting, lang, t, onTimeline, onCancel }: CardProps) {
-  // Per-card live elapsed time. For in_progress, extrapolate from server's
-  // effective_ms_now using "tick" as a refresh trigger every 30s.
-  // The server already accumulated up to its serverNow; we add the time
-  // since this fetch arrived. Simpler: just rely on tick + reusing
-  // effective_ms_now (server refreshes on every realtime change).
+const Card = function Card({ a, tick, fetchedAt, highlighted, acting, lang, t, onTimeline, onCancel }: CardProps) {
+  // Per-card live elapsed time. For in_progress, extrapolate from the
+  // server's effective_ms_now by adding the wall-clock time elapsed since
+  // the last fetch. `tick` is referenced only to force a re-render every
+  // minute — Date.now() does the actual math, so the value never drifts
+  // by more than ~60s and resets exactly when fetchedAt updates.
+  void tick; // re-render trigger only
   const liveMs = a.status === 'in_progress'
-    ? a.effective_ms_now + Math.max(0, (tick * 30_000) - 0) // tick keeps ref fresh
+    ? a.effective_ms_now + Math.max(0, Date.now() - fetchedAt)
     : a.effective_ms_now;
 
   const lastEvtFmt = a.last_event ? fmtTime(a.last_event.occurred_at, lang) : null;

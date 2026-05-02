@@ -72,15 +72,20 @@ export default function ActivityClient({ session }: { session: Session }) {
   // Per-date assignment context (only relevant when Retail is in play)
   const [assignmentForDate, setAssignmentForDate] = useState<AssignmentForDate | null>(null);
   const [assignmentLoading, setAssignmentLoading] = useState(false);
+  const [assignmentLoaded, setAssignmentLoaded] = useState(false);
   const loadAssignmentForDate = useCallback(async (d: string) => {
     setAssignmentLoading(true);
     try {
       const sb = getSupabaseBrowser();
+      // Pull only assignments whose status is "live" (matches the server-side
+      // resolveActiveAssignment) so a stale cancelled/rejected row never wins
+      // over a fresh live one — order by created_at desc still applies.
       const { data } = await sb
         .from('assignments')
         .select('id, status, store:stores(name, address)')
         .eq('agent_id', activeUserId)
         .eq('shift_date', d)
+        .in('status', ['accepted', 'in_progress', 'completed', 'incomplete'])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -99,6 +104,7 @@ export default function ActivityClient({ session }: { session: Session }) {
       setAssignmentForDate(null);
     }
     setAssignmentLoading(false);
+    setAssignmentLoaded(true);
   }, [activeUserId]);
 
   // If admin visits /activity without preview mode, redirect to /admin
@@ -190,25 +196,29 @@ export default function ActivityClient({ session }: { session: Session }) {
   // Single source of truth for which campaigns the agent may register today.
   // Centralized so the UI, the +/- log endpoint and the upsert endpoint all
   // agree. See lib/activity.ts → getAllowedActivityModalities for the table.
+  //
+  // Don't compute until BOTH modality + assignment have finished loading.
+  // Otherwise the first render flashes "D2D" before the assignment query
+  // resolves, and any concurrent applyEntry() call could lock that flash in.
+  const formReady = modalityLoaded && assignmentLoaded;
   const hasActiveAssignment =
     !!assignmentForDate
     && (assignmentForDate.status === 'accepted' || assignmentForDate.status === 'in_progress');
-  const allowedModalities: CampaignType[] = modalityLoaded
+  const allowedModalities: CampaignType[] = formReady
     ? getAllowedActivityModalities(userModality, hasActiveAssignment)
-    : ['D2D'];
+    : ['D2D']; // placeholder while the form is gated below
   const showCampaignSelector = allowedModalities.length > 1;
 
-  // If the current campaign isn't allowed today, snap to the first allowed
-  // one (which is always Retail when there's an active assignment, even if
-  // the agent's profile modality is d2d — that's the rule that has failed
-  // repeatedly in earlier iterations).
+  // Snap campaignType into the allowed set whenever ANY input changes —
+  // including campaignType itself (catches stale values written by
+  // applyEntry() after a server fetch). Once it lands inside the set the
+  // .includes() check is true and the effect is a no-op.
   useEffect(() => {
-    if (!modalityLoaded) return;
+    if (!formReady) return;
     if (!allowedModalities.includes(campaignType)) {
       setCampaignType(allowedModalities[0]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modalityLoaded, userModality, assignmentForDate?.id, assignmentForDate?.status]);
+  }, [formReady, allowedModalities, campaignType]);
 
   // Restore localStorage draft once initial load is done and no DB entry exists for today
   useEffect(() => {
@@ -478,8 +488,9 @@ export default function ActivityClient({ session }: { session: Session }) {
                 </div>
               )}
 
-              {/* Location */}
-              {campaignType === 'D2D' && (
+              {/* Location — gated by formReady so the D2D zip-code field
+                   never flashes before we know whether D2D is allowed. */}
+              {formReady && campaignType === 'D2D' && (
                 <div className="mb-4">
                   <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">{t('activity.zipCode')}</label>
                   <input type="text" value={zipCode} onChange={(e) => setZipCode(e.target.value)}
@@ -525,7 +536,10 @@ export default function ActivityClient({ session }: { session: Session }) {
                 </div>
               )}
 
-              {/* Metric fields with +/- */}
+              {/* Metric fields with +/- — gated by formReady AND only when
+                  the current campaignType is in the allowed set, so D2D
+                  metric inputs never flash when D2D isn't allowed today. */}
+              {formReady && allowedModalities.includes(campaignType) && (
               <div className="space-y-3">
                 {fields.map((f) => {
                   const val = (metrics as Record<string, number>)[f.key] ?? 0;
@@ -592,6 +606,11 @@ export default function ActivityClient({ session }: { session: Session }) {
                   </div>
                 )}
               </div>
+              )}
+
+              {!formReady && (
+                <div className="py-8 text-center text-xs text-gray-400">{t('common.loading')}</div>
+              )}
             </div>
           </div>
 

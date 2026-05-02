@@ -32,6 +32,9 @@ interface Props {
   liveDistanceMeters: number | null;
   /** Forces re-render every minute. */
   tick: number;
+  /** Epoch ms of the last successful /api/assignments/my fetch. The live
+   *  elapsed time is computed as effective_ms_now + (now - fetchedAt). */
+  fetchedAt: number;
 }
 
 const formatHHMM = (ms: number) => {
@@ -77,19 +80,20 @@ function derivePunctuality(
   return 'no_show';
 }
 
-export default function AssignmentProgressCard({ assignment: a, liveDistanceMeters, tick }: Props) {
+export default function AssignmentProgressCard({ assignment: a, liveDistanceMeters, tick, fetchedAt }: Props) {
   const { t, lang } = useLanguage();
 
-  // Live elapsed: extrapolate effective_ms_now if currently counting, else freeze.
+  // Live elapsed: when the assignment is in_progress, add the wall-clock
+  // time elapsed since the fetch to the server's snapshot. `tick` exists
+  // only as a re-render trigger; the actual math uses Date.now() so the
+  // value resets exactly when fetchedAt updates and never drifts past the
+  // last refetch.
   const elapsedMs = useMemo(() => {
+    void tick; // re-render trigger only
     const state = deriveState(a);
     if (state !== 'inProgress') return a.effective_ms_now;
-    // For in_progress (counting), extrapolate from the server's snapshot up to
-    // local now using a per-minute tick. We approximate the time elapsed since
-    // the snapshot by the tick counter (each tick = 1 minute since mount/refetch).
-    return a.effective_ms_now + tick * 60_000;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [a.effective_ms_now, a.status, a.last_event?.event_type, tick]);
+    return a.effective_ms_now + Math.max(0, Date.now() - fetchedAt);
+  }, [a, fetchedAt, tick]);
 
   const expectedMs = a.expected_duration_min * 60_000;
   const progressPct = Math.max(0, Math.min(100, Math.round((elapsedMs / expectedMs) * 100)));

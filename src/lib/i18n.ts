@@ -1538,10 +1538,14 @@ export function fmtDate(dateStr: string, lang: Lang = 'es'): string {
   return `${mmm}/${dd}/${yy}`;
 }
 
-/** Format a time as "H:MM (am/pm)" — single source of truth for time
+/** Format a time as "HH:MM AM/PM" — single source of truth for time
  *  display across the platform. Accepts either a full ISO timestamp or a
- *  bare "HH:MM[:SS]" wall-clock string. */
-export function fmtTime(input: string | Date | null | undefined, lang: Lang = 'es'): string {
+ *  bare "HH:MM[:SS]" wall-clock string. The hour is zero-padded and the
+ *  meridiem suffix is uppercase (no parentheses), per the platform style
+ *  guide. The `lang` arg is kept for API compatibility but the format is
+ *  identical in every locale. */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function fmtTime(input: string | Date | null | undefined, _lang: Lang = 'es'): string {
   if (!input) return '—';
   let h: number;
   let m: number;
@@ -1561,10 +1565,11 @@ export function fmtTime(input: string | Date | null | undefined, lang: Lang = 'e
     h = input.getHours();
     m = input.getMinutes();
   }
-  const ampm = h >= 12 ? (lang === 'en' ? 'pm' : 'pm') : (lang === 'en' ? 'am' : 'am');
+  const ampm = h >= 12 ? 'PM' : 'AM';
   const h12 = h % 12 || 12;
+  const hh = String(h12).padStart(2, '0');
   const mm = String(m).padStart(2, '0');
-  return `${h12}:${mm} (${ampm})`;
+  return `${hh}:${mm} ${ampm}`;
 }
 
 /** Format date + time as "MMM/DD/YY · H:MM (am/pm)". Uses fmtTime for the

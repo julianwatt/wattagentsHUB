@@ -131,9 +131,11 @@ export default function AssignmentCards({ role }: Props) {
   // Geolocation for the active card's distance
   const [position, setPosition] = useState<{ lat: number; lng: number } | null>(null);
 
-  // Tick to force countdown re-render every minute. Exposed as `tick` for
-  // child components that derive their own time-dependent state from it.
+  // Tick to force countdown re-render every minute. `tick` is just a render
+  // trigger — child components compute time deltas from `fetchedAt` so they
+  // never drift if the parent component mounts long before this fetch.
   const [tick, setNowTick] = useState(0);
+  const [fetchedAt, setFetchedAt] = useState<number>(() => Date.now());
 
   // Skip everything if not an agent
   // Anyone who can RECEIVE assignments (agents + managers) sees these cards
@@ -147,6 +149,7 @@ export default function AssignmentCards({ role }: Props) {
       if (res.ok) {
         const j: MyEnvelope = await res.json();
         setData(j);
+        setFetchedAt(Date.now());
       }
     } catch {
       /* silent */
@@ -365,6 +368,7 @@ export default function AssignmentCards({ role }: Props) {
             }}
             liveDistanceMeters={dist}
             tick={tick}
+            fetchedAt={fetchedAt}
           />
           <div
             className="rounded-2xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-gray-900 shadow-md overflow-hidden"

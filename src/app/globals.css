@@ -37,9 +37,33 @@ html, body {
 .text-dark { color: var(--dark); }
 .ring-brand { --tw-ring-color: var(--primary); }
 
+/* === TOUCH-DEVICE INPUT BASELINE === */
+/* iOS Safari auto-zooms when focusing an input whose font-size < 16px. The
+   fix is global, not viewport hacks (user-scalable=no breaks accessibility).
+   Apply to every coarse-pointer device (iPhone + iPad + Android), regardless
+   of width, to every input/select/textarea. If a control needs to look
+   visually smaller, shrink it via padding or container width — never the
+   font-size on mobile. */
+@media (pointer: coarse) {
+  input[type="text"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  input[type="email"],
+  input[type="password"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="search"],
+  input:not([type]),
+  select,
+  textarea {
+    font-size: 16px; /* iOS no-zoom baseline — DO NOT lower below 16px */
+  }
+}
+
 /* === TABLET / iPad TOUCH OPTIMIZATION === */
 @media (pointer: coarse) and (min-width: 768px) {
-  /* Larger tap targets for inputs and buttons on touch tablets */
+  /* Larger tap targets for inputs on touch tablets */
   input[type="text"],
   input[type="number"],
   input[type="date"],
@@ -48,7 +72,6 @@ html, body {
   select,
   textarea {
     min-height: 44px;
-    font-size: 16px; /* prevents iOS auto-zoom on focus */
   }
 
   /* Comfortable button tap zones (exclude toggle switches & tiny inline controls) */

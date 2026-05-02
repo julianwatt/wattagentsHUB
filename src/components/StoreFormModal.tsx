@@ -57,16 +57,27 @@ function usePlacesScript(): PlacesStatus {
   const [status, setStatus] = useState<PlacesStatus>('loading');
   useEffect(() => {
     const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!key) { setStatus('no-key'); return; }
+    if (!key) {
+      console.warn('[stores] NEXT_PUBLIC_GOOGLE_MAPS_API_KEY missing — autocomplete disabled');
+      setStatus('no-key');
+      return;
+    }
     if (typeof window === 'undefined') return;
     if (window.google?.maps?.places) { setStatus('ready'); return; }
 
     const existing = document.getElementById(PLACES_SCRIPT_ID) as HTMLScriptElement | null;
     if (existing) {
+      // Another mount is already loading the script — poll for window.google
+      // and surface an error if it never arrives (typically a network issue
+      // or the SDK was injected but failed to initialise).
       const check = setInterval(() => {
         if (window.google?.maps?.places) { setStatus('ready'); clearInterval(check); }
       }, 100);
-      const timeout = setTimeout(() => { clearInterval(check); setStatus('error'); }, 8000);
+      const timeout = setTimeout(() => {
+        clearInterval(check);
+        console.warn('[stores] Maps SDK never reported window.google.maps.places after 8s');
+        setStatus('error');
+      }, 8000);
       return () => { clearInterval(check); clearTimeout(timeout); };
     }
 
@@ -75,8 +86,21 @@ function usePlacesScript(): PlacesStatus {
     s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&v=weekly`;
     s.async = true;
     s.defer = true;
-    s.onload = () => setStatus('ready');
-    s.onerror = () => setStatus('error');
+    s.onload = () => {
+      // Some auth failures don't fire .onerror (the SDK loads then logs to
+      // console). gm_authFailure is the canonical hook for those — wired
+      // separately by useGmAuthFailureWatch in the parent component.
+      if (window.google?.maps?.places) {
+        setStatus('ready');
+      } else {
+        console.warn('[stores] Maps SDK loaded but places library is missing');
+        setStatus('error');
+      }
+    };
+    s.onerror = (ev) => {
+      console.warn('[stores] Maps SDK script failed to load (network/CSP/referrer block):', ev);
+      setStatus('error');
+    };
     document.head.appendChild(s);
     return () => { /* keep script in DOM for reuse across mounts */ };
   }, []);
@@ -164,6 +188,11 @@ export default function StoreFormModal({ onClose, onSaved, initialStore }: Props
       if (p.formatted_address) setAddress(p.formatted_address);
     });
     autocompleteRef.current = ac;
+    // Log once so we can confirm in production console that the widget
+    // attached. If suggestions still never appear after this log, the
+    // problem is in Google Cloud (Places API not enabled, billing off,
+    // or referrer restriction blocking the request).
+    console.info('[stores] Places Autocomplete attached to address input');
 
     return () => {
       const evt = window.google?.maps?.event;
