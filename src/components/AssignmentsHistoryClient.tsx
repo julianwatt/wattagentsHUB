@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useLanguage } from './LanguageContext';
+import { fmtTime as fmtTimeI18n } from '@/lib/i18n';
 import AssignmentTimelineModal from './AssignmentTimelineModal';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -89,7 +90,6 @@ export default function AssignmentsHistoryClient() {
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<SummaryShape | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [exporting, setExporting] = useState(false);
 
   // Detail modal state
   const [detailFor, setDetailFor] = useState<HistoryRow | null>(null);
@@ -194,37 +194,12 @@ export default function AssignmentsHistoryClient() {
   };
   const sortIcon = (key: SortKey) => sortKey === key ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
 
-  // ── CSV export ──────────────────────────────────────────────────────────
-  const exportCsv = async () => {
-    setExporting(true);
-    try {
-      const sp = new URLSearchParams(queryParams);
-      sp.set('format', 'csv');
-      sp.set('sort', sortKey);
-      sp.set('dir', sortDir);
-      const res = await fetch(`/api/assignments/history?${sp.toString()}`, { cache: 'no-store' });
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `assignments_${from || 'all'}_to_${to || 'all'}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-      }
-    } catch { /* silent */ }
-    setExporting(false);
-  };
-
   // ── Formatting helpers ──────────────────────────────────────────────────
   const fmtDate = (iso: string) =>
     new Date(`${iso}T12:00:00Z`).toLocaleDateString(lang === 'es' ? 'es-MX' : 'en-US', {
       weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
     });
-  const fmtTime = (iso: string | null) =>
-    iso ? new Date(iso).toLocaleTimeString(lang === 'es' ? 'es-MX' : 'en-US', { hour: '2-digit', minute: '2-digit' }) : '—';
+  const fmtTime = (iso: string | null) => fmtTimeI18n(iso, lang);
 
   // Cumplimiento label/colour for a row
   const durationCellClass = (r: HistoryRow): string => {
@@ -293,26 +268,19 @@ export default function AssignmentsHistoryClient() {
               >
                 {t('assignments.clearFilters')}
               </button>
-              <button
-                onClick={exportCsv}
-                disabled={exporting || total === 0}
-                className="text-[11px] font-bold px-2.5 py-1 rounded-lg text-white transition-opacity disabled:opacity-50"
-                style={{ backgroundColor: 'var(--primary)' }}
-              >
-                {exporting ? '…' : `↓ ${t('assignments.exportCsv')}`}
-              </button>
             </div>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
-            {/* Date range */}
+          {/* Date range — both fields share a row on every breakpoint */}
+          <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">{t('assignments.filterFrom')}</label>
               <input
                 type="date"
                 value={from}
                 onChange={(e) => setFrom(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                className="w-full max-w-full box-border px-2.5 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--primary)] appearance-none"
+                style={{ minWidth: 0 }}
               />
             </div>
             <div>
@@ -321,7 +289,8 @@ export default function AssignmentsHistoryClient() {
                 type="date"
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                className="w-full max-w-full box-border px-2.5 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--primary)] appearance-none"
+                style={{ minWidth: 0 }}
               />
             </div>
           </div>
@@ -440,7 +409,7 @@ export default function AssignmentsHistoryClient() {
                     <p className="text-[10px] text-gray-400">@{r.agent?.username ?? '—'}</p>
                   </td>
                   <td className="px-3 py-2.5 text-gray-600 dark:text-gray-300">{r.store?.name ?? '—'}</td>
-                  <td className="px-3 py-2.5 tabular-nums text-gray-700 dark:text-gray-200">{r.scheduled_start_time.slice(0, 5)}</td>
+                  <td className="px-3 py-2.5 tabular-nums text-gray-700 dark:text-gray-200">{fmtTimeI18n(r.scheduled_start_time, lang)}</td>
                   <td className="px-3 py-2.5 tabular-nums">
                     {r.actual_entry_at ? (
                       <span className="text-emerald-600 dark:text-emerald-400">{fmtTime(r.actual_entry_at)}</span>

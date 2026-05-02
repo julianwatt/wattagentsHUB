@@ -1,7 +1,11 @@
 'use client';
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useLanguage } from './LanguageContext';
+import { fmtTime as fmtTimeI18n } from '@/lib/i18n';
+import AssignmentCards from './AssignmentCards';
 import AssignmentTimelineModal from './AssignmentTimelineModal';
+
+interface Props { role: string; }
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface MyHistoryRow {
@@ -44,7 +48,7 @@ function formatHHMM(min: number): string {
 const DURATION_BUCKETS = ['met', 'partial', 'unmet'] as const;
 
 // ── Component ────────────────────────────────────────────────────────────────
-export default function MyPerformanceClient() {
+export default function MyPerformanceClient({ role }: Props) {
   const { t, lang } = useLanguage();
 
   const [from, setFrom] = useState(daysAgoLocal(30));
@@ -118,8 +122,7 @@ export default function MyPerformanceClient() {
     new Date(`${iso}T12:00:00Z`).toLocaleDateString(lang === 'es' ? 'es-MX' : 'en-US', {
       weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
     });
-  const fmtTime = (iso: string | null) =>
-    iso ? new Date(iso).toLocaleTimeString(lang === 'es' ? 'es-MX' : 'en-US', { hour: '2-digit', minute: '2-digit' }) : '—';
+  const fmtTime = (iso: string | null) => fmtTimeI18n(iso, lang);
 
   const durationBadge = (r: MyHistoryRow) => {
     if (r.met_duration === true) return <Badge color="emerald">✓ {t('assignments.complianceMet')}</Badge>;
@@ -151,6 +154,10 @@ export default function MyPerformanceClient() {
           {t('myPerformance.subtitle')}
         </p>
       </div>
+
+      {/* Live assignment cards (pending / accepted / in-progress / waiting).
+          Self-gates on role and renders nothing when there's no live work. */}
+      <AssignmentCards role={role} />
 
       {/* Summary */}
       <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-3 sm:p-4">
@@ -260,7 +267,7 @@ export default function MyPerformanceClient() {
                 >
                   <td className="px-3 py-2.5 tabular-nums text-gray-700 dark:text-gray-200 whitespace-nowrap">{fmtDate(r.shift_date)}</td>
                   <td className="px-3 py-2.5 text-gray-600 dark:text-gray-300">{r.store?.name ?? '—'}</td>
-                  <td className="px-3 py-2.5 tabular-nums text-gray-700 dark:text-gray-200">{r.scheduled_start_time.slice(0, 5)}</td>
+                  <td className="px-3 py-2.5 tabular-nums text-gray-700 dark:text-gray-200">{fmtTimeI18n(r.scheduled_start_time, lang)}</td>
                   <td className="px-3 py-2.5 tabular-nums">
                     {r.actual_entry_at ? (
                       <span className="text-emerald-600 dark:text-emerald-400">{fmtTime(r.actual_entry_at)}</span>

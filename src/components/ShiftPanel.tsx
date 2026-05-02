@@ -4,6 +4,7 @@ import { usePushSubscription } from './usePushSubscription';
 import { useLanguage } from './LanguageContext';
 import { useShift, ShiftEvent, ShiftStore } from './ShiftContext';
 import { fmtDistance } from '@/lib/geo';
+import { fmtTime } from '@/lib/i18n';
 
 function HourglassIcon({ className }: { className?: string }) {
   return (
@@ -15,7 +16,7 @@ function HourglassIcon({ className }: { className?: string }) {
 
 // ── Helpers ──
 function fmtTimeShort(iso: string, lang: string): string {
-  return new Date(iso).toLocaleTimeString(lang === 'en' ? 'en-US' : 'es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return fmtTime(iso, lang as 'es' | 'en');
 }
 
 function formatElapsed(ms: number): string {

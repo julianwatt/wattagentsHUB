@@ -5,7 +5,7 @@ import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
 import { useTheme } from './ThemeContext';
 import { usePreviewRole, useActiveUserId } from './PreviewRoleContext';
-import { fmtDate } from '@/lib/i18n';
+import { fmtDate, fmtTime } from '@/lib/i18n';
 import type { Lang } from '@/lib/i18n';
 import { ActivityEntryWithAgent, effectivenessRate } from '@/lib/activity';
 import {
@@ -54,12 +54,6 @@ function buildChartData(entries: ActivityEntryWithAgent[], lang: Lang = 'es') {
 function sumField(entries: ActivityEntryWithAgent[], fn: (e: ActivityEntryWithAgent) => number): number {
   return entries.reduce((s, e) => s + fn(e), 0);
 }
-
-function fmtTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-}
-
 
 interface StatCardProps { label: string; value: string | number; sub?: string; color?: string; icon?: string; }
 function StatCard({ label, value, sub, color = 'orange', icon }: StatCardProps) {
@@ -269,7 +263,7 @@ export default function DashboardClient({ session }: { session: Session }) {
                               <span className="text-[11px] font-bold flex-shrink-0" style={{ color: 'var(--primary)' }}>{e.sales} {t('common.closings')}</span>
                             </div>
                             <div className="flex gap-2 text-[10px] text-gray-400 mt-0.5">
-                              <span>🕐 {fmtTime(e.first_activity_at)}–{fmtTime(e.last_activity_at)}</span>
+                              <span>🕐 {fmtTime(e.first_activity_at, lang)}–{fmtTime(e.last_activity_at, lang)}</span>
                               <span className="ml-auto">{effectivenessRate(e).toFixed(1)}%</span>
                             </div>
                             {canSeeTeam && e.agent_name && (

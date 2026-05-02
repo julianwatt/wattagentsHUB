@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useLanguage } from './LanguageContext';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
 import { fmtDistance } from '@/lib/geo';
+import { fmtTime } from '@/lib/i18n';
 import AssignmentTimelineModal from './AssignmentTimelineModal';
 import type { GeofenceEventType } from '@/lib/assignmentGeofence';
 
@@ -391,7 +392,7 @@ interface CardProps {
   tick: number;
   highlighted: boolean;
   acting: boolean;
-  lang: string;
+  lang: 'es' | 'en';
   t: (k: string) => string;
   onTimeline: (p: { id: string; agentName: string; storeName: string }) => void;
   onCancel: (id: string) => void;
@@ -407,10 +408,10 @@ const Card = function Card({ a, tick, highlighted, acting, lang, t, onTimeline, 
     ? a.effective_ms_now + Math.max(0, (tick * 30_000) - 0) // tick keeps ref fresh
     : a.effective_ms_now;
 
-  const lastEvtFmt = a.last_event ? new Date(a.last_event.occurred_at).toLocaleTimeString(lang === 'es' ? 'es-MX' : 'en-US', { hour: '2-digit', minute: '2-digit' }) : null;
-  const startFmt = a.scheduled_start_time.slice(0, 5);
-  const entryFmt = a.actual_entry_at ? new Date(a.actual_entry_at).toLocaleTimeString(lang === 'es' ? 'es-MX' : 'en-US', { hour: '2-digit', minute: '2-digit' }) : null;
-  const exitFmt = a.actual_exit_at ? new Date(a.actual_exit_at).toLocaleTimeString(lang === 'es' ? 'es-MX' : 'en-US', { hour: '2-digit', minute: '2-digit' }) : null;
+  const lastEvtFmt = a.last_event ? fmtTime(a.last_event.occurred_at, lang) : null;
+  const startFmt = fmtTime(a.scheduled_start_time, lang);
+  const entryFmt = a.actual_entry_at ? fmtTime(a.actual_entry_at, lang) : null;
+  const exitFmt = a.actual_exit_at ? fmtTime(a.actual_exit_at, lang) : null;
 
   const statusBadge: { color: string; label: string } = (() => {
     if (a.status === 'pending') return { color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300', label: t('assignments.statusPending') };

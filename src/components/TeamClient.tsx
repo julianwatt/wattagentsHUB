@@ -4,7 +4,7 @@ import { Session } from 'next-auth';
 import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
 import { usePreviewRole, useActiveUserId } from './PreviewRoleContext';
-import { fmtDate } from '@/lib/i18n';
+import { fmtDate, fmtTime } from '@/lib/i18n';
 import { ActivityEntryWithAgent, effectivenessRate } from '@/lib/activity';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
 import ToggleSwitch from './ToggleSwitch';
@@ -26,10 +26,6 @@ interface TeamData {
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
-function fmtTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-}
 function daysSince(date: string): number {
   const ms = Date.now() - new Date(date).getTime();
   return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
@@ -296,13 +292,13 @@ export default function TeamClient({ session }: { session: Session }) {
                       <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/40 px-4 py-3">
                         <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">{t('team.firstSale')}</p>
                         <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5">{findAgent(todaysSales.first.entry.agent_id)?.name ?? todaysSales.first.entry.agent_name}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">🕐 {fmtTime(todaysSales.first.time)}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">🕐 {fmtTime(todaysSales.first.time, lang)}</p>
                         <p className="text-[10px] text-gray-400 mt-0.5">{fmtDate(todaysSales.date, lang)}</p>
                       </div>
                       <div className="rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/40 px-4 py-3">
                         <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">{t('team.lastSale')}</p>
                         <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5">{findAgent(todaysSales.last.entry.agent_id)?.name ?? todaysSales.last.entry.agent_name}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">🕐 {fmtTime(todaysSales.last.time)}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">🕐 {fmtTime(todaysSales.last.time, lang)}</p>
                         <p className="text-[10px] text-gray-400 mt-0.5">{fmtDate(todaysSales.date, lang)}</p>
                       </div>
                     </div>

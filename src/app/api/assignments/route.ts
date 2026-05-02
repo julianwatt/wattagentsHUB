@@ -144,8 +144,9 @@ export async function POST(req: NextRequest) {
   if (!agent.is_active) {
     return NextResponse.json({ error: 'Agent is not active' }, { status: 400 });
   }
-  if (agent.role !== 'agent') {
-    return NextResponse.json({ error: 'Target user is not an agent' }, { status: 400 });
+  // Agents and managers (jr/sr) can be assigned. Higher roles cannot.
+  if (!['agent', 'jr_manager', 'sr_manager'].includes(agent.role)) {
+    return NextResponse.json({ error: 'Target user role cannot receive assignments' }, { status: 400 });
   }
 
   // Verify store exists

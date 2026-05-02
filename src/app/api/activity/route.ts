@@ -75,22 +75,34 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Look up the active assignment once — used for both Retail resolution
+  // and the D2D-with-active-assignment block.
+  const activeAssignment = await resolveActiveAssignment(session.user.id, date);
+
+  // ── D2D blocked when the user has an accepted/in_progress Retail assignment.
+  // The assignment is the source of truth for what they're working on today.
+  if (ct === 'D2D' && activeAssignment && (activeAssignment.status === 'accepted' || activeAssignment.status === 'in_progress')) {
+    return NextResponse.json(
+      { error: 'D2D_BLOCKED_BY_ASSIGNMENT', message: 'Tienes una asignación de tienda activa — no puedes registrar D2D hoy' },
+      { status: 403 },
+    );
+  }
+
   // ── Retail: store comes from the active assignment, NOT from the client ──
   let resolvedStoreChain = store_chain;
   let resolvedStoreAddress = store_address;
   let resolvedAssignmentId: string | null = null;
 
   if (ct === 'Retail') {
-    const assignment = await resolveActiveAssignment(session.user.id, date);
-    if (!assignment) {
+    if (!activeAssignment) {
       return NextResponse.json(
         { error: 'NO_ASSIGNMENT', message: 'No tienes una asignación activa para esta fecha' },
         { status: 409 },
       );
     }
-    resolvedStoreChain = assignment.store_name;
-    resolvedStoreAddress = assignment.store_address ?? null;
-    resolvedAssignmentId = assignment.assignment_id;
+    resolvedStoreChain = activeAssignment.store_name;
+    resolvedStoreAddress = activeAssignment.store_address ?? null;
+    resolvedAssignmentId = activeAssignment.assignment_id;
   }
 
   try {

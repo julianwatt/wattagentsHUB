@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useLanguage } from './LanguageContext';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
 import { haversineMeters, fmtDistance } from '@/lib/geo';
+import { fmtTime } from '@/lib/i18n';
 import AssignmentTracker from './AssignmentTracker';
 import AssignmentProgressCard from './AssignmentProgressCard';
 import type { GeofenceEventType } from '@/lib/assignmentGeofence';
@@ -135,7 +136,8 @@ export default function AssignmentCards({ role }: Props) {
   const [tick, setNowTick] = useState(0);
 
   // Skip everything if not an agent
-  const isAgent = role === 'agent';
+  // Anyone who can RECEIVE assignments (agents + managers) sees these cards
+  const isAgent = role === 'agent' || role === 'jr_manager' || role === 'sr_manager';
 
   // ── Fetch ───────────────────────────────────────────────────────────────
   const fetchMine = useCallback(async () => {
@@ -298,7 +300,7 @@ export default function AssignmentCards({ role }: Props) {
               </span>
               <span className="text-gray-700 dark:text-gray-200">
                 <span className="text-gray-500 dark:text-gray-400">{t('assignments.cardStartTime')}:</span>{' '}
-                <strong className="tabular-nums">{a.scheduled_start_time.slice(0, 5)}</strong>
+                <strong className="tabular-nums">{fmtTime(a.scheduled_start_time, lang)}</strong>
               </span>
               <span className="text-gray-700 dark:text-gray-200">
                 <span className="text-gray-500 dark:text-gray-400">{t('assignments.cardDuration')}:</span>{' '}
@@ -400,7 +402,7 @@ export default function AssignmentCards({ role }: Props) {
                   ⏱️ <span className="font-semibold">{formatCountdown(start, t)}</span>
                 </p>
                 <p className="text-[10px] text-emerald-700/70 dark:text-emerald-300/70 mt-0.5">
-                  {t('assignments.cardStartTime')}: <strong className="tabular-nums">{a.scheduled_start_time.slice(0, 5)}</strong>
+                  {t('assignments.cardStartTime')}: <strong className="tabular-nums">{fmtTime(a.scheduled_start_time, lang)}</strong>
                   {' · '}
                   {t('assignments.cardDuration')}: <strong>{Math.floor(a.expected_duration_min / 60)}h{a.expected_duration_min % 60 ? ` ${a.expected_duration_min % 60}m` : ''}</strong>
                 </p>
@@ -410,11 +412,12 @@ export default function AssignmentCards({ role }: Props) {
               <button
                 onClick={() => a.store && openMaps(a.store.address, a.store.latitude, a.store.longitude)}
                 disabled={!a.store}
-                className="w-full py-3 rounded-xl text-sm font-bold text-white transition-colors active:scale-[0.98]"
+                className="w-full py-3 rounded-xl text-sm font-bold text-white transition-colors active:scale-[0.98] inline-flex items-center justify-center gap-2"
                 style={{ backgroundColor: 'var(--primary)' }}
                 aria-label={t('assignments.cardOpenMaps')}
               >
-                🗺️ {t('assignments.cardOpenMaps')}
+                <LocationPinIcon className="w-4 h-4" />
+                {t('assignments.cardOpenMaps')}
               </button>
 
               {/* Keep-app-open reminder + tracker controller (today only) */}
@@ -499,5 +502,14 @@ export default function AssignmentCards({ role }: Props) {
         </div>
       )}
     </div>
+  );
+}
+
+function LocationPinIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
   );
 }

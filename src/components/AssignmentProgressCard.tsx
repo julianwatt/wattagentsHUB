@@ -2,6 +2,7 @@
 import { useMemo } from 'react';
 import { useLanguage } from './LanguageContext';
 import { fmtDistance } from '@/lib/geo';
+import { fmtTime } from '@/lib/i18n';
 import {
   PUNCTUALITY_GRACE_MIN,
   PUNCTUALITY_LATE_CUTOFF_MIN,
@@ -140,8 +141,7 @@ export default function AssignmentProgressCard({ assignment: a, liveDistanceMete
   };
   const punctCfg = PUNCT_CFG[punctuality];
 
-  const fmtTime = (iso: string) =>
-    new Date(iso).toLocaleTimeString(lang === 'es' ? 'es-MX' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+  const fmtT = (iso: string) => fmtTime(iso, lang);
 
   // ── Optional contextual messages per state ─────────────────────────────
   const contextMessage =
@@ -208,7 +208,7 @@ export default function AssignmentProgressCard({ assignment: a, liveDistanceMete
               {t('assignments.progressActualEntry')}
             </p>
             <p className="font-bold text-gray-800 dark:text-gray-100 tabular-nums">
-              {a.actual_entry_at ? fmtTime(a.actual_entry_at) : <span className="text-gray-400">—</span>}
+              {a.actual_entry_at ? fmtT(a.actual_entry_at) : <span className="text-gray-400">—</span>}
             </p>
           </div>
           <div className="rounded-lg bg-gray-50 dark:bg-gray-800/50 px-2.5 py-1.5">

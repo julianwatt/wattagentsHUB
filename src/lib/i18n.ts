@@ -40,7 +40,9 @@ const es = {
     formTitle: 'Crear nueva asignación',
     fieldAgent: 'Agente',
     agentChoose: 'Selecciona un agente',
-    agentSearchPlaceholder: 'Buscar agente por nombre o usuario…',
+    agentSearchPlaceholder: 'Buscar agente o manager por nombre o usuario…',
+    searchEmpty: 'Sin resultados.',
+    standardLabel: 'estándar',
     alreadyAssigned: 'ya asignado',
     alreadyAssignedHint: 'Este agente ya tiene una asignación activa para esa fecha.',
     fieldStore: 'Tienda',
@@ -763,7 +765,9 @@ const en: typeof es = {
     formTitle: 'Create new assignment',
     fieldAgent: 'Agent',
     agentChoose: 'Select an agent',
-    agentSearchPlaceholder: 'Search agent by name or username…',
+    agentSearchPlaceholder: 'Search agent or manager by name or username…',
+    searchEmpty: 'No results.',
+    standardLabel: 'standard',
     alreadyAssigned: 'already assigned',
     alreadyAssignedHint: 'This agent already has an active assignment for that date.',
     fieldStore: 'Store',
@@ -1460,15 +1464,41 @@ export function fmtDate(dateStr: string, lang: Lang = 'es'): string {
   return `${mmm}/${dd}/${yy}`;
 }
 
-/** Format date + time as "MMM/DD/YY · H:MM AM/PM" */
+/** Format a time as "H:MM (am/pm)" — single source of truth for time
+ *  display across the platform. Accepts either a full ISO timestamp or a
+ *  bare "HH:MM[:SS]" wall-clock string. */
+export function fmtTime(input: string | Date | null | undefined, lang: Lang = 'es'): string {
+  if (!input) return '—';
+  let h: number;
+  let m: number;
+  if (typeof input === 'string') {
+    // Bare "HH:MM" or "HH:MM:SS" → no timezone parsing
+    if (/^\d{2}:\d{2}(:\d{2})?$/.test(input)) {
+      const parts = input.split(':');
+      h = parseInt(parts[0], 10);
+      m = parseInt(parts[1], 10);
+    } else {
+      const d = new Date(input);
+      if (Number.isNaN(d.getTime())) return '—';
+      h = d.getHours();
+      m = d.getMinutes();
+    }
+  } else {
+    h = input.getHours();
+    m = input.getMinutes();
+  }
+  const ampm = h >= 12 ? (lang === 'en' ? 'pm' : 'pm') : (lang === 'en' ? 'am' : 'am');
+  const h12 = h % 12 || 12;
+  const mm = String(m).padStart(2, '0');
+  return `${h12}:${mm} (${ampm})`;
+}
+
+/** Format date + time as "MMM/DD/YY · H:MM (am/pm)". Uses fmtTime for the
+ *  time portion so both helpers share a single format. */
 export function fmtDateTime(dateStr: string, lang: Lang = 'es'): string {
-  const d = new Date(dateStr);
   const datePart = fmtDate(dateStr, lang);
-  let h = d.getHours();
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  h = h % 12 || 12;
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  return `${datePart} · ${h}:${mm} ${ampm}`;
+  const timePart = fmtTime(dateStr, lang);
+  return `${datePart} · ${timePart}`;
 }
 
 export function getT(lang: Lang) {

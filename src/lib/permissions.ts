@@ -25,14 +25,15 @@ export function canManageAssignments(role: string | null | undefined): boolean {
 }
 
 /**
- * Roles that have the agent-side "Mi desempeño" section showing their own
- * assignment history + personal stats.
+ * Roles that have the agent-side "Asignaciones" section showing their own
+ * assignment history + live cards + personal stats.
  *
- * 👉 FUTURE: if Managers also gain a "Mi desempeño" view of their own past
- * assignments (as opposed to managing their team), add them here. Their
- * section will be self-scoped by user id, so no API changes required.
+ * Includes managers because the CEO can now assign shifts to them too —
+ * they need to see and act on their own assignments. The section is
+ * always self-scoped by session.user.id, so the same API endpoints
+ * serve all roles without changes.
  */
-const OWN_PERFORMANCE_ROLES: readonly AppRole[] = ['agent'];
+const OWN_PERFORMANCE_ROLES: readonly AppRole[] = ['agent', 'jr_manager', 'sr_manager'];
 
 export function canSeeOwnPerformance(role: string | null | undefined): boolean {
   return !!role && (OWN_PERFORMANCE_ROLES as readonly string[]).includes(role);

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Session } from 'next-auth';
 import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
-import { fmtDate, fmtDateTime } from '@/lib/i18n';
+import { fmtDate, fmtDateTime, fmtTime } from '@/lib/i18n';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
 import { fmtDistance } from '@/lib/geo';
 
@@ -342,7 +342,7 @@ export default function NotificationsClient({ session }: { session: Session }) {
   const shiftTotalPages = Math.max(1, Math.ceil(shiftTotal / shiftPageSize));
 
   const shiftFmtDate = (iso: string) => new Date(iso).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-MX', { year: 'numeric', month: 'short', day: 'numeric' });
-  const shiftFmtTime = (iso: string) => new Date(iso).toLocaleTimeString(lang === 'en' ? 'en-US' : 'es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const shiftFmtTime = (iso: string) => fmtTime(iso, lang);
 
   const clearShiftFilters = () => {
     setShiftFilterAgent('');

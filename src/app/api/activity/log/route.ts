@@ -28,22 +28,32 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Look up active assignment once for both branches.
+  const activeAssignment = await resolveActiveAssignment(session.user.id, date);
+
+  // D2D blocked when there's an accepted/in_progress assignment for the date.
+  if (ct === 'D2D' && activeAssignment && (activeAssignment.status === 'accepted' || activeAssignment.status === 'in_progress')) {
+    return NextResponse.json(
+      { error: 'D2D_BLOCKED_BY_ASSIGNMENT', message: 'Tienes una asignación de tienda activa — no puedes registrar D2D hoy' },
+      { status: 403 },
+    );
+  }
+
   // For Retail, override store fields from the active assignment.
   let resolvedStoreChain = store_chain;
   let resolvedStoreAddress = store_address;
   let resolvedAssignmentId: string | null = null;
 
   if (ct === 'Retail') {
-    const assignment = await resolveActiveAssignment(session.user.id, date);
-    if (!assignment) {
+    if (!activeAssignment) {
       return NextResponse.json(
         { error: 'NO_ASSIGNMENT', message: 'No tienes una asignación activa para esta fecha' },
         { status: 409 },
       );
     }
-    resolvedStoreChain = assignment.store_name;
-    resolvedStoreAddress = assignment.store_address ?? null;
-    resolvedAssignmentId = assignment.assignment_id;
+    resolvedStoreChain = activeAssignment.store_name;
+    resolvedStoreAddress = activeAssignment.store_address ?? null;
+    resolvedAssignmentId = activeAssignment.assignment_id;
   }
 
   try {

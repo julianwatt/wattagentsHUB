@@ -7,7 +7,7 @@ import InfoTooltip from './InfoTooltip';
 import { useLanguage } from './LanguageContext';
 import { usePreviewRole, useActiveUserId } from './PreviewRoleContext';
 import { useShift } from './ShiftContext';
-import { fmtDate } from '@/lib/i18n';
+import { fmtDate, fmtTime } from '@/lib/i18n';
 import { ActivityEntry, CampaignType, effectivenessRate } from '@/lib/activity';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
 
@@ -46,11 +46,6 @@ const RETAIL_FIELDS: Array<{ key: RetailKey; goal?: number; icon: string; labelK
 const EMPTY_D2D = { knocks: 0, contacts: 0, bills: 0, sales: 0 };
 const EMPTY_RETAIL = { stops: 0, zipcodes: 0, credit_checks: 0, sales: 0 };
 const draftKey = (userId: string) => `watt_activity_draft_${userId}`;
-
-function fmtTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-}
 
 export default function ActivityClient({ session }: { session: Session }) {
   const { t, lang } = useLanguage();
@@ -194,14 +189,22 @@ export default function ActivityClient({ session }: { session: Session }) {
 
   // Force the campaign type to match the user's modality. For 'd2d' only:
   // always D2D. For 'retail' only: always Retail. For 'both': respect what
-  // the user picked. This runs after modality is loaded so we don't flip
-  // back and forth on first render.
+  // the user picked, UNLESS there's an active assignment for the date —
+  // in which case D2D is blocked and the campaign must be Retail.
   useEffect(() => {
     if (!modalityLoaded) return;
     if (userModality === 'd2d' && campaignType !== 'D2D') setCampaignType('D2D');
     if (userModality === 'retail' && campaignType !== 'Retail') setCampaignType('Retail');
+    if (
+      userModality === 'both'
+      && assignmentForDate
+      && (assignmentForDate.status === 'accepted' || assignmentForDate.status === 'in_progress')
+      && campaignType !== 'Retail'
+    ) {
+      setCampaignType('Retail');
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modalityLoaded, userModality]);
+  }, [modalityLoaded, userModality, assignmentForDate?.id, assignmentForDate?.status]);
 
   // Restore localStorage draft once initial load is done and no DB entry exists for today
   useEffect(() => {
@@ -413,8 +416,8 @@ export default function ActivityClient({ session }: { session: Session }) {
           <div className="mb-4 rounded-2xl px-4 py-3 flex flex-wrap gap-4 items-center text-sm"
             style={{ backgroundColor: 'var(--dark)', color: 'white' }}>
             <span className="font-semibold opacity-70 text-xs uppercase tracking-wide">{t('activity.todayLabel')}</span>
-            <span>🕐 {t('activity.firstActivity')}: <strong>{fmtTime(todayEntry.first_activity_at)}</strong></span>
-            <span>🕐 {t('activity.lastActivity')}: <strong>{fmtTime(todayEntry.last_activity_at)}</strong></span>
+            <span>🕐 {t('activity.firstActivity')}: <strong>{fmtTime(todayEntry.first_activity_at, lang)}</strong></span>
+            <span>🕐 {t('activity.lastActivity')}: <strong>{fmtTime(todayEntry.last_activity_at, lang)}</strong></span>
             <span>{t('activity.typeLabel')}: <strong>{todayEntry.campaign_type}</strong></span>
           </div>
         )}
@@ -431,8 +434,9 @@ export default function ActivityClient({ session }: { session: Session }) {
               </div>
 
               {/* Campaign type — hidden when the agent's modality forces a single
-                  campaign. Visible toggle only for 'both'. */}
-              {userModality === 'both' && (
+                  campaign OR when an active assignment exists for the date
+                  (D2D is blocked once there's a Retail commitment). */}
+              {userModality === 'both' && !(assignmentForDate && (assignmentForDate.status === 'accepted' || assignmentForDate.status === 'in_progress')) && (
                 <div className="mb-4">
                   <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide flex items-center gap-1.5">
                     {t('activity.campaignType')}
@@ -623,7 +627,7 @@ export default function ActivityClient({ session }: { session: Session }) {
                             {/* Times */}
                             {(entry.first_activity_at || entry.last_activity_at) && (
                               <p className="text-[10px] text-gray-400 mb-1.5">
-                                🕐 {fmtTime(entry.first_activity_at)} → {fmtTime(entry.last_activity_at)}
+                                🕐 {fmtTime(entry.first_activity_at, lang)} → {fmtTime(entry.last_activity_at, lang)}
                               </p>
                             )}
                             <div className="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">

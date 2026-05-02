@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useLanguage } from './LanguageContext';
 import { fmtDistance } from '@/lib/geo';
+import { fmtDate, fmtTime } from '@/lib/i18n';
 import type { GeofenceEventType } from '@/lib/assignmentGeofence';
 
 interface EventRow {
@@ -62,10 +63,7 @@ export default function AssignmentTimelineModal({ assignmentId, agentName, store
     return t('assignments.bellReentered');
   };
 
-  const fmtTime = (iso: string) =>
-    new Date(iso).toLocaleString(lang === 'es' ? 'es-MX' : 'en-US', {
-      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit',
-    });
+  const fmtWhen = (iso: string) => `${fmtDate(iso, lang)} · ${fmtTime(iso, lang)}`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-0 sm:px-4">
@@ -107,7 +105,7 @@ export default function AssignmentTimelineModal({ assignmentId, agentName, store
                       {eventLabel(ev.event_type)}
                     </span>
                     <span className="text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
-                      {fmtTime(ev.occurred_at)}
+                      {fmtWhen(ev.occurred_at)}
                     </span>
                   </div>
                   {ev.distance_meters != null && (

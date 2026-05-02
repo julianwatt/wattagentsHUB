@@ -1,10 +1,18 @@
 'use client';
-import { useState, useEffect, useMemo, FormEvent, useCallback } from 'react';
+import { useState, useEffect, useMemo, FormEvent, useCallback, useRef } from 'react';
 import { useLanguage } from './LanguageContext';
+import { fmtTime } from '@/lib/i18n';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
 
 // ── Types ────────────────────────────────────────────────────────────────────
-interface Agent { id: string; name: string; username: string; role: string; is_active: boolean; }
+interface Assignee {
+  id: string;
+  name: string;
+  username: string;
+  role: string;
+  modality: 'd2d' | 'retail' | 'both';
+  is_active: boolean;
+}
 interface Store { id: string; name: string; address: string | null; }
 interface AssignmentSummary {
   id: string;
@@ -15,19 +23,29 @@ interface AssignmentSummary {
 }
 
 // ── Allowed slots ────────────────────────────────────────────────────────────
+// Slot internal values stay HH:MM (server validates against this set), but
+// the UI labels render through fmtTime for "10:00 (am)" style.
 const SLOTS = ['10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00'];
-// Duration choices (minutes, 4h–8h in 30-min steps)
-const DURATIONS = [240, 270, 300, 330, 360, 390, 420, 450, 480];
+// Duration choices — whole hours from 4 to 8.
+const DURATIONS = [240, 300, 360, 420, 480];
 
 const todayLocal = (): string => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-const fmtDuration = (min: number): string => {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+const fmtDurationShort = (min: number): string => `${Math.floor(min / 60)}h`;
+
+const ROLE_LABEL_KEY: Record<string, string> = {
+  agent: 'admin.roleAgent',
+  jr_manager: 'admin.roleJrManager',
+  sr_manager: 'admin.roleSrManager',
+};
+
+const MODALITY_LABEL_KEY: Record<string, string> = {
+  d2d: 'admin.modalityD2D',
+  retail: 'admin.modalityRetail',
+  both: 'admin.modalityBoth',
 };
 
 // ── Public props (so the parent can preload values for "reasignar") ─────────
@@ -40,11 +58,8 @@ export interface AssignmentFormPreset {
 }
 
 interface Props {
-  /** Optional preset for "reasignar tras rechazo" flow. */
   preset?: AssignmentFormPreset | null;
-  /** Bumped by the parent to force the form to re-apply a preset. */
   presetVersion?: number;
-  /** Called after a successful create (used by parent to refresh listing). */
   onCreated?: (assignmentId: string) => void;
 }
 
@@ -53,7 +68,7 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
   const { t, lang } = useLanguage();
 
   // Lookups
-  const [agents, setAgents] = useState<Agent[]>([]);
+  const [assignees, setAssignees] = useState<Assignee[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [loadingLookups, setLoadingLookups] = useState(true);
 
@@ -64,18 +79,18 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
   const [startTime, setStartTime] = useState('10:00');
   const [durationMin, setDurationMin] = useState(360);
 
-  // Agent search filter
+  // Autocomplete state
   const [agentSearch, setAgentSearch] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
 
-  // Existing assignments (for "agent already has one for that date" hint)
   const [busyByAgentDate, setBusyByAgentDate] = useState<Map<string, AssignmentSummary>>(new Map());
 
-  // UI state
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // ── Load agents + stores on mount ────────────────────────────────────────
+  // ── Load assignees + stores ─────────────────────────────────────────────
   useEffect(() => {
     (async () => {
       try {
@@ -84,16 +99,14 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
           fetch('/api/shift/stores', { cache: 'no-store' }),
         ]);
         if (aRes.ok) {
-          const list: Agent[] = await aRes.json();
-          setAgents(
+          const list: Assignee[] = await aRes.json();
+          setAssignees(
             list
-              .filter((u) => u.role === 'agent' && u.is_active !== false)
+              .filter((u) => ['agent', 'jr_manager', 'sr_manager'].includes(u.role) && u.is_active !== false)
               .sort((a, b) => a.name.localeCompare(b.name)),
           );
         }
-        if (sRes.ok) {
-          setStores(await sRes.json());
-        }
+        if (sRes.ok) setStores(await sRes.json());
       } catch (err) {
         console.error('[AssignmentForm] lookups error', err);
       }
@@ -101,7 +114,7 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
     })();
   }, []);
 
-  // ── Apply preset whenever the parent bumps presetVersion ─────────────────
+  // Apply preset whenever the parent bumps presetVersion
   useEffect(() => {
     if (!preset) return;
     if (preset.agent_id) setAgentId(preset.agent_id);
@@ -114,12 +127,9 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [presetVersion]);
 
-  // ── When the date changes, fetch which agents already have an assignment ─
+  // Refresh "busy" map when date changes
   const refreshBusy = useCallback(async (date: string) => {
-    if (!date) {
-      setBusyByAgentDate(new Map());
-      return;
-    }
+    if (!date) { setBusyByAgentDate(new Map()); return; }
     try {
       const res = await fetch(
         `/api/assignments?date=${encodeURIComponent(date)}&statuses=pending,accepted,in_progress,completed,incomplete&limit=500`,
@@ -128,52 +138,63 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
       if (!res.ok) return;
       const data = await res.json();
       const map = new Map<string, AssignmentSummary>();
-      for (const a of (data.assignments ?? []) as AssignmentSummary[]) {
-        map.set(a.agent_id, a);
-      }
+      for (const a of (data.assignments ?? []) as AssignmentSummary[]) map.set(a.agent_id, a);
       setBusyByAgentDate(map);
-    } catch {
-      /* silent */
-    }
+    } catch { /* silent */ }
   }, []);
 
-  useEffect(() => {
-    refreshBusy(shiftDate);
-  }, [shiftDate, refreshBusy]);
+  useEffect(() => { refreshBusy(shiftDate); }, [shiftDate, refreshBusy]);
 
-  // Realtime: refresh "busy" map when assignments change
   useEffect(() => {
     const sb = getSupabaseBrowser();
-    const channel = sb
-      .channel('assignment-form-busy')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'assignments' },
-        () => { refreshBusy(shiftDate); },
-      )
+    const channel = sb.channel('assignment-form-busy')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'assignments' }, () => { refreshBusy(shiftDate); })
       .subscribe();
     return () => { sb.removeChannel(channel); };
   }, [shiftDate, refreshBusy]);
 
-  // ── Filtered agent list (search + show busy badge) ───────────────────────
-  const filteredAgents = useMemo(() => {
+  // Suggestions: filter by name/username; prefix match prioritized
+  const suggestions = useMemo(() => {
     const q = agentSearch.trim().toLowerCase();
-    if (!q) return agents;
-    return agents.filter(
-      (a) => a.name.toLowerCase().includes(q) || a.username.toLowerCase().includes(q),
-    );
-  }, [agents, agentSearch]);
+    if (!q || agentId) return [];
+    return assignees
+      .filter((a) => a.name.toLowerCase().includes(q) || a.username.toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [assignees, agentSearch, agentId]);
 
+  const selectedAgent = useMemo(() => assignees.find((a) => a.id === agentId), [assignees, agentId]);
   const selectedAgentBusy = agentId ? busyByAgentDate.get(agentId) : null;
+
+  // Close suggestions on outside click
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    if (showSuggestions) document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [showSuggestions]);
+
+  const pickAssignee = (a: Assignee) => {
+    setAgentId(a.id);
+    setAgentSearch('');
+    setShowSuggestions(false);
+  };
+  const clearAssignee = () => {
+    setAgentId('');
+    setAgentSearch('');
+    setShowSuggestions(false);
+  };
 
   // ── Submit ───────────────────────────────────────────────────────────────
   const resetForm = () => {
     setAgentId('');
+    setAgentSearch('');
     setStoreId('');
     setShiftDate(todayLocal());
     setStartTime('10:00');
     setDurationMin(360);
-    setAgentSearch('');
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -203,9 +224,7 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
           expected_duration_min: durationMin,
         }),
       });
-
       const data = await res.json().catch(() => ({}));
-
       if (!res.ok) {
         if (res.status === 409 && data?.error === 'duplicate') {
           setFormError(data.message ?? t('assignments.errorAlreadyAssigned'));
@@ -215,10 +234,8 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
         setSubmitting(false);
         return;
       }
-
-      // Success — show message, clear form
-      const agentName = agents.find((a) => a.id === agentId)?.name ?? '';
-      setSuccess(t('assignments.successCreated').replace('{agent}', agentName));
+      const name = selectedAgent?.name ?? '';
+      setSuccess(t('assignments.successCreated').replace('{agent}', name));
       resetForm();
       onCreated?.(data.assignment?.id);
     } catch {
@@ -243,46 +260,85 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
   }
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-4 sm:p-6">
+    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-4 sm:p-6 overflow-hidden">
       <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
         <span>📋</span> {t('assignments.formTitle')}
       </h2>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* ── Agent ──────────────────────────────────────────────────────── */}
-        <div>
+        {/* ── Assignee autocomplete ──────────────────────────────────────── */}
+        <div ref={suggestionsRef} className="relative">
           <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
             {t('assignments.fieldAgent')}
           </label>
-          <input
-            type="text"
-            value={agentSearch}
-            onChange={(e) => setAgentSearch(e.target.value)}
-            placeholder={t('assignments.agentSearchPlaceholder')}
-            className="w-full px-3 py-2 mb-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm placeholder-gray-400"
-          />
-          <select
-            value={agentId}
-            onChange={(e) => setAgentId(e.target.value)}
-            required
-            className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm"
-          >
-            <option value="">{t('assignments.agentChoose')}</option>
-            {filteredAgents.map((a) => {
-              const busy = busyByAgentDate.has(a.id);
-              return (
-                <option key={a.id} value={a.id} disabled={busy && a.id !== agentId}>
-                  {a.name}
-                  {busy ? ` — ${t('assignments.alreadyAssigned')}` : ''}
-                </option>
-              );
-            })}
-          </select>
+          {selectedAgent ? (
+            <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-[var(--primary)] bg-[var(--primary-light)] text-sm">
+              <div className="min-w-0 flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-gray-900 dark:text-gray-100 truncate">{selectedAgent.name}</span>
+                <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                  {t(ROLE_LABEL_KEY[selectedAgent.role] ?? 'admin.roleAgent')}
+                </span>
+                <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                  {t(MODALITY_LABEL_KEY[selectedAgent.modality] ?? 'admin.modalityD2D')}
+                </span>
+              </div>
+              <button type="button" onClick={clearAssignee}
+                className="text-[11px] font-semibold underline text-[var(--primary)] flex-shrink-0">
+                {t('common.edit')}
+              </button>
+            </div>
+          ) : (
+            <>
+              <input
+                type="text"
+                value={agentSearch}
+                onChange={(e) => { setAgentSearch(e.target.value); setShowSuggestions(true); }}
+                onFocus={() => setShowSuggestions(true)}
+                placeholder={t('assignments.agentSearchPlaceholder')}
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm placeholder-gray-400"
+                autoComplete="off"
+              />
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute left-0 right-0 mt-1 z-30 max-h-72 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg">
+                  {suggestions.map((a) => {
+                    const busy = busyByAgentDate.has(a.id);
+                    return (
+                      <button
+                        key={a.id}
+                        type="button"
+                        disabled={busy}
+                        onClick={() => pickAssignee(a)}
+                        className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 ${
+                          busy ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50 dark:hover:bg-gray-800'
+                        }`}
+                      >
+                        <div className="min-w-0 flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-gray-900 dark:text-gray-100 truncate">{a.name}</span>
+                          <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                            {t(ROLE_LABEL_KEY[a.role] ?? 'admin.roleAgent')}
+                          </span>
+                          <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                            {t(MODALITY_LABEL_KEY[a.modality] ?? 'admin.modalityD2D')}
+                          </span>
+                        </div>
+                        {busy && <span className="text-[10px] text-amber-600 dark:text-amber-400 flex-shrink-0">{t('assignments.alreadyAssigned')}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {showSuggestions && agentSearch.trim() && suggestions.length === 0 && (
+                <div className="absolute left-0 right-0 mt-1 z-30 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg px-3 py-2 text-xs text-gray-400">
+                  {t('assignments.searchEmpty')}
+                </div>
+              )}
+            </>
+          )}
           {selectedAgentBusy && (
             <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-1.5">
               ⚠️ {t('assignments.alreadyAssignedHint')}
               <span className="font-mono ml-1">
-                · {selectedAgentBusy.shift_date} · {selectedAgentBusy.scheduled_start_time}
+                · {selectedAgentBusy.shift_date} · {fmtTime(selectedAgentBusy.scheduled_start_time, lang)}
               </span>
             </p>
           )}
@@ -297,7 +353,7 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
             value={storeId}
             onChange={(e) => setStoreId(e.target.value)}
             required
-            className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm"
+            className="w-full max-w-full box-border px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm"
           >
             <option value="">{t('assignments.storeChoose')}</option>
             {stores.map((s) => (
@@ -309,54 +365,75 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
           </select>
         </div>
 
-        {/* ── Date + start time + duration row ──────────────────────────── */}
-        <div className="grid sm:grid-cols-3 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
-              {t('assignments.fieldDate')}
-            </label>
-            <input
-              type="date"
-              value={shiftDate}
-              min={todayLocal()}
-              onChange={(e) => setShiftDate(e.target.value)}
-              required
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
-              {t('assignments.fieldStartTime')}
-            </label>
-            <select
-              value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
-              required
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm"
-            >
-              {SLOTS.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
-              {t('assignments.fieldDuration')}
-            </label>
-            <select
-              value={durationMin}
-              onChange={(e) => setDurationMin(parseInt(e.target.value, 10))}
-              required
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm"
-            >
-              {DURATIONS.map((d) => (
-                <option key={d} value={d}>{fmtDuration(d)}{d === 360 ? ` (${lang === 'es' ? 'estándar' : 'standard'})` : ''}</option>
-              ))}
-            </select>
+        {/* ── Date ──────────────────────────────────────────────────────── */}
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+            {t('assignments.fieldDate')}
+          </label>
+          <input
+            type="date"
+            value={shiftDate}
+            min={todayLocal()}
+            onChange={(e) => setShiftDate(e.target.value)}
+            required
+            className="w-full max-w-full box-border px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm appearance-none"
+            style={{ minWidth: 0 }}
+          />
+        </div>
+
+        {/* ── Start time button group ───────────────────────────────────── */}
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+            {t('assignments.fieldStartTime')}
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            {SLOTS.map((slot) => {
+              const active = startTime === slot;
+              return (
+                <button
+                  key={slot}
+                  type="button"
+                  onClick={() => setStartTime(slot)}
+                  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${
+                    active
+                      ? 'border-[var(--primary)] text-white bg-[var(--primary)]'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-gray-300'
+                  }`}
+                >
+                  {fmtTime(slot, lang)}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* ── Error / success banners ───────────────────────────────────── */}
+        {/* ── Duration button group ─────────────────────────────────────── */}
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+            {t('assignments.fieldDuration')}
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            {DURATIONS.map((d) => {
+              const active = durationMin === d;
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setDurationMin(d)}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${
+                    active
+                      ? 'border-[var(--primary)] text-white bg-[var(--primary)]'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-gray-300'
+                  }`}
+                >
+                  {fmtDurationShort(d)}
+                  {d === 360 ? <span className="ml-1 opacity-70 font-normal">· {t('assignments.standardLabel')}</span> : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {formError && (
           <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl px-3 py-2.5">
             {formError}
@@ -368,10 +445,9 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
           </p>
         )}
 
-        {/* ── Submit ────────────────────────────────────────────────────── */}
         <button
           type="submit"
-          disabled={submitting || !!selectedAgentBusy}
+          disabled={submitting || !!selectedAgentBusy || !agentId}
           className="w-full py-2.5 rounded-xl text-white font-bold text-sm transition-colors disabled:opacity-60"
           style={{ backgroundColor: 'var(--primary)' }}
         >

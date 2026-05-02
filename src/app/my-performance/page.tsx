@@ -20,7 +20,7 @@ export default async function MyPerformancePage() {
   return (
     <AppLayout session={session}>
       <div className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
-        <MyPerformanceClient />
+        <MyPerformanceClient role={session.user.role as string} />
       </div>
     </AppLayout>
   );

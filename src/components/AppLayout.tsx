@@ -16,7 +16,6 @@ import { fmtDistance } from '@/lib/geo';
 import { useIsStandaloneIOS } from './useStandalone';
 import { isLegacyShiftPanelEnabled } from '@/lib/flags';
 import { canManageAssignments, canSeeOwnPerformance } from '@/lib/permissions';
-import AssignmentCards from './AssignmentCards';
 
 interface Props {
   session: Session;
@@ -39,7 +38,10 @@ const BASE_NAV = [
 ];
 const TEAM_NAV = { href: '/team', icon: TeamIcon, key: 'nav.team' };
 const ASSIGNMENTS_NAV = { href: '/assignments', icon: AssignmentsIcon, key: 'nav.assignments' };
-const MY_PERFORMANCE_NAV = { href: '/my-performance', icon: PerformanceIcon, key: 'nav.myPerformance' };
+// Agent-side entry — same icon + label as the CEO's Asignaciones for cross-role
+// consistency. Points at the agent's own /my-performance page, which now hosts
+// the live assignment cards + personal history.
+const MY_ASSIGNMENTS_NAV = { href: '/my-performance', icon: AssignmentsIcon, key: 'nav.assignments' };
 const MANAGE_NAV = { href: '/manage/users', icon: AdminIcon, key: 'nav.manage' };
 const NOTIF_NAV = { href: '/notifications', icon: NotifNavIcon, key: 'admin.notifications' };
 
@@ -69,6 +71,36 @@ export default function AppLayout({ session, children }: Props) {
       } catch {}
     })();
   }, [session.user.id, session.user.name]);
+
+  // Pending-assignment indicator for the assignee's nav icon (agents +
+  // managers). Shows a small red dot on the Asignaciones nav entry when
+  // there's at least one pending assignment for the user.
+  const [hasPendingAssignment, setHasPendingAssignment] = useState(false);
+  useEffect(() => {
+    const r = realRole ?? session.user.role;
+    if (!['agent', 'jr_manager', 'sr_manager'].includes(r)) {
+      setHasPendingAssignment(false);
+      return;
+    }
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const res = await fetch('/api/assignments/my', { cache: 'no-store' });
+        if (!cancelled && res.ok) {
+          const j = await res.json();
+          const pending = (j.live ?? []).some((a: { status: string }) => a.status === 'pending');
+          setHasPendingAssignment(pending);
+        }
+      } catch { /* silent */ }
+    };
+    refresh();
+    // Subscribe to assignment realtime changes
+    const sb = getSupabaseBrowser();
+    const ch = sb.channel('nav-pending-assignment')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'assignments' }, () => refresh())
+      .subscribe();
+    return () => { cancelled = true; sb.removeChannel(ch); };
+  }, [realRole, session.user.role]);
 
   // Fetch active users for "Ver como" individual selection
   const [previewUsers, setPreviewUsers] = useState<PreviewUser[]>([]);
@@ -155,7 +187,7 @@ export default function AppLayout({ session, children }: Props) {
       return true;
     }),
     ...(canSeeTeam ? [TEAM_NAV] : []),
-    ...(canSeeOwnPerformance(role) ? [MY_PERFORMANCE_NAV] : []),
+    ...(canSeeOwnPerformance(role) ? [MY_ASSIGNMENTS_NAV] : []),
     ...(canManageAssignments(role) ? [ASSIGNMENTS_NAV] : []),
     ...((isAdminReal && !previewRole) || role === 'ceo' ? [NOTIF_NAV] : []),
     ...(canSeeAdmin ? [MANAGE_NAV] : []),
@@ -338,18 +370,22 @@ export default function AppLayout({ session, children }: Props) {
             {allNav.map((item) => {
               const Icon = item.icon;
               const active = pathname === item.href || pathname.startsWith(item.href + '/');
+              const showDot = item.href === '/my-performance' && hasPendingAssignment;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                     active
                       ? 'text-white'
                       : 'text-white/70 hover:text-white hover:bg-white/10'
                   }`}
                   style={active ? { backgroundColor: 'var(--primary)' } : {}}
                 >
-                  <Icon className="w-4 h-4" />
+                  <span className="relative">
+                    <Icon className="w-4 h-4" />
+                    {showDot && <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-red-500" aria-hidden />}
+                  </span>
                   {t(item.key)}
                 </Link>
               );
@@ -528,6 +564,7 @@ export default function AppLayout({ session, children }: Props) {
           {allNav.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href || pathname.startsWith(item.href + '/');
+            const showDot = item.href === '/my-performance' && hasPendingAssignment;
             return (
               <Link
                 key={item.href}
@@ -540,7 +577,10 @@ export default function AppLayout({ session, children }: Props) {
                 }`}
                 style={active ? { backgroundColor: 'var(--primary)' } : {}}
               >
-                <Icon className="w-5 h-5 md:w-6 md:h-6" />
+                <span className="relative">
+                  <Icon className="w-5 h-5 md:w-6 md:h-6" />
+                  {showDot && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500" aria-hidden />}
+                </span>
                 {t(item.key)}
               </Link>
             );
@@ -562,11 +602,6 @@ export default function AppLayout({ session, children }: Props) {
       {/* Push notification opt-in banner (CEO / admin) */}
       {showBell && <PushOptInBanner />}
 
-      {/* Agent assignment cards — visible across the whole platform while
-          the agent has a pending or active assignment. The component
-          self-gates on role and renders nothing for non-agents. */}
-      <AssignmentCards role={role} />
-
       {/* Main content — bottom padding for tab bar (mobile + tablet) */}
       <main className="flex-1 min-h-0 main-bottom-nav">
         {children}
@@ -580,6 +615,7 @@ export default function AppLayout({ session, children }: Props) {
           {allNav.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href;
+            const showDot = item.href === '/my-performance' && hasPendingAssignment;
             return (
               <Link
                 key={item.href}
@@ -589,7 +625,10 @@ export default function AppLayout({ session, children }: Props) {
                 }`}
                 style={active ? { color: 'var(--primary)' } : {}}
               >
-                <Icon className="w-7 h-7 md:w-8 md:h-8" />
+                <span className="relative">
+                  <Icon className="w-7 h-7 md:w-8 md:h-8" />
+                  {showDot && <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-gray-900" aria-hidden />}
+                </span>
                 <span>{t(item.key)}</span>
               </Link>
             );
@@ -637,10 +676,6 @@ function RosterIcon({ className }: { className: string }) {
 function AssignmentsIcon({ className }: { className: string }) {
   // Clipboard with checklist — represents task / shift assignment management.
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 12l2 2 4-4M9 17h6" /></svg>;
-}
-function PerformanceIcon({ className }: { className: string }) {
-  // Trending-up chart — agent's own performance metrics.
-  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>;
 }
 function HamburgerIcon({ className }: { className: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>;
