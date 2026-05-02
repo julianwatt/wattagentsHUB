@@ -182,7 +182,11 @@ function PlacesAddressInput({
           // out-of-box predictions for ambiguous matches.
           includedPrimaryTypes: ['street_address', 'premise', 'subpremise', 'route'],
           includedRegionCodes: ['us'],
-          locationRestriction: { rectangle: TEXAS_LOCATION_RESTRICTION },
+          // locationRestriction expects a LatLngBoundsLiteral directly
+          // ({ south, west, north, east }), NOT wrapped in `{ rectangle }`.
+          // Wrapping triggers InvalidValueError and the request returns no
+          // suggestions, which is what we saw earlier.
+          locationRestriction: TEXAS_LOCATION_RESTRICTION,
         });
         if (cancelled) return;
         const list = (res?.suggestions ?? [])
