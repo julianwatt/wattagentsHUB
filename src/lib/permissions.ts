@@ -23,3 +23,17 @@ const ASSIGNMENTS_ROLES: readonly AppRole[] = ['admin', 'ceo'];
 export function canManageAssignments(role: string | null | undefined): boolean {
   return !!role && (ASSIGNMENTS_ROLES as readonly string[]).includes(role);
 }
+
+/**
+ * Roles that have the agent-side "Mi desempeño" section showing their own
+ * assignment history + personal stats.
+ *
+ * 👉 FUTURE: if Managers also gain a "Mi desempeño" view of their own past
+ * assignments (as opposed to managing their team), add them here. Their
+ * section will be self-scoped by user id, so no API changes required.
+ */
+const OWN_PERFORMANCE_ROLES: readonly AppRole[] = ['agent'];
+
+export function canSeeOwnPerformance(role: string | null | undefined): boolean {
+  return !!role && (OWN_PERFORMANCE_ROLES as readonly string[]).includes(role);
+}

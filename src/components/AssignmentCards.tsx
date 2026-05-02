@@ -4,8 +4,17 @@ import { useLanguage } from './LanguageContext';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
 import { haversineMeters, fmtDistance } from '@/lib/geo';
 import AssignmentTracker from './AssignmentTracker';
+import AssignmentProgressCard from './AssignmentProgressCard';
+import type { GeofenceEventType } from '@/lib/assignmentGeofence';
 
 // ── Types ────────────────────────────────────────────────────────────────────
+interface MyLastEvent {
+  event_type: GeofenceEventType;
+  occurred_at: string;
+  distance_meters: number | null;
+  geo_method: string | null;
+}
+
 interface MyAssignment {
   id: string;
   agent_id: string;
@@ -17,6 +26,7 @@ interface MyAssignment {
   status: 'pending' | 'accepted' | 'rejected' | 'in_progress' | 'completed' | 'incomplete' | 'cancelled';
   rejection_reason: string | null;
   agent_response_at: string | null;
+  actual_entry_at: string | null;
   created_at: string;
   assigner: { id: string; name: string } | null;
   store: {
@@ -27,6 +37,9 @@ interface MyAssignment {
     longitude: number;
     geofence_radius_meters: number;
   } | null;
+  // Enrichments from /api/assignments/my
+  last_event: MyLastEvent | null;
+  effective_ms_now: number;
 }
 
 interface MyEnvelope {
@@ -117,8 +130,9 @@ export default function AssignmentCards({ role }: Props) {
   // Geolocation for the active card's distance
   const [position, setPosition] = useState<{ lat: number; lng: number } | null>(null);
 
-  // Tick to force countdown re-render every minute
-  const [, setNowTick] = useState(0);
+  // Tick to force countdown re-render every minute. Exposed as `tick` for
+  // child components that derive their own time-dependent state from it.
+  const [tick, setNowTick] = useState(0);
 
   // Skip everything if not an agent
   const isAgent = role === 'agent';
@@ -334,8 +348,23 @@ export default function AssignmentCards({ role }: Props) {
           ? Math.round(haversineMeters(position.lat, position.lng, a.store.latitude, a.store.longitude))
           : null;
         return (
+          <div key={a.id} className="space-y-3">
+          {/* Live progress card — sibling above the static details card */}
+          <AssignmentProgressCard
+            assignment={{
+              id: a.id,
+              status: a.status,
+              shift_date: a.shift_date,
+              scheduled_start_time: a.scheduled_start_time,
+              expected_duration_min: a.expected_duration_min,
+              actual_entry_at: a.actual_entry_at,
+              effective_ms_now: a.effective_ms_now,
+              last_event: a.last_event,
+            }}
+            liveDistanceMeters={dist}
+            tick={tick}
+          />
           <div
-            key={a.id}
             className="rounded-2xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-gray-900 shadow-md overflow-hidden"
           >
             <div className="px-4 py-2.5 bg-emerald-600 text-white text-sm font-bold flex items-center gap-2">
@@ -404,6 +433,7 @@ export default function AssignmentCards({ role }: Props) {
                 </>
               )}
             </div>
+          </div>
           </div>
         );
       })}
