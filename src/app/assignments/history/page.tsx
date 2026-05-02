@@ -1,5 +1,5 @@
-import AssignmentsPlaceholder from '@/components/AssignmentsPlaceholder';
+import AssignmentsHistoryClient from '@/components/AssignmentsHistoryClient';
 
 export default function AssignmentsHistoryPage() {
-  return <AssignmentsPlaceholder messageKey="assignments.placeholderHistory" />;
+  return <AssignmentsHistoryClient />;
 }
