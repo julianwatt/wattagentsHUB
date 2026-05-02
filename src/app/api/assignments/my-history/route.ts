@@ -71,7 +71,13 @@ export async function GET(req: NextRequest) {
 
   if (from) q = q.gte('shift_date', from);
   if (to)   q = q.lte('shift_date', to);
-  if (statuses && statuses.size > 0) q = q.in('status', Array.from(statuses));
+  if (statuses && statuses.size > 0) {
+    q = q.in('status', Array.from(statuses));
+  } else {
+    // Same default as /api/assignments/history: hide 'replaced' rows
+    // unless the agent explicitly filters for them.
+    q = q.neq('status', 'replaced');
+  }
   if (punctuality && punctuality.size > 0) q = q.in('punctuality', Array.from(punctuality));
   if (duration && duration.size > 0 && duration.size < 3) {
     const ors: string[] = [];

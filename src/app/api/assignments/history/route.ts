@@ -86,7 +86,15 @@ function applyFilters(q: QueryBuilder, f: FilterArgs): QueryBuilder {
   if (f.to)   q = q.lte('shift_date', f.to);
   if (f.agents && f.agents.size > 0) q = q.in('agent_id', Array.from(f.agents));
   if (f.stores && f.stores.size > 0) q = q.in('store_id', Array.from(f.stores));
-  if (f.statuses && f.statuses.size > 0) q = q.in('status', Array.from(f.statuses));
+  if (f.statuses && f.statuses.size > 0) {
+    q = q.in('status', Array.from(f.statuses));
+  } else {
+    // Default view excludes 'replaced' rows — they're historical noise
+    // (the row was superseded by another for the same agent+day) and the
+    // CEO never asked for them. They remain queryable via explicit
+    // statuses=replaced for audit purposes.
+    q = q.neq('status', 'replaced');
+  }
   if (f.punctuality && f.punctuality.size > 0) q = q.in('punctuality', Array.from(f.punctuality));
   if (f.duration && f.duration.size > 0) q = applyDurationFilter(q, f.duration);
   return q;

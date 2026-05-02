@@ -487,11 +487,30 @@ const Card = function Card({ a, tick, fetchedAt, highlighted, acting, lang, t, o
   const canCancel = !['completed', 'incomplete', 'cancelled', 'rejected'].includes(a.status);
   const canReassign = a.status === 'rejected' || a.status === 'cancelled';
 
+  // Card tint by status — green for actively-working, red for problem
+  // states, neutral for the rest. The highlight ring (primary brand) wins
+  // when present so the per-row "just-changed" animation stays visible.
+  const tintClass = (() => {
+    if (a.status === 'in_progress') {
+      // Subtle green wash + green border when actively working AND inside.
+      const inside = a.last_event?.event_type !== 'exited_warn' && a.last_event?.event_type !== 'exited_final';
+      if (inside) return 'border-emerald-300 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-900/10';
+      return 'border-amber-300 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-900/10';
+    }
+    if (a.status === 'rejected' || a.status === 'cancelled') {
+      return 'border-red-200 dark:border-red-900/40 bg-red-50/40 dark:bg-red-900/10';
+    }
+    if (a.status === 'completed' || a.status === 'incomplete') {
+      return 'border-gray-100 dark:border-gray-800 bg-gray-50/40 dark:bg-gray-900/30';
+    }
+    return 'border-gray-100 dark:border-gray-800';
+  })();
+
   return (
-    <div className={`bg-white dark:bg-gray-900 rounded-2xl border shadow-sm p-3.5 transition-all ${
+    <div className={`rounded-2xl border shadow-sm p-3.5 transition-all ${
       highlighted
-        ? 'border-[var(--primary)] ring-2 ring-[var(--primary)] ring-opacity-40'
-        : 'border-gray-100 dark:border-gray-800'
+        ? 'border-[var(--primary)] ring-2 ring-[var(--primary)] ring-opacity-40 bg-white dark:bg-gray-900'
+        : `bg-white dark:bg-gray-900 ${tintClass}`
     }`}>
       {/* Header: avatar + name + status */}
       <div className="flex items-start justify-between gap-2 mb-2">

@@ -4,8 +4,10 @@ import { useLanguage } from './LanguageContext';
 import { fmtDistance } from '@/lib/geo';
 import { fmtTime } from '@/lib/i18n';
 import {
-  PUNCTUALITY_GRACE_MIN,
-  PUNCTUALITY_LATE_CUTOFF_MIN,
+  punctualityForEntry,
+  liveStatusBeforeEntry,
+  type Punctuality,
+  type LivePunctuality,
   type GeofenceEventType,
 } from '@/lib/assignmentGeofence';
 
@@ -56,28 +58,24 @@ function deriveState(a: AssignmentForProgress): ProgressState {
   return 'inProgress';
 }
 
-function derivePunctuality(
-  a: AssignmentForProgress,
-): 'on_time' | 'late' | 'no_show' | 'pending' {
-  if (!a.actual_entry_at) {
-    // No entry yet — depends on whether scheduled time has passed
-    const time = a.scheduled_start_time.length === 5
-      ? `${a.scheduled_start_time}:00`
-      : a.scheduled_start_time;
-    const scheduled = new Date(`${a.shift_date}T${time}Z`);
-    const minSinceScheduled = (Date.now() - scheduled.getTime()) / 60000;
-    if (minSinceScheduled > PUNCTUALITY_LATE_CUTOFF_MIN) return 'no_show';
-    return 'pending';
+/**
+ * Punctuality bucket for the progress card. Delegates to the centralized
+ * functions in lib/assignmentGeofence so the 5-bucket post-entry table and
+ * the 3-bucket pre-entry table never drift between server and client.
+ */
+type ProgressPunctuality = Punctuality | LivePunctuality;
+function derivePunctuality(a: AssignmentForProgress): ProgressPunctuality {
+  if (a.actual_entry_at) {
+    return punctualityForEntry({
+      shift_date: a.shift_date,
+      scheduled_start_time: a.scheduled_start_time,
+      actual_entry_at: a.actual_entry_at,
+    });
   }
-  const time = a.scheduled_start_time.length === 5
-    ? `${a.scheduled_start_time}:00`
-    : a.scheduled_start_time;
-  const scheduled = new Date(`${a.shift_date}T${time}Z`);
-  const entry = new Date(a.actual_entry_at);
-  const diffMin = (entry.getTime() - scheduled.getTime()) / 60000;
-  if (diffMin <= PUNCTUALITY_GRACE_MIN) return 'on_time';
-  if (diffMin <= PUNCTUALITY_LATE_CUTOFF_MIN) return 'late';
-  return 'no_show';
+  return liveStatusBeforeEntry({
+    shift_date: a.shift_date,
+    scheduled_start_time: a.scheduled_start_time,
+  });
 }
 
 export default function AssignmentProgressCard({ assignment: a, liveDistanceMeters, tick, fetchedAt }: Props) {
@@ -137,11 +135,14 @@ export default function AssignmentProgressCard({ assignment: a, liveDistanceMete
   };
   const cfg = STATE_CFG[state];
 
-  const PUNCT_CFG = {
-    on_time: { color: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300', label: '✓ ' + t('assignments.punctualityOnTime') },
-    late:    { color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300', label: t('assignments.punctualityLate') },
-    no_show: { color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300', label: t('assignments.punctualityNoShow') },
-    pending: { color: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300', label: '—' },
+  const PUNCT_CFG: Record<ProgressPunctuality, { color: string; label: string }> = {
+    on_time:           { color: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300', label: '✓ ' + t('assignments.punctualityOnTime') },
+    late:              { color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300', label: t('assignments.punctualityLate') },
+    late_arrival:      { color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300', label: t('assignments.punctualityLateArrival') },
+    late_severe:       { color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300', label: t('assignments.punctualityLateSevere') },
+    no_show:           { color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300', label: t('assignments.punctualityNoShow') },
+    pending_arrival:   { color: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300', label: t('assignments.punctualityPendingArrival') },
+    awaiting_arrival:  { color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300', label: t('assignments.punctualityAwaitingArrival') },
   };
   const punctCfg = PUNCT_CFG[punctuality];
 
@@ -165,7 +166,7 @@ export default function AssignmentProgressCard({ assignment: a, liveDistanceMete
           <span aria-hidden>{cfg.emoji}</span>
           <span className={`text-sm font-bold ${cfg.color} truncate`}>{cfg.label}</span>
         </div>
-        {punctuality !== 'pending' && (
+        {punctuality !== 'pending_arrival' && (
           <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full whitespace-nowrap ${punctCfg.color}`}>
             {punctCfg.label}
           </span>

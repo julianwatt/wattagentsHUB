@@ -63,6 +63,10 @@ export async function GET(req: NextRequest) {
   if (statusesCsv) {
     const arr = statusesCsv.split(',').map((s) => s.trim()).filter(Boolean);
     if (arr.length) q = q.in('status', arr);
+  } else {
+    // Hide 'replaced' rows unless explicitly requested. They're historical
+    // noise — the row was superseded by another for the same agent+day.
+    q = q.neq('status', 'replaced');
   }
 
   const { data, error } = await q;
