@@ -14,6 +14,7 @@ import { getSupabaseBrowser } from '@/lib/supabase-browser';
 import { usePushSubscription } from './usePushSubscription';
 import { fmtDistance } from '@/lib/geo';
 import { useIsStandaloneIOS } from './useStandalone';
+import { isLegacyShiftPanelEnabled } from '@/lib/flags';
 
 interface Props {
   session: Session;
@@ -24,9 +25,13 @@ function HomeIcon({ className }: { className: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>;
 }
 const HOME_NAV = { href: '/home', icon: HomeIcon, key: 'nav.home' };
+// Legacy /shift entry is gated behind the LEGACY_SHIFT_PANEL feature flag.
+// When the flag is off the entry is removed entirely from the nav.
 const BASE_NAV = [
   { href: '/activity', icon: ActivityIcon, key: 'nav.activity', hideForAdmin: true },
-  { href: '/shift', icon: ShiftIcon, key: 'nav.shift', hideForAdmin: true },
+  ...(isLegacyShiftPanelEnabled()
+    ? [{ href: '/shift', icon: ShiftIcon, key: 'nav.shift', hideForAdmin: true }]
+    : []),
   { href: '/simulator', icon: SimIcon, key: 'nav.simulator' },
   { href: '/dashboard', icon: DashIcon, key: 'nav.dashboard' },
 ];
