@@ -7,7 +7,7 @@ import {
   getAgentEntries,
   getEntriesForUsers,
   deleteEntry,
-  isCampaignAllowed,
+  getAllowedActivityModalities,
   resolveActiveAssignment,
   getUserModality,
   CampaignType,
@@ -63,27 +63,30 @@ export async function POST(req: NextRequest) {
 
   const ct = (campaignType as CampaignType) ?? 'D2D';
 
-  // ── Modality enforcement ─────────────────────────────────────────────────
-  // Reject the submission if the agent's modality doesn't allow this campaign.
-  // Defense in depth: even if the UI hides the toggle, an attacker can still
-  // POST with a forged campaignType.
+  // ── Modality enforcement (single source of truth) ────────────────────────
+  // Look up modality + active assignment, then ask the centralized function
+  // which campaigns are allowed today. Reject anything outside that set.
+  // Defense in depth: even if the UI hides D2D, an attacker can still POST
+  // with a forged campaignType, so this server-side gate stops them.
   const modality = await getUserModality(session.user.id);
-  if (!isCampaignAllowed(modality, ct)) {
+  const activeAssignment = await resolveActiveAssignment(session.user.id, date);
+  const hasActiveAssignment =
+    !!activeAssignment
+    && (activeAssignment.status === 'accepted' || activeAssignment.status === 'in_progress');
+  const allowed = getAllowedActivityModalities(modality, hasActiveAssignment);
+
+  if (!allowed.includes(ct)) {
+    // Use a more specific error code when the rejection is caused by an
+    // active Retail assignment overriding the agent's profile modality —
+    // the UI shows a clearer message in that case.
+    if (ct === 'D2D' && hasActiveAssignment) {
+      return NextResponse.json(
+        { error: 'D2D_BLOCKED_BY_ASSIGNMENT', message: 'Tienes una asignación de tienda activa — solo puedes registrar Retail hoy' },
+        { status: 403 },
+      );
+    }
     return NextResponse.json(
       { error: 'CAMPAIGN_NOT_ALLOWED', message: `Tu modalidad no permite registrar ${ct}` },
-      { status: 403 },
-    );
-  }
-
-  // Look up the active assignment once — used for both Retail resolution
-  // and the D2D-with-active-assignment block.
-  const activeAssignment = await resolveActiveAssignment(session.user.id, date);
-
-  // ── D2D blocked when the user has an accepted/in_progress Retail assignment.
-  // The assignment is the source of truth for what they're working on today.
-  if (ct === 'D2D' && activeAssignment && (activeAssignment.status === 'accepted' || activeAssignment.status === 'in_progress')) {
-    return NextResponse.json(
-      { error: 'D2D_BLOCKED_BY_ASSIGNMENT', message: 'Tienes una asignación de tienda activa — no puedes registrar D2D hoy' },
       { status: 403 },
     );
   }

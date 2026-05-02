@@ -11,14 +11,46 @@ export type ActivityField = D2DField | RetailField;
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * The agent's modality determines which campaign types they may register.
- * Used by the API to reject mismatched submissions even if the client UI
- * is bypassed.
+ * Single source of truth for what activity campaigns an agent may register
+ * on a given date. Combines the profile modality with the active assignment
+ * (which is always Retail by design — assignments target a store).
+ *
+ * Rule table (assignment ALWAYS prevails):
+ *
+ *   profile  | active assignment | allowed campaigns
+ *   ---------+-------------------+------------------
+ *   d2d      | none              | [D2D]
+ *   d2d      | yes (Retail)      | [Retail]   ← assignment wins over profile
+ *   retail   | none              | [Retail]
+ *   retail   | yes (Retail)      | [Retail]
+ *   both     | none              | [D2D, Retail]
+ *   both     | yes (Retail)      | [Retail]   ← assignment narrows the choice
+ *
+ * Every UI that hides/shows campaign tabs and every server endpoint that
+ * accepts a campaign_type MUST go through this function. Inline checks
+ * have caused regressions before — do not reintroduce them.
  */
-export function isCampaignAllowed(modality: Modality, campaign: CampaignType): boolean {
-  if (modality === 'both') return true;
-  if (modality === 'retail') return campaign === 'Retail';
-  return campaign === 'D2D';
+export function getAllowedActivityModalities(
+  modality: Modality,
+  hasActiveAssignment: boolean,
+): CampaignType[] {
+  // Active assignment always means Retail-only for the day.
+  if (hasActiveAssignment) return ['Retail'];
+  if (modality === 'both') return ['D2D', 'Retail'];
+  if (modality === 'retail') return ['Retail'];
+  return ['D2D'];
+}
+
+/**
+ * Convenience predicate built on top of getAllowedActivityModalities.
+ * Server-side validation calls this after looking up modality + assignment.
+ */
+export function isCampaignAllowedFor(
+  modality: Modality,
+  hasActiveAssignment: boolean,
+  campaign: CampaignType,
+): boolean {
+  return getAllowedActivityModalities(modality, hasActiveAssignment).includes(campaign);
 }
 
 /** Active assignment for an agent on a given date (the one the activity

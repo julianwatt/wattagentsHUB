@@ -82,6 +82,7 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
   // Autocomplete state
   const [agentSearch, setAgentSearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [highlightIdx, setHighlightIdx] = useState(0);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
   const [busyByAgentDate, setBusyByAgentDate] = useState<Map<string, AssignmentSummary>>(new Map());
@@ -153,13 +154,17 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
     return () => { sb.removeChannel(channel); };
   }, [shiftDate, refreshBusy]);
 
-  // Suggestions: filter by name/username; prefix match prioritized
+  // Combobox suggestions: empty query → full active list (sorted A-Z so a
+  // click reveals every option; the user can scroll). Typed query → partial
+  // match against name OR username, accent-insensitive (NFD strip).
+  // No 8-row cap — the dropdown has internal max-height + scroll.
   const suggestions = useMemo(() => {
-    const q = agentSearch.trim().toLowerCase();
-    if (!q || agentId) return [];
-    return assignees
-      .filter((a) => a.name.toLowerCase().includes(q) || a.username.toLowerCase().includes(q))
-      .slice(0, 8);
+    if (agentId) return [];
+    const norm = (s: string) =>
+      s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const q = norm(agentSearch.trim());
+    if (!q) return assignees;
+    return assignees.filter((a) => norm(a.name).includes(q) || norm(a.username).includes(q));
   }, [assignees, agentSearch, agentId]);
 
   const selectedAgent = useMemo(() => assignees.find((a) => a.id === agentId), [assignees, agentId]);
@@ -292,24 +297,65 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
               <input
                 type="text"
                 value={agentSearch}
-                onChange={(e) => { setAgentSearch(e.target.value); setShowSuggestions(true); }}
-                onFocus={() => setShowSuggestions(true)}
+                role="combobox"
+                aria-expanded={showSuggestions}
+                aria-controls="agent-suggestions-list"
+                aria-autocomplete="list"
+                onChange={(e) => {
+                  setAgentSearch(e.target.value);
+                  setShowSuggestions(true);
+                  setHighlightIdx(0);
+                }}
+                onFocus={() => { setShowSuggestions(true); setHighlightIdx(0); }}
+                onClick={() => setShowSuggestions(true)}
+                onKeyDown={(e) => {
+                  if (!showSuggestions) {
+                    if (e.key === 'ArrowDown' || e.key === 'Enter') {
+                      e.preventDefault();
+                      setShowSuggestions(true);
+                      setHighlightIdx(0);
+                    }
+                    return;
+                  }
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setHighlightIdx((i) => Math.min(suggestions.length - 1, i + 1));
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setHighlightIdx((i) => Math.max(0, i - 1));
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const pick = suggestions[highlightIdx];
+                    if (pick && !busyByAgentDate.has(pick.id)) pickAssignee(pick);
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setShowSuggestions(false);
+                  }
+                }}
                 placeholder={t('assignments.agentSearchPlaceholder')}
                 className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm placeholder-gray-400"
                 autoComplete="off"
               />
               {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute left-0 right-0 mt-1 z-30 max-h-72 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg">
-                  {suggestions.map((a) => {
+                <div
+                  id="agent-suggestions-list"
+                  role="listbox"
+                  className="absolute left-0 right-0 mt-1 z-30 max-h-72 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg"
+                >
+                  {suggestions.map((a, idx) => {
                     const busy = busyByAgentDate.has(a.id);
+                    const highlighted = idx === highlightIdx;
                     return (
                       <button
                         key={a.id}
                         type="button"
+                        role="option"
+                        aria-selected={highlighted}
                         disabled={busy}
                         onClick={() => pickAssignee(a)}
-                        className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 ${
-                          busy ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50 dark:hover:bg-gray-800'
+                        onMouseEnter={() => setHighlightIdx(idx)}
+                        className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 transition-colors ${
+                          busy ? 'opacity-50 cursor-not-allowed' : highlighted ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800'
                         }`}
                       >
                         <div className="min-w-0 flex items-center gap-2 flex-wrap">
@@ -327,7 +373,7 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
                   })}
                 </div>
               )}
-              {showSuggestions && agentSearch.trim() && suggestions.length === 0 && (
+              {showSuggestions && suggestions.length === 0 && (
                 <div className="absolute left-0 right-0 mt-1 z-30 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg px-3 py-2 text-xs text-gray-400">
                   {t('assignments.searchEmpty')}
                 </div>

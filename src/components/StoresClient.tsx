@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useLanguage } from './LanguageContext';
 import StoreFormModal from './StoreFormModal';
+import ToggleSwitch from './ToggleSwitch';
 
 interface Store {
   id: string;
@@ -132,17 +133,13 @@ export default function StoresClient() {
                 >
                   ✎ {t('stores.editBtn')}
                 </button>
-                <button
-                  onClick={() => toggle(s)}
+                <ToggleSwitch
+                  checked={s.is_active}
+                  onChange={() => toggle(s)}
                   disabled={toggling === s.id}
-                  className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-colors disabled:opacity-50 ${
-                    s.is_active
-                      ? 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-red-300 hover:text-red-600 dark:hover:text-red-400'
-                      : 'border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
-                  }`}
-                >
-                  {toggling === s.id ? '…' : s.is_active ? t('stores.deactivate') : t('stores.activate')}
-                </button>
+                  size="lg"
+                  ariaLabel={s.is_active ? t('stores.deactivate') : t('stores.activate')}
+                />
               </div>
             </li>
           ))}

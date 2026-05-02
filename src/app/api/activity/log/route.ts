@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import {
   incrementField,
-  isCampaignAllowed,
+  getAllowedActivityModalities,
   resolveActiveAssignment,
   getUserModality,
   CampaignType,
@@ -19,22 +19,24 @@ export async function POST(req: NextRequest) {
 
   const ct = (campaignType as CampaignType) ?? 'D2D';
 
-  // Modality enforcement (defense in depth — same as /api/activity POST)
+  // Modality enforcement via the single source of truth.
+  // Same logic as POST /api/activity — see lib/activity.ts.
   const modality = await getUserModality(session.user.id);
-  if (!isCampaignAllowed(modality, ct)) {
+  const activeAssignment = await resolveActiveAssignment(session.user.id, date);
+  const hasActiveAssignment =
+    !!activeAssignment
+    && (activeAssignment.status === 'accepted' || activeAssignment.status === 'in_progress');
+  const allowed = getAllowedActivityModalities(modality, hasActiveAssignment);
+
+  if (!allowed.includes(ct)) {
+    if (ct === 'D2D' && hasActiveAssignment) {
+      return NextResponse.json(
+        { error: 'D2D_BLOCKED_BY_ASSIGNMENT', message: 'Tienes una asignación de tienda activa — solo puedes registrar Retail hoy' },
+        { status: 403 },
+      );
+    }
     return NextResponse.json(
       { error: 'CAMPAIGN_NOT_ALLOWED', message: `Tu modalidad no permite registrar ${ct}` },
-      { status: 403 },
-    );
-  }
-
-  // Look up active assignment once for both branches.
-  const activeAssignment = await resolveActiveAssignment(session.user.id, date);
-
-  // D2D blocked when there's an accepted/in_progress assignment for the date.
-  if (ct === 'D2D' && activeAssignment && (activeAssignment.status === 'accepted' || activeAssignment.status === 'in_progress')) {
-    return NextResponse.json(
-      { error: 'D2D_BLOCKED_BY_ASSIGNMENT', message: 'Tienes una asignación de tienda activa — no puedes registrar D2D hoy' },
       { status: 403 },
     );
   }

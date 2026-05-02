@@ -8,7 +8,7 @@ import { useLanguage } from './LanguageContext';
 import { usePreviewRole, useActiveUserId } from './PreviewRoleContext';
 import { useShift } from './ShiftContext';
 import { fmtDate, fmtTime } from '@/lib/i18n';
-import { ActivityEntry, CampaignType, effectivenessRate } from '@/lib/activity';
+import { ActivityEntry, CampaignType, effectivenessRate, getAllowedActivityModalities } from '@/lib/activity';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
 
 type Modality = 'd2d' | 'retail' | 'both';
@@ -187,21 +187,25 @@ export default function ActivityClient({ session }: { session: Session }) {
   useEffect(() => { loadEntry(date); }, [date, loadEntry]);
   useEffect(() => { loadAssignmentForDate(date); }, [date, loadAssignmentForDate]);
 
-  // Force the campaign type to match the user's modality. For 'd2d' only:
-  // always D2D. For 'retail' only: always Retail. For 'both': respect what
-  // the user picked, UNLESS there's an active assignment for the date —
-  // in which case D2D is blocked and the campaign must be Retail.
+  // Single source of truth for which campaigns the agent may register today.
+  // Centralized so the UI, the +/- log endpoint and the upsert endpoint all
+  // agree. See lib/activity.ts → getAllowedActivityModalities for the table.
+  const hasActiveAssignment =
+    !!assignmentForDate
+    && (assignmentForDate.status === 'accepted' || assignmentForDate.status === 'in_progress');
+  const allowedModalities: CampaignType[] = modalityLoaded
+    ? getAllowedActivityModalities(userModality, hasActiveAssignment)
+    : ['D2D'];
+  const showCampaignSelector = allowedModalities.length > 1;
+
+  // If the current campaign isn't allowed today, snap to the first allowed
+  // one (which is always Retail when there's an active assignment, even if
+  // the agent's profile modality is d2d — that's the rule that has failed
+  // repeatedly in earlier iterations).
   useEffect(() => {
     if (!modalityLoaded) return;
-    if (userModality === 'd2d' && campaignType !== 'D2D') setCampaignType('D2D');
-    if (userModality === 'retail' && campaignType !== 'Retail') setCampaignType('Retail');
-    if (
-      userModality === 'both'
-      && assignmentForDate
-      && (assignmentForDate.status === 'accepted' || assignmentForDate.status === 'in_progress')
-      && campaignType !== 'Retail'
-    ) {
-      setCampaignType('Retail');
+    if (!allowedModalities.includes(campaignType)) {
+      setCampaignType(allowedModalities[0]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modalityLoaded, userModality, assignmentForDate?.id, assignmentForDate?.status]);
@@ -433,10 +437,11 @@ export default function ActivityClient({ session }: { session: Session }) {
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm" />
               </div>
 
-              {/* Campaign type — hidden when the agent's modality forces a single
-                  campaign OR when an active assignment exists for the date
-                  (D2D is blocked once there's a Retail commitment). */}
-              {userModality === 'both' && !(assignmentForDate && (assignmentForDate.status === 'accepted' || assignmentForDate.status === 'in_progress')) && (
+              {/* Campaign type selector — only rendered when more than one
+                  modality is allowed today (i.e. profile=both AND no active
+                  assignment). Otherwise the disallowed modality must be
+                  completely hidden, never just disabled. */}
+              {showCampaignSelector && (
                 <div className="mb-4">
                   <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide flex items-center gap-1.5">
                     {t('activity.campaignType')}
@@ -453,7 +458,7 @@ export default function ActivityClient({ session }: { session: Session }) {
                     </div>
                   )}
                   <div className="grid grid-cols-2 gap-2">
-                    {(['D2D', 'Retail'] as CampaignType[]).map((ct) => {
+                    {allowedModalities.map((ct) => {
                       const lockedByEntry = todayEntry && date === today() && todayEntry.campaign_type !== ct;
                       const isActive = campaignType === ct;
                       const ctColor = ct === 'D2D' ? '#0284c7' : '#9333ea';
