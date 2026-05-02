@@ -56,7 +56,7 @@ export default function ActivityClient({ session }: { session: Session }) {
   const { t, lang } = useLanguage();
   const { previewUserName } = usePreviewRole();
   const { activeUserId, isPreviewMode } = useActiveUserId(session.user.id);
-  const { store: shiftStore, loading: shiftStoreLoading, shiftState } = useShift();
+  const { store: shiftStore, shiftState } = useShift();
 
   // Fetch real user name + modality from DB
   const [dbUserName, setDbUserName] = useState<string>(previewUserName ?? session.user.name ?? '');
