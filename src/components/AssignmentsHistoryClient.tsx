@@ -270,11 +270,11 @@ export default function AssignmentsHistoryClient() {
   };
   const statusBadge = (s: string) => {
     const cls = s === 'completed' ? 'emerald'
+              : s === 'in_progress' ? 'emerald'  // En curso → verde, igual que el panel Hoy
               : s === 'incomplete' ? 'orange'
               : s === 'rejected' ? 'red'
               : s === 'cancelled' ? 'gray'
-              : s === 'in_progress' ? 'sky'
-              : s === 'accepted' ? 'sky'
+              : s === 'accepted' ? 'sky'         // Por llegar / accepted → azul
               : 'amber';
     return <Badge color={cls as Color}>{t(`assignments.status${capitalize(s)}`)}</Badge>;
   };
