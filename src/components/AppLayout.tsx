@@ -321,20 +321,26 @@ export default function AppLayout({ session, children }: Props) {
     : t('nav.agent');
 
   // ── Tenure calculation ──
-  const tenureText = (() => {
-    if (!hireDate) return '';
+  // Deferred to after mount so the SSR snapshot doesn't depend on `new
+  // Date()`. Computing it during render produces server-time vs client-
+  // time strings that disagree at day/week/month boundaries — the cause
+  // of the React #418 hydration error reported on every page that mounts
+  // AppLayout. Initial value is empty; after mount the effect populates it.
+  const [tenureText, setTenureText] = useState<string>('');
+  useEffect(() => {
+    if (!hireDate) { setTenureText(''); return; }
     const start = new Date(hireDate);
     const now = new Date();
     const diffMs = now.getTime() - start.getTime();
     const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    if (days < 14) return `${days} ${t('nav.tenureDays')}`;
+    if (days < 14) { setTenureText(`${days} ${t('nav.tenureDays')}`); return; }
     const weeks = Math.floor(days / 7);
-    if (days < 90) return `${weeks} ${t('nav.tenureWeeks')}`;
+    if (days < 90) { setTenureText(`${weeks} ${t('nav.tenureWeeks')}`); return; }
     const months = Math.floor(days / 30.44);
-    if (months < 24) return `${months} ${t('nav.tenureMonths')}`;
+    if (months < 24) { setTenureText(`${months} ${t('nav.tenureMonths')}`); return; }
     const years = (days / 365.25).toFixed(1);
-    return `${years} ${t('nav.tenureYears')}`;
-  })();
+    setTenureText(`${years} ${t('nav.tenureYears')}`);
+  }, [hireDate, t]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col transition-colors">

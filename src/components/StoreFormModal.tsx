@@ -3,14 +3,10 @@ import { useEffect, useRef, useState, FormEvent, useCallback } from 'react';
 import usePlacesAutocomplete, { getDetails } from 'use-places-autocomplete';
 import { useLanguage } from './LanguageContext';
 
-// Texas bounding box (approximate, covers the whole state).
-//   SE corner: 25.84°N, -93.51°W
-//   NW corner: 36.50°N, -106.65°W
-// Used to bias + strict-bound the Places Autocomplete results so the CEO
-// only sees Texas addresses. The corners are passed as an LatLngBounds-like
-// object directly; the SDK's own constructor wraps them transparently.
-const TEXAS_BOUNDS_SW = { lat: 25.84, lng: -106.65 };
-const TEXAS_BOUNDS_NE = { lat: 36.50, lng: -93.51 };
+// Texas filtering is enforced client-side by the regex in PlacesAddressInput.
+// We don't pass `bounds`/`strictBounds` to the legacy AutocompleteService —
+// Google deprecated those for predictions in May 2023 and the wrapper
+// silently drops them.
 
 export interface StoreInitial {
   id: string;
@@ -76,21 +72,46 @@ function usePlacesScript(): PlacesStatus {
     s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&loading=async&v=weekly`;
     s.async = true;
     s.defer = true;
+    let pollHandle: ReturnType<typeof setInterval> | null = null;
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+    const stopPolling = () => {
+      if (pollHandle) clearInterval(pollHandle);
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+      pollHandle = null;
+      timeoutHandle = null;
+    };
+
     s.onload = () => {
+      // With loading=async, Google's outer bundle loads first and the
+      // places library streams in afterwards. s.onload fires before
+      // window.google.maps.places is populated, so we poll until it is.
       if (window.google?.maps?.places) {
         console.info('[stores] Maps SDK loaded — places library ready');
         setStatus('ready');
-      } else {
-        console.warn('[stores] Maps SDK loaded but places library is missing');
-        setStatus('error');
+        return;
       }
+      pollHandle = setInterval(() => {
+        if (window.google?.maps?.places) {
+          console.info('[stores] Maps SDK places library became ready');
+          setStatus('ready');
+          stopPolling();
+        }
+      }, 100);
+      timeoutHandle = setTimeout(() => {
+        console.warn('[stores] places library never became ready after 8s');
+        setStatus('error');
+        stopPolling();
+      }, 8000);
     };
     s.onerror = (ev) => {
       console.warn('[stores] Maps SDK script failed to load (network/CSP/referrer block):', ev);
       setStatus('error');
     };
     document.head.appendChild(s);
-    return () => { /* keep script in DOM for reuse across mounts */ };
+    return () => {
+      stopPolling();
+      /* keep script in DOM for reuse across mounts */
+    };
   }, []);
   return status;
 }
@@ -146,23 +167,28 @@ function PlacesAddressInput({
     clearSuggestions,
   } = usePlacesAutocomplete({
     requestOptions: {
-      // Restrict suggestions to Texas, US:
-      //   - country: 'us' eliminates non-US results outright.
-      //   - bounds + strictBounds restrict to the Texas bounding box.
-      //   - types 'address' returns street-level addresses only.
-      // The bounds/strictBounds combo causes Google to drop predictions whose
-      // geometry falls outside the box, which is exactly what we want.
+      // Layer 1 (server-side): country=us drops non-US results outright.
+      // The legacy AutocompleteService used here ignores `bounds` /
+      // `strictBounds` for predictions silently (deprecated since May 2023
+      // — those params survive only on the new Places API), so we don't
+      // bother sending them. Texas filtering is enforced in layer 2 below.
       componentRestrictions: { country: 'us' },
       types: ['address'],
-      bounds: {
-        south: TEXAS_BOUNDS_SW.lat,
-        west: TEXAS_BOUNDS_SW.lng,
-        north: TEXAS_BOUNDS_NE.lat,
-        east: TEXAS_BOUNDS_NE.lng,
-      } as unknown as never,
-      strictBounds: true,
     },
     debounce: 250,
+  });
+
+  // Layer 2 (client-side, the actual gate): drop any prediction whose
+  // description doesn't end with ", TX[, USA]" or ", Texas[, USA]". The
+  // AutocompletePrediction.description is what Google would show, so the
+  // state suffix is reliably present for US street addresses.
+  const filteredPredictions = predictions.filter((p) => {
+    const desc = p.description ?? '';
+    // Match ", TX" or ", Texas" followed by end-of-string, comma, or
+    // whitespace+ZIP. Google's autocomplete formats US street addresses as
+    // "<street>, <city>, <STATE> <ZIP>, USA" so the comma+state needle is
+    // reliable when present.
+    return /,\s*(TX|Texas)(\s+\d|\s*,|$)/i.test(desc);
   });
 
   // Sync external value (e.g. when initialStore loads in edit mode) into
@@ -241,9 +267,9 @@ function PlacesAddressInput({
         autoComplete="off"
         className="w-full max-w-full box-border px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm"
       />
-      {showList && predictions.length > 0 && (
+      {showList && filteredPredictions.length > 0 && (
         <div className="absolute left-0 right-0 mt-1 z-30 max-h-72 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg">
-          {predictions.map((p) => (
+          {filteredPredictions.map((p) => (
             <button
               key={p.place_id}
               type="button"
@@ -258,7 +284,7 @@ function PlacesAddressInput({
           ))}
         </div>
       )}
-      {showList && q.trim().length >= 3 && !predLoading && predictions.length === 0 && predStatus === 'ZERO_RESULTS' && (
+      {showList && q.trim().length >= 3 && !predLoading && filteredPredictions.length === 0 && (
         <p className="text-[10px] text-gray-400 mt-1">{hint}</p>
       )}
       {ready && q.trim().length < 3 && (

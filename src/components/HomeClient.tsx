@@ -106,18 +106,29 @@ export default function HomeClient({ session }: { session: Session }) {
 
   const firstName = (session.user.name ?? '').split(' ')[0];
 
+  // Greeting + today's date depend on the user's local clock, so we defer
+  // both to after mount. Computing them during render produced different
+  // strings on server (UTC) vs client (browser TZ) and triggered React's
+  // hydration mismatch (#418) every load.
+  const [greetingText, setGreetingText] = useState('');
+  const [dateText, setDateText] = useState('');
+  useEffect(() => {
+    setGreetingText(greeting(lang));
+    setDateText(new Date().toLocaleDateString(lang === 'es' ? 'es-MX' : 'en-US', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    }));
+  }, [lang]);
+
   return (
     <AppLayout session={session}>
       <div className="max-w-3xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-5">
         {/* Greeting */}
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {greeting(lang)}, {firstName}
+            {greetingText ? `${greetingText}, ${firstName}` : firstName}
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 capitalize">
-            {new Date().toLocaleDateString(lang === 'es' ? 'es-MX' : 'en-US', {
-              weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-            })}
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 capitalize min-h-[1.25rem]">
+            {dateText}
           </p>
         </div>
 
