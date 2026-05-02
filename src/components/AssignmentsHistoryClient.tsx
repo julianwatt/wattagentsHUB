@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useLanguage } from './LanguageContext';
 import { fmtTime as fmtTimeI18n } from '@/lib/i18n';
 import AssignmentTimelineModal from './AssignmentTimelineModal';
+import { formatStoreLabel } from '@/lib/stores';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface AgentLite { id: string; name: string; username: string; }
@@ -447,7 +448,7 @@ export default function AssignmentsHistoryClient() {
                     <p className="font-medium text-gray-800 dark:text-gray-100">{r.agent?.name ?? '—'}</p>
                     <p className="text-[10px] text-gray-400">@{r.agent?.username ?? '—'}</p>
                   </td>
-                  <td className="px-3 py-2.5 text-gray-600 dark:text-gray-300">{r.store?.name ?? '—'}</td>
+                  <td className="px-3 py-2.5 text-gray-600 dark:text-gray-300">{r.store ? formatStoreLabel(r.store) : '—'}</td>
                   <td className="px-3 py-2.5 tabular-nums text-gray-700 dark:text-gray-200">{fmtTimeI18n(r.scheduled_start_time, lang)}</td>
                   <td className="px-3 py-2.5 tabular-nums">
                     {r.actual_entry_at ? (
@@ -512,7 +513,7 @@ export default function AssignmentsHistoryClient() {
         <AssignmentTimelineModal
           assignmentId={detailFor.id}
           agentName={detailFor.agent?.name ?? '—'}
-          storeName={detailFor.store?.name ?? '—'}
+          storeName={detailFor.store ? formatStoreLabel(detailFor.store) : '—'}
           onClose={() => setDetailFor(null)}
         />
       )}

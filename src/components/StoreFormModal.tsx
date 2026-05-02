@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState, FormEvent, useCallback } from 'react';
 import { useLanguage } from './LanguageContext';
+import { STORE_TYPES, isStoreType } from '@/lib/stores';
 
 export interface StoreInitial {
   id: string;
@@ -281,7 +282,19 @@ export default function StoreFormModal({ onClose, onSaved, initialStore }: Props
 
   const isEdit = !!initialStore;
 
-  const [name, setName] = useState(initialStore?.name ?? '');
+  // Migration logic for the name → type-selector change:
+  //   - New store: empty selection, user must pick.
+  //   - Edit + existing name matches a STORE_TYPES value: preselect it.
+  //   - Edit + existing name is custom (e.g. legacy "Watt Distributors
+  //     Office – Irving"): default to 'Other' and surface the original
+  //     name in an info banner so the CEO knows what they're replacing.
+  const initialName = initialStore?.name ?? '';
+  const initialIsCustom = !!initialStore && !isStoreType(initialName);
+  const [name, setName] = useState<string>(
+    !initialStore ? ''
+    : isStoreType(initialName) ? initialName
+    : 'Other',
+  );
   const [address, setAddress] = useState(initialStore?.address ?? '');
   const [latitude, setLatitude] = useState(
     initialStore ? String(initialStore.latitude) : ''
@@ -305,7 +318,10 @@ export default function StoreFormModal({ onClose, onSaved, initialStore }: Props
     setFormError(null);
 
     const trimmedName = name.trim();
-    if (!trimmedName) { setFormError(t('stores.errorNameRequired')); return; }
+    if (!trimmedName || !isStoreType(trimmedName)) {
+      setFormError(t('stores.errorTypeRequired'));
+      return;
+    }
 
     const lat = parseFloat(latitude);
     const lng = parseFloat(longitude);
@@ -386,19 +402,59 @@ export default function StoreFormModal({ onClose, onSaved, initialStore }: Props
             </p>
           )}
 
-          {/* Name */}
+          {/* Type selector — replaces the legacy free-form name input.
+              Six fixed options, single selection, commercial chains
+              separated from operative ones with a divider. */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
-              {t('stores.fieldName')}
+              {t('stores.fieldType')}
             </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              maxLength={120}
-              className="w-full max-w-full box-border px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm"
-            />
+            {initialIsCustom && (
+              <p className="mb-2 text-[10px] rounded-xl bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 px-3 py-2 text-sky-800 dark:text-sky-200 leading-snug">
+                ℹ️ {t('stores.customNameInfo').replace('{name}', initialName)}
+              </p>
+            )}
+            <div className="grid grid-cols-3 gap-2">
+              {STORE_TYPES.slice(0, 3).map((opt) => {
+                const active = name === opt;
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setName(opt)}
+                    className={`px-3 py-2 rounded-xl text-sm font-semibold border transition-colors ${
+                      active
+                        ? 'text-white border-transparent'
+                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                    }`}
+                    style={active ? { backgroundColor: 'var(--primary)' } : {}}
+                  >
+                    {opt}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="my-3 border-t border-gray-100 dark:border-gray-800" />
+            <div className="grid grid-cols-3 gap-2">
+              {STORE_TYPES.slice(3).map((opt) => {
+                const active = name === opt;
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setName(opt)}
+                    className={`px-3 py-2 rounded-xl text-sm font-semibold border transition-colors ${
+                      active
+                        ? 'text-white border-transparent'
+                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                    }`}
+                    style={active ? { backgroundColor: 'var(--primary)' } : {}}
+                  >
+                    {opt}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Address */}
@@ -451,7 +507,6 @@ export default function StoreFormModal({ onClose, onSaved, initialStore }: Props
                   step="any"
                   required
                   readOnly={coordsLocked}
-                  placeholder="32.83867"
                   className={`w-full max-w-full box-border px-3 py-2 rounded-xl border bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm tabular-nums ${
                     coordsLocked
                       ? 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400'
@@ -471,7 +526,6 @@ export default function StoreFormModal({ onClose, onSaved, initialStore }: Props
                   step="any"
                   required
                   readOnly={coordsLocked}
-                  placeholder="-97.01237"
                   className={`w-full max-w-full box-border px-3 py-2 rounded-xl border bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm tabular-nums ${
                     coordsLocked
                       ? 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400'

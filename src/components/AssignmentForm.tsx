@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, FormEvent, useCallback, useRef } from 're
 import { useLanguage } from './LanguageContext';
 import { fmtTime } from '@/lib/i18n';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
+import { formatStoreLabel } from '@/lib/stores';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface Assignee {
@@ -301,6 +302,20 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
                 aria-expanded={showSuggestions}
                 aria-controls="agent-suggestions-list"
                 aria-autocomplete="list"
+                // Anti–password-manager attributes. iOS Safari
+                // aggressively offers Passwords on any text input that
+                // looks credential-shaped (name=user|email|search etc.),
+                // so we use the new-password trick + 1Password's opt-out
+                // attribute, plus a generic name that doesn't match any
+                // heuristic.
+                name="watt-assignee-picker"
+                autoComplete="new-password"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-1p-ignore="true"
+                data-lpignore="true"
+                data-form-type="other"
                 onChange={(e) => {
                   setAgentSearch(e.target.value);
                   setShowSuggestions(true);
@@ -334,7 +349,6 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
                 }}
                 placeholder={t('assignments.agentSearchPlaceholder')}
                 className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm placeholder-gray-400"
-                autoComplete="off"
               />
               {showSuggestions && suggestions.length > 0 && (
                 <div
@@ -404,8 +418,7 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
             <option value="">{t('assignments.storeChoose')}</option>
             {stores.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name}
-                {s.address ? ` — ${s.address}` : ''}
+                {formatStoreLabel(s)}
               </option>
             ))}
           </select>

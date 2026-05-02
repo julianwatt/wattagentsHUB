@@ -4,6 +4,7 @@ import { useLanguage } from './LanguageContext';
 import { fmtTime as fmtTimeI18n } from '@/lib/i18n';
 import AssignmentCards from './AssignmentCards';
 import AssignmentTimelineModal from './AssignmentTimelineModal';
+import { formatStoreLabel } from '@/lib/stores';
 
 interface Props { role: string; }
 
@@ -299,7 +300,7 @@ export default function MyPerformanceClient({ role }: Props) {
                   className={`cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors ${rowTint(r)}`}
                 >
                   <td className="px-3 py-2.5 tabular-nums text-gray-700 dark:text-gray-200 whitespace-nowrap">{fmtDate(r.shift_date)}</td>
-                  <td className="px-3 py-2.5 text-gray-600 dark:text-gray-300">{r.store?.name ?? '—'}</td>
+                  <td className="px-3 py-2.5 text-gray-600 dark:text-gray-300">{r.store ? formatStoreLabel(r.store) : '—'}</td>
                   <td className="px-3 py-2.5 tabular-nums text-gray-700 dark:text-gray-200">{fmtTimeI18n(r.scheduled_start_time, lang)}</td>
                   <td className="px-3 py-2.5 tabular-nums">
                     {r.actual_entry_at ? (
@@ -362,7 +363,7 @@ export default function MyPerformanceClient({ role }: Props) {
         <AssignmentTimelineModal
           assignmentId={detailFor.id}
           agentName={t('myPerformance.youLabel')}
-          storeName={detailFor.store?.name ?? '—'}
+          storeName={detailFor.store ? formatStoreLabel(detailFor.store) : '—'}
           onClose={() => setDetailFor(null)}
         />
       )}

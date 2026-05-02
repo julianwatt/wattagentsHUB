@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useLanguage } from './LanguageContext';
 import StoreFormModal from './StoreFormModal';
 import ToggleSwitch from './ToggleSwitch';
+import { formatStoreLabel } from '@/lib/stores';
 
 interface Store {
   id: string;
@@ -103,12 +104,9 @@ export default function StoresClient() {
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{s.name}</p>
-                  {s.address && (
-                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 leading-snug break-words">
-                      {s.address}
-                    </p>
-                  )}
+                  <p className="text-sm font-bold text-gray-900 dark:text-gray-100 break-words leading-snug">
+                    {formatStoreLabel(s)}
+                  </p>
                 </div>
                 <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 ${
                   s.is_active

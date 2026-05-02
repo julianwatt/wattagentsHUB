@@ -9,6 +9,7 @@ import { usePreviewRole, useActiveUserId } from './PreviewRoleContext';
 import { useShift } from './ShiftContext';
 import { fmtDate, fmtTime } from '@/lib/i18n';
 import { ActivityEntry, CampaignType, effectivenessRate, getAllowedActivityModalities } from '@/lib/activity';
+import { formatStoreLabel } from '@/lib/stores';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
 
 type Modality = 'd2d' | 'retail' | 'both';
@@ -510,8 +511,9 @@ export default function ActivityClient({ session }: { session: Session }) {
                     <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
                       <span className="text-sm">📍</span>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{assignmentForDate.store_name}</p>
-                        {assignmentForDate.store_address && <p className="text-[10px] text-gray-400 truncate">{assignmentForDate.store_address}</p>}
+                        <p className="text-sm font-medium text-gray-800 dark:text-gray-100 break-words leading-snug">
+                          {formatStoreLabel({ name: assignmentForDate.store_name, address: assignmentForDate.store_address })}
+                        </p>
                       </div>
                     </div>
                   ) : assignmentForDate?.status === 'pending' ? (

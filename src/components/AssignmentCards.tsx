@@ -7,6 +7,7 @@ import { fmtTime } from '@/lib/i18n';
 import AssignmentTracker from './AssignmentTracker';
 import AssignmentProgressCard from './AssignmentProgressCard';
 import type { GeofenceEventType } from '@/lib/assignmentGeofence';
+import { formatStoreLabel } from '@/lib/stores';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface MyLastEvent {
@@ -285,14 +286,11 @@ export default function AssignmentCards({ role }: Props) {
             <span>{t('assignments.cardPendingTitle')}</span>
           </div>
           <div className="p-4 space-y-2.5">
-            {/* Store */}
+            {/* Store — formatStoreLabel emits "TYPE - street, city, zip" */}
             <div>
               <p className="text-base font-bold text-gray-900 dark:text-gray-100">
-                {a.store?.name ?? '—'}
+                {a.store ? formatStoreLabel(a.store) : '—'}
               </p>
-              {a.store?.address && (
-                <p className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">{a.store.address}</p>
-              )}
             </div>
 
             {/* Date / time / duration */}
@@ -385,11 +383,8 @@ export default function AssignmentCards({ role }: Props) {
               {/* Store + distance */}
               <div>
                 <p className="text-base font-bold text-gray-900 dark:text-gray-100">
-                  {a.store?.name ?? '—'}
+                  {a.store ? formatStoreLabel(a.store) : '—'}
                 </p>
-                {a.store?.address && (
-                  <p className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">{a.store.address}</p>
-                )}
                 <p className="text-[11px] mt-1.5">
                   <span className="text-gray-500 dark:text-gray-400">{t('assignments.cardDistance')}:</span>{' '}
                   {dist != null ? (

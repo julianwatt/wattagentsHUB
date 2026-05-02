@@ -7,6 +7,7 @@ import { fmtDistance } from '@/lib/geo';
 import { fmtTime } from '@/lib/i18n';
 import AssignmentTimelineModal from './AssignmentTimelineModal';
 import type { GeofenceEventType } from '@/lib/assignmentGeofence';
+import { formatStoreLabel } from '@/lib/stores';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface LastEvent {
@@ -487,8 +488,8 @@ const Card = function Card({ a, tick, fetchedAt, highlighted, acting, lang, t, o
 
       {/* Body */}
       <div className="space-y-1.5 text-[11px]">
-        <p className="text-gray-700 dark:text-gray-200 truncate">
-          📍 <strong>{a.store?.name ?? '—'}</strong>
+        <p className="text-gray-700 dark:text-gray-200 break-words leading-snug">
+          📍 <strong>{a.store ? formatStoreLabel(a.store) : '—'}</strong>
         </p>
         <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400 tabular-nums">
           <span>🕐 {startFmt}</span>
@@ -539,7 +540,7 @@ const Card = function Card({ a, tick, fetchedAt, highlighted, acting, lang, t, o
       {/* Quick actions */}
       <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
         <button
-          onClick={() => onTimeline({ id: a.id, agentName: a.agent?.name ?? '—', storeName: a.store?.name ?? '—' })}
+          onClick={() => onTimeline({ id: a.id, agentName: a.agent?.name ?? '—', storeName: a.store ? formatStoreLabel(a.store) : '—' })}
           className="text-[10px] font-bold px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"
         >
           {t('assignments.viewTimeline')}
