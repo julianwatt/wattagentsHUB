@@ -1,7 +1,16 @@
 'use client';
 import { useEffect, useRef, useState, FormEvent, useCallback } from 'react';
-import usePlacesAutocomplete, { getGeocode, getLatLng } from 'use-places-autocomplete';
+import usePlacesAutocomplete, { getDetails } from 'use-places-autocomplete';
 import { useLanguage } from './LanguageContext';
+
+// Texas bounding box (approximate, covers the whole state).
+//   SE corner: 25.84°N, -93.51°W
+//   NW corner: 36.50°N, -106.65°W
+// Used to bias + strict-bound the Places Autocomplete results so the CEO
+// only sees Texas addresses. The corners are passed as an LatLngBounds-like
+// object directly; the SDK's own constructor wraps them transparently.
+const TEXAS_BOUNDS_SW = { lat: 25.84, lng: -106.65 };
+const TEXAS_BOUNDS_NE = { lat: 36.50, lng: -93.51 };
 
 export interface StoreInitial {
   id: string;
@@ -137,10 +146,21 @@ function PlacesAddressInput({
     clearSuggestions,
   } = usePlacesAutocomplete({
     requestOptions: {
-      // Prefer addresses (street-level results). Empty geocode types fall
-      // through to mixed results — restricting to 'address' keeps the list
-      // tight and accurate for store entry.
+      // Restrict suggestions to Texas, US:
+      //   - country: 'us' eliminates non-US results outright.
+      //   - bounds + strictBounds restrict to the Texas bounding box.
+      //   - types 'address' returns street-level addresses only.
+      // The bounds/strictBounds combo causes Google to drop predictions whose
+      // geometry falls outside the box, which is exactly what we want.
+      componentRestrictions: { country: 'us' },
       types: ['address'],
+      bounds: {
+        south: TEXAS_BOUNDS_SW.lat,
+        west: TEXAS_BOUNDS_SW.lng,
+        north: TEXAS_BOUNDS_NE.lat,
+        east: TEXAS_BOUNDS_NE.lng,
+      } as unknown as never,
+      strictBounds: true,
     },
     debounce: 250,
   });
@@ -172,17 +192,36 @@ function PlacesAddressInput({
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [showList]);
 
-  const handlePick = async (description: string) => {
+  const handlePick = async (placeId: string, description: string) => {
     setValue(description, false);
     onChangeText(description);
     setShowList(false);
     clearSuggestions();
     try {
-      const results = await getGeocode({ address: description });
-      const { lat, lng } = await getLatLng(results[0]);
-      onSelect(description, lat, lng);
+      // Use Places Details (already-enabled Places API) instead of the
+      // separate Geocoding API. Asking for `geometry` + `formatted_address`
+      // explicitly is required — without it Google returns the row without
+      // those fields to save quota, and lat/lng would be undefined.
+      const detail = await getDetails({
+        placeId,
+        fields: ['geometry', 'formatted_address'],
+      });
+      if (typeof detail === 'string') {
+        // Some failure paths return a status string instead of a result.
+        console.warn('[stores] getDetails returned status string:', detail);
+        return;
+      }
+      const loc = detail?.geometry?.location;
+      if (!loc) {
+        console.warn('[stores] getDetails returned no geometry.location');
+        return;
+      }
+      // The result's lat/lng can be a function (legacy LatLng) or numbers.
+      const lat = typeof loc.lat === 'function' ? loc.lat() : (loc.lat as unknown as number);
+      const lng = typeof loc.lng === 'function' ? loc.lng() : (loc.lng as unknown as number);
+      onSelect(detail.formatted_address ?? description, lat, lng);
     } catch (err) {
-      console.warn('[stores] geocode failed:', err);
+      console.warn('[stores] getDetails failed:', err);
     }
   };
 
@@ -208,7 +247,7 @@ function PlacesAddressInput({
             <button
               key={p.place_id}
               type="button"
-              onClick={() => handlePick(p.description)}
+              onClick={() => handlePick(p.place_id, p.description)}
               className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-b border-gray-50 dark:border-gray-800 last:border-0"
             >
               <span className="font-medium">{p.structured_formatting?.main_text ?? p.description}</span>

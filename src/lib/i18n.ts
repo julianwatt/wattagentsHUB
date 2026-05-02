@@ -71,6 +71,9 @@ const es = {
     statusCompleted: 'Completada',
     statusIncomplete: 'No completada',
     statusCancelled: 'Cancelada',
+    endedByAdmin: 'Terminada por Admin',
+    endedByCeo: 'Terminada por CEO',
+    endedByGeneric: 'Terminada por gestión',
 
     // ── Agent cards ──────────────────────────────────────────────────────
     cardPendingTitle: 'Tienes una asignación pendiente',
@@ -833,6 +836,9 @@ const en: typeof es = {
     statusCompleted: 'Completed',
     statusIncomplete: 'Incomplete',
     statusCancelled: 'Cancelled',
+    endedByAdmin: 'Ended by Admin',
+    endedByCeo: 'Ended by CEO',
+    endedByGeneric: 'Ended by management',
 
     // ── Agent cards ──────────────────────────────────────────────────────
     cardPendingTitle: 'You have a pending assignment',

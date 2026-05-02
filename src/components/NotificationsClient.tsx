@@ -341,7 +341,11 @@ export default function NotificationsClient({ session }: { session: Session }) {
 
   const shiftTotalPages = Math.max(1, Math.ceil(shiftTotal / shiftPageSize));
 
-  const shiftFmtDate = (iso: string) => new Date(iso).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-MX', { year: 'numeric', month: 'short', day: 'numeric' });
+  // Use the centralized fmtDate/fmtTime helpers (which yield identical
+  // output server-side and client-side, modulo a single timezone) instead
+  // of toLocaleDateString — Node's runtime locale can disagree with the
+  // browser's, which is one source of the React #418 hydration mismatch.
+  const shiftFmtDate = (iso: string) => fmtDate(iso, lang);
   const shiftFmtTime = (iso: string) => fmtTime(iso, lang);
 
   const clearShiftFilters = () => {

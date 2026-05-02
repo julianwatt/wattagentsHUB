@@ -8,6 +8,8 @@ import AssignmentTimelineModal from './AssignmentTimelineModal';
 interface AgentLite { id: string; name: string; username: string; }
 interface StoreLite { id: string; name: string; address: string | null; }
 
+interface CancelledByUser { id: string; name: string; role: string }
+
 interface HistoryRow {
   id: string;
   agent_id: string;
@@ -25,8 +27,27 @@ interface HistoryRow {
   punctuality: 'on_time' | 'late' | 'no_show' | null;
   status: string;
   rejection_reason: string | null;
+  cancelled_at: string | null;
+  cancelled_by: string | null;
+  cancelled_by_user?: CancelledByUser | null;
   agent: AgentLite | null;
   store: StoreLite | null;
+}
+
+/** "Ended by Admin/CEO" badge label, derived from cancelled_by user role.
+ *  Returns null when there's no cancelling user (e.g. row not cancelled or
+ *  pre-shift cancellation that doesn't need a badge). */
+function endedByLabel(
+  row: { status: string; actual_entry_at: string | null; cancelled_by_user?: CancelledByUser | null },
+  t: (k: string) => string,
+): string | null {
+  if (row.status !== 'cancelled' || !row.cancelled_by_user) return null;
+  // Pre-shift cancellations (agent never arrived) don't need the badge.
+  if (!row.actual_entry_at) return null;
+  const role = row.cancelled_by_user.role;
+  if (role === 'admin') return t('assignments.endedByAdmin');
+  if (role === 'ceo')   return t('assignments.endedByCeo');
+  return t('assignments.endedByGeneric');
 }
 
 interface SummaryShape {
@@ -448,7 +469,16 @@ export default function AssignmentsHistoryClient() {
                   </td>
                   <td className="px-3 py-2.5">{durationBadge(r)}</td>
                   <td className="px-3 py-2.5">{punctualityBadge(r.punctuality)}</td>
-                  <td className="px-3 py-2.5">{statusBadge(r.status)}</td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex flex-col gap-1 items-start">
+                      {statusBadge(r.status)}
+                      {endedByLabel(r, t) && (
+                        <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 whitespace-nowrap">
+                          ⏹ {endedByLabel(r, t)}
+                        </span>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

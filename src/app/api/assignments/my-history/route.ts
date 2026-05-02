@@ -63,7 +63,8 @@ export async function GET(req: NextRequest) {
       scheduled_start_time, expected_duration_min, status,
       actual_entry_at, actual_exit_at, effective_minutes,
       met_duration, punctuality, rejection_reason,
-      agent_response_at, created_at,
+      agent_response_at, created_at, cancelled_at, cancelled_by,
+      cancelled_by_user:users!assignments_cancelled_by_fkey ( id, name, role ),
       store:stores ( id, name, address )
     `, { count: 'exact' })
     .eq('agent_id', userId);

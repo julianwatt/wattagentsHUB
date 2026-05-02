@@ -8,6 +8,8 @@ import AssignmentTimelineModal from './AssignmentTimelineModal';
 interface Props { role: string; }
 
 // ── Types ────────────────────────────────────────────────────────────────────
+interface CancelledByUser { id: string; name: string; role: string }
+
 interface MyHistoryRow {
   id: string;
   agent_id: string;
@@ -24,7 +26,22 @@ interface MyHistoryRow {
   met_duration: boolean | null;
   punctuality: 'on_time' | 'late' | 'no_show' | null;
   status: string;
+  cancelled_at: string | null;
+  cancelled_by: string | null;
+  cancelled_by_user?: CancelledByUser | null;
   store: { id: string; name: string; address: string | null } | null;
+}
+
+function endedByLabel(
+  row: { status: string; actual_entry_at: string | null; cancelled_by_user?: CancelledByUser | null },
+  t: (k: string) => string,
+): string | null {
+  if (row.status !== 'cancelled' || !row.cancelled_by_user) return null;
+  if (!row.actual_entry_at) return null;
+  const role = row.cancelled_by_user.role;
+  if (role === 'admin') return t('assignments.endedByAdmin');
+  if (role === 'ceo')   return t('assignments.endedByCeo');
+  return t('assignments.endedByGeneric');
 }
 
 interface SummaryShape {
@@ -302,7 +319,16 @@ export default function MyPerformanceClient({ role }: Props) {
                       formatHHMM(r.effective_minutes)
                     )}
                   </td>
-                  <td className="px-3 py-2.5">{durationBadge(r)}</td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex flex-col gap-1 items-start">
+                      {durationBadge(r)}
+                      {endedByLabel(r, t) && (
+                        <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 whitespace-nowrap">
+                          ⏹ {endedByLabel(r, t)}
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-3 py-2.5">{punctualityBadge(r.punctuality)}</td>
                 </tr>
               ))}

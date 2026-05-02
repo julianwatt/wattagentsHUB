@@ -4,6 +4,11 @@ import { authOptions } from '@/lib/auth-options';
 import { supabase } from '@/lib/supabase';
 import { sendPushToUser } from '@/lib/push';
 import { canManageAssignments } from '@/lib/permissions';
+import {
+  computeEffectiveMs,
+  type AssignmentEvent,
+  type GeofenceEventType,
+} from '@/lib/assignmentGeofence';
 
 const noCache = {
   'Cache-Control': 'no-store, no-cache, must-revalidate',
@@ -43,12 +48,15 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     );
   }
 
-  // Fetch the assignment + joined references for notification copy
+  // Fetch the assignment + joined references for notification copy.
+  // expected_duration_min is needed to compute met_duration when the cancel
+  // flow has to freeze the in_progress shift's tally.
   const { data: assignment, error: fetchErr } = await supabase
     .from('assignments')
     .select(`
       id, agent_id, assigned_by, store_id, shift_date,
-      scheduled_start_time, status,
+      scheduled_start_time, expected_duration_min, status,
+      actual_entry_at,
       store:stores ( id, name )
     `)
     .eq('id', id)
@@ -168,14 +176,49 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     );
   }
 
-  const now = new Date().toISOString();
+  const nowDate = new Date();
+  const now = nowDate.toISOString();
+
+  // If the cancellation hits an actively-running shift (the agent already
+  // arrived at the store), we freeze the tally as if the agent had clocked
+  // out at this exact moment. This preserves all the work the agent did up
+  // to the cancellation:
+  //   - actual_exit_at        ← cancelled_at
+  //   - effective_minutes     ← computeEffectiveMs over the events, with
+  //                             liveNow = now (closes any open "inside"
+  //                             interval right at the cancellation time)
+  //   - met_duration          ← whether they hit the expected duration
+  // For cancellations BEFORE arrival (status pending/accepted, no
+  // actual_entry_at), we leave those fields null — there's nothing to
+  // preserve and the row should look like a plain pre-shift cancellation.
+  const wasActive =
+    assignment.actual_entry_at !== null
+    && (assignment.status === 'in_progress' || assignment.status === 'accepted');
+
+  const updatePayload: Record<string, unknown> = {
+    status: 'cancelled',
+    cancelled_at: now,
+    cancelled_by: session.user.id,
+  };
+
+  if (wasActive) {
+    const { data: evRows } = await supabase
+      .from('assignment_geofence_events')
+      .select('event_type, occurred_at')
+      .eq('assignment_id', id)
+      .order('occurred_at', { ascending: true });
+    const evs = ((evRows ?? []) as { event_type: GeofenceEventType; occurred_at: string }[])
+      .map<AssignmentEvent>((e) => ({ event_type: e.event_type, occurred_at: e.occurred_at }));
+    const effMs = computeEffectiveMs(evs, nowDate);
+    const effMin = Math.floor(effMs / 60000);
+    updatePayload.actual_exit_at = now;
+    updatePayload.effective_minutes = effMin;
+    updatePayload.met_duration = effMin >= assignment.expected_duration_min;
+  }
+
   const { error: cancelErr } = await supabase
     .from('assignments')
-    .update({
-      status: 'cancelled',
-      cancelled_at: now,
-      cancelled_by: session.user.id,
-    })
+    .update(updatePayload)
     .eq('id', id);
 
   if (cancelErr) {
