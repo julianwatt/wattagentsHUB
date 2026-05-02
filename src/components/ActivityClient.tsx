@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import Link from 'next/link';
 import { Session } from 'next-auth';
 import AppLayout from './AppLayout';
 import InfoTooltip from './InfoTooltip';
@@ -9,6 +10,16 @@ import { useShift } from './ShiftContext';
 import { fmtDate } from '@/lib/i18n';
 import { ActivityEntry, CampaignType, effectivenessRate } from '@/lib/activity';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
+
+type Modality = 'd2d' | 'retail' | 'both';
+
+/** Per-date assignment context used by Retail-mode UX. */
+interface AssignmentForDate {
+  id: string;
+  status: 'pending' | 'accepted' | 'rejected' | 'in_progress' | 'completed' | 'incomplete' | 'cancelled';
+  store_name: string;
+  store_address: string | null;
+}
 
 // Use local date (not UTC) — toISOString() shifts day when UTC > local date
 const today = () => new Date().toLocaleDateString('en-CA');
@@ -47,18 +58,53 @@ export default function ActivityClient({ session }: { session: Session }) {
   const { activeUserId, isPreviewMode } = useActiveUserId(session.user.id);
   const { store: shiftStore, loading: shiftStoreLoading, shiftState } = useShift();
 
-  // Fetch real user name from DB
+  // Fetch real user name + modality from DB
   const [dbUserName, setDbUserName] = useState<string>(previewUserName ?? session.user.name ?? '');
+  const [userModality, setUserModality] = useState<Modality>('d2d');
+  const [modalityLoaded, setModalityLoaded] = useState(false);
   useEffect(() => {
-    if (previewUserName) { setDbUserName(previewUserName); return; }
     (async () => {
       try {
         const sb = getSupabaseBrowser();
-        const { data } = await sb.from('users').select('name').eq('id', activeUserId).single();
-        if (data?.name) setDbUserName(data.name);
+        const { data } = await sb.from('users').select('name, modality').eq('id', activeUserId).single();
+        if (!previewUserName && data?.name) setDbUserName(data.name);
+        if (data?.modality) setUserModality(data.modality as Modality);
       } catch {}
+      setModalityLoaded(true);
     })();
-  }, [activeUserId, previewUserName, session.user.name]);
+  }, [activeUserId, previewUserName]);
+
+  // Per-date assignment context (only relevant when Retail is in play)
+  const [assignmentForDate, setAssignmentForDate] = useState<AssignmentForDate | null>(null);
+  const [assignmentLoading, setAssignmentLoading] = useState(false);
+  const loadAssignmentForDate = useCallback(async (d: string) => {
+    setAssignmentLoading(true);
+    try {
+      const sb = getSupabaseBrowser();
+      const { data } = await sb
+        .from('assignments')
+        .select('id, status, store:stores(name, address)')
+        .eq('agent_id', activeUserId)
+        .eq('shift_date', d)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data) {
+        const store = data.store as unknown as { name: string; address: string | null } | null;
+        setAssignmentForDate({
+          id: data.id,
+          status: data.status as AssignmentForDate['status'],
+          store_name: store?.name ?? '—',
+          store_address: store?.address ?? null,
+        });
+      } else {
+        setAssignmentForDate(null);
+      }
+    } catch {
+      setAssignmentForDate(null);
+    }
+    setAssignmentLoading(false);
+  }, [activeUserId]);
 
   // If admin visits /activity without preview mode, redirect to /admin
   const isRealAdmin = session.user.role === 'admin';
@@ -144,6 +190,18 @@ export default function ActivityClient({ session }: { session: Session }) {
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
   useEffect(() => { loadEntry(date); }, [date, loadEntry]);
+  useEffect(() => { loadAssignmentForDate(date); }, [date, loadAssignmentForDate]);
+
+  // Force the campaign type to match the user's modality. For 'd2d' only:
+  // always D2D. For 'retail' only: always Retail. For 'both': respect what
+  // the user picked. This runs after modality is loaded so we don't flip
+  // back and forth on first render.
+  useEffect(() => {
+    if (!modalityLoaded) return;
+    if (userModality === 'd2d' && campaignType !== 'D2D') setCampaignType('D2D');
+    if (userModality === 'retail' && campaignType !== 'Retail') setCampaignType('Retail');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modalityLoaded, userModality]);
 
   // Restore localStorage draft once initial load is done and no DB entry exists for today
   useEffect(() => {
@@ -307,6 +365,12 @@ export default function ActivityClient({ session }: { session: Session }) {
   const fields = campaignType === 'D2D' ? D2D_FIELDS : RETAIL_FIELDS;
   const metrics = campaignType === 'D2D' ? d2d : retail;
 
+  // Retail logging requires an active accepted assignment for the date.
+  // Disable the +/- buttons when one isn't present.
+  const retailReady = campaignType !== 'Retail'
+    || (assignmentForDate && ['accepted', 'in_progress', 'completed', 'incomplete'].includes(assignmentForDate.status));
+  const retailBlocked = campaignType === 'Retail' && !retailReady;
+
   const scheduleAutoSave = useCallback((
     d: string, ct: CampaignType,
     newD2D: typeof EMPTY_D2D, newRetail: typeof EMPTY_RETAIL,
@@ -366,42 +430,44 @@ export default function ActivityClient({ session }: { session: Session }) {
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm" />
               </div>
 
-              {/* Campaign type */}
-              <div className="mb-4">
-                <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide flex items-center gap-1.5">
-                  {t('activity.campaignType')}
-                  <InfoTooltip text={t('activity.campaignTypeTooltip')} />
-                </label>
-                {todayEntry && date === today() && (
-                  <div className="mb-2 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-[11px] leading-snug text-amber-800 dark:text-amber-200 flex items-start gap-1.5">
-                    <span aria-hidden>🔒</span>
-                    <span>
-                      {t('activity.campaignLockedBannerPrefix')}{' '}
-                      <strong>{todayEntry.campaign_type}</strong>{' '}
-                      {t('activity.campaignLockedBannerSuffix')}
-                    </span>
+              {/* Campaign type — hidden when the agent's modality forces a single
+                  campaign. Visible toggle only for 'both'. */}
+              {userModality === 'both' && (
+                <div className="mb-4">
+                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide flex items-center gap-1.5">
+                    {t('activity.campaignType')}
+                    <InfoTooltip text={t('activity.campaignTypeTooltip')} />
+                  </label>
+                  {todayEntry && date === today() && (
+                    <div className="mb-2 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-[11px] leading-snug text-amber-800 dark:text-amber-200 flex items-start gap-1.5">
+                      <span aria-hidden>🔒</span>
+                      <span>
+                        {t('activity.campaignLockedBannerPrefix')}{' '}
+                        <strong>{todayEntry.campaign_type}</strong>{' '}
+                        {t('activity.campaignLockedBannerSuffix')}
+                      </span>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['D2D', 'Retail'] as CampaignType[]).map((ct) => {
+                      const lockedByEntry = todayEntry && date === today() && todayEntry.campaign_type !== ct;
+                      const isActive = campaignType === ct;
+                      const ctColor = ct === 'D2D' ? '#0284c7' : '#9333ea';
+                      return (
+                        <button key={ct} type="button"
+                          disabled={!!lockedByEntry}
+                          onClick={() => setCampaignType(ct)}
+                          title={lockedByEntry ? t('activity.campaignLocked') : undefined}
+                          className={`relative py-2 rounded-xl text-sm font-semibold border transition-colors disabled:cursor-not-allowed ${lockedByEntry ? 'opacity-50 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-dashed border-gray-300 dark:border-gray-600' : isActive ? 'text-white border-transparent' : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700'}`}
+                          style={isActive && !lockedByEntry ? { backgroundColor: ctColor } : {}}>
+                          {lockedByEntry && <span className="absolute top-1 right-1.5 text-[10px]" aria-hidden>🔒</span>}
+                          {ct === 'D2D' ? '🚶 D2D' : '🏪 Retail'}
+                        </button>
+                      );
+                    })}
                   </div>
-                )}
-                <div className="grid grid-cols-2 gap-2">
-                  {(['D2D', 'Retail'] as CampaignType[]).map((ct) => {
-                    // Lock the other tab if today already has an entry of one type
-                    const lockedByEntry = todayEntry && date === today() && todayEntry.campaign_type !== ct;
-                    const isActive = campaignType === ct;
-                    const ctColor = ct === 'D2D' ? '#0284c7' : '#9333ea'; // sky / purple
-                    return (
-                      <button key={ct} type="button"
-                        disabled={!!lockedByEntry}
-                        onClick={() => setCampaignType(ct)}
-                        title={lockedByEntry ? t('activity.campaignLocked') : undefined}
-                        className={`relative py-2 rounded-xl text-sm font-semibold border transition-colors disabled:cursor-not-allowed ${lockedByEntry ? 'opacity-50 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-dashed border-gray-300 dark:border-gray-600' : isActive ? 'text-white border-transparent' : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700'}`}
-                        style={isActive && !lockedByEntry ? { backgroundColor: ctColor } : {}}>
-                        {lockedByEntry && <span className="absolute top-1 right-1.5 text-[10px]" aria-hidden>🔒</span>}
-                        {ct === 'D2D' ? '🚶 D2D' : '🏪 Retail'}
-                      </button>
-                    );
-                  })}
                 </div>
-              </div>
+              )}
 
               {/* Location */}
               {campaignType === 'D2D' && (
@@ -414,23 +480,37 @@ export default function ActivityClient({ session }: { session: Session }) {
               )}
               {campaignType === 'Retail' && (
                 <div className="mb-4">
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">{t('shift.activeStore')}</label>
-                  {shiftStoreLoading ? (
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">{t('activity.assignedStore')}</label>
+                  {assignmentLoading ? (
                     <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
                       <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                      {t('shift.loading')}
+                      {t('common.loading')}
                     </div>
-                  ) : shiftStoreName ? (
+                  ) : assignmentForDate && (assignmentForDate.status === 'accepted' || assignmentForDate.status === 'in_progress' || assignmentForDate.status === 'completed' || assignmentForDate.status === 'incomplete') ? (
                     <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
                       <span className="text-sm">📍</span>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{shiftStoreName}</p>
-                        {shiftStoreAddress && <p className="text-[10px] text-gray-400 truncate">{shiftStoreAddress}</p>}
+                        <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{assignmentForDate.store_name}</p>
+                        {assignmentForDate.store_address && <p className="text-[10px] text-gray-400 truncate">{assignmentForDate.store_address}</p>}
                       </div>
                     </div>
+                  ) : assignmentForDate?.status === 'pending' ? (
+                    <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-3">
+                      <p className="text-xs font-semibold text-amber-800 dark:text-amber-200 mb-1">⏳ {t('activity.assignmentPendingTitle')}</p>
+                      <p className="text-[11px] text-amber-700 dark:text-amber-300">{t('activity.assignmentPendingBody')}</p>
+                      <Link href="/home" className="inline-block mt-1.5 text-[11px] font-bold underline" style={{ color: 'var(--primary)' }}>
+                        {t('activity.assignmentPendingCta')} →
+                      </Link>
+                    </div>
+                  ) : assignmentForDate?.status === 'rejected' ? (
+                    <div className="rounded-xl bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 px-3 py-3">
+                      <p className="text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1">⏸️ {t('activity.assignmentRejectedTitle')}</p>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400">{t('activity.assignmentRejectedBody')}</p>
+                    </div>
                   ) : (
-                    <div className="px-3 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-                      <p className="text-xs text-amber-700 dark:text-amber-300">{t('shift.noActiveShift')}</p>
+                    <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-3">
+                      <p className="text-xs font-semibold text-amber-800 dark:text-amber-200 mb-1">📭 {t('activity.assignmentMissingTitle')}</p>
+                      <p className="text-[11px] text-amber-700 dark:text-amber-300">{t('activity.assignmentMissingBody')}</p>
                     </div>
                   )}
                 </div>
@@ -459,7 +539,7 @@ export default function ActivityClient({ session }: { session: Session }) {
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <button type="button" disabled={isPreviewMode || isIncMinus || val === 0}
+                        <button type="button" disabled={isPreviewMode || isIncMinus || val === 0 || retailBlocked}
                           onClick={() => handleIncrement(f.key, -1)}
                           className="w-11 h-11 md:w-12 md:h-12 rounded-xl font-bold text-lg md:text-xl flex items-center justify-center border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-red-50 hover:text-red-500 active:scale-95 disabled:opacity-30 transition-all flex-shrink-0">
                           {isIncMinus ? '…' : '−'}
@@ -467,7 +547,7 @@ export default function ActivityClient({ session }: { session: Session }) {
                         <input type="number" min={0} max={999} value={val} readOnly={isPreviewMode}
                           onChange={(e) => setMetrics(f.key, Math.max(0, Number(e.target.value)))}
                           className="flex-1 text-center px-2 py-2.5 md:py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 font-bold text-xl md:text-2xl focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
-                        <button type="button" disabled={isPreviewMode || isIncPlus}
+                        <button type="button" disabled={isPreviewMode || isIncPlus || retailBlocked}
                           onClick={() => handleIncrement(f.key, 1)}
                           className="w-11 h-11 md:w-12 md:h-12 rounded-xl font-bold text-lg md:text-xl flex items-center justify-center text-white active:scale-95 disabled:opacity-50 transition-all flex-shrink-0"
                           style={{ backgroundColor: 'var(--primary)' }}>

@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   const session = await requireAdminOrCeo();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { username, name, role, manager_id, email, hire_date } = await req.json();
+  const { username, name, role, manager_id, email, hire_date, modality } = await req.json();
   if (!username || !name) {
     return NextResponse.json({ error: 'username and name are required' }, { status: 400 });
   }
@@ -47,6 +47,8 @@ export async function POST(req: NextRequest) {
       email || null,
       true, // must_change_password
       hire_date || null,
+      // Only agents have a meaningful modality; non-agents default to 'd2d'
+      role === 'agent' && (modality === 'retail' || modality === 'both') ? modality : 'd2d',
     );
 
     // Try to email the temp password if email was provided

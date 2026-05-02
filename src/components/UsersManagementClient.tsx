@@ -7,6 +7,7 @@ import ToggleSwitch from './ToggleSwitch';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
 
 type UserRole = 'agent' | 'jr_manager' | 'sr_manager' | 'admin' | 'ceo';
+type Modality = 'd2d' | 'retail' | 'both';
 type Tab = 'users' | 'roster';
 type ActiveFilter = 'all' | 'active' | 'inactive';
 
@@ -20,6 +21,7 @@ interface User {
   must_change_password: boolean;
   is_active: boolean;
   hire_date: string;
+  modality: Modality;
   created_at: string;
 }
 
@@ -188,6 +190,7 @@ export default function UsersManagementClient({ session }: { session: Session })
     role: 'agent' as UserRole,
     manager_id: '', sr_manager_filter: '',
     hire_date: today(),
+    modality: 'd2d' as Modality,
   });
   const [formError, setFormError] = useState('');
   const [created, setCreated] = useState<CreatedUserInfo | null>(null);
@@ -206,7 +209,7 @@ export default function UsersManagementClient({ session }: { session: Session })
     if (res.ok) {
       const data = await res.json();
       setCreated({ username: data.username, name: data.name, tempPassword: data.tempPassword, emailSent: data.emailSent, email: data.email });
-      setForm({ username: '', name: '', email: '', role: 'agent', manager_id: '', sr_manager_filter: '', hire_date: today() });
+      setForm({ username: '', name: '', email: '', role: 'agent', manager_id: '', sr_manager_filter: '', hire_date: today(), modality: 'd2d' });
       fetchUsers();
     } else {
       const d = await res.json();
@@ -399,6 +402,20 @@ export default function UsersManagementClient({ session }: { session: Session })
                     <input type="date" value={form.hire_date} required onChange={(e) => setForm({ ...form, hire_date: e.target.value })}
                       className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm" />
                   </div>
+
+                  {/* Modality — only relevant for agents */}
+                  {form.role === 'agent' && (
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.modalityLabel')}</label>
+                      <select value={form.modality} onChange={(e) => setForm({ ...form, modality: e.target.value as Modality })}
+                        className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm">
+                        <option value="d2d">{t('admin.modalityD2D')}</option>
+                        <option value="retail">{t('admin.modalityRetail')}</option>
+                        <option value="both">{t('admin.modalityBoth')}</option>
+                      </select>
+                      <p className="text-[10px] text-gray-400 mt-1">{t('admin.modalityHint')}</p>
+                    </div>
+                  )}
 
                   {formError && <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl px-3 py-2">{formError}</p>}
 
@@ -751,6 +768,7 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
   const [srManager, setSrManager] = useState(initialSr);
   const [managerId, setManagerId] = useState(initialMgr);
   const [isActive, setIsActive] = useState(user.is_active);
+  const [modality, setModality] = useState<Modality>(user.modality ?? 'd2d');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -775,6 +793,8 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
       id: user.id, name, email: email || null, role,
       hire_date: hireDate, is_active: isActive,
       manager_id: resolvedManagerId,
+      // Modality only persisted for agents (other roles always 'd2d')
+      modality: role === 'agent' ? modality : 'd2d',
     };
 
     try {
@@ -871,6 +891,18 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
               disabled={ceoViewingAdmin}
               className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm disabled:opacity-60" />
           </div>
+          {role === 'agent' && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.modalityLabel')}</label>
+              <select value={modality} onChange={(e) => setModality(e.target.value as Modality)}
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm">
+                <option value="d2d">{t('admin.modalityD2D')}</option>
+                <option value="retail">{t('admin.modalityRetail')}</option>
+                <option value="both">{t('admin.modalityBoth')}</option>
+              </select>
+              <p className="text-[10px] text-gray-400 mt-1">{t('admin.modalityHint')}</p>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.role')}</label>
             <select value={role} onChange={(e) => { setRole(e.target.value as UserRole); setManagerId(''); setSrManager(''); }}
