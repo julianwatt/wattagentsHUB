@@ -8,9 +8,13 @@ export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  // Only active stores are exposed to the assignment selector. Inactive
+  // stores stay in the table so historical assignments keep their
+  // store_id reference, but they don't appear as new options.
   const { data, error } = await supabase
     .from('stores')
     .select('id, name, address, latitude, longitude, geofence_radius_meters')
+    .eq('is_active', true)
     .order('name', { ascending: true });
 
   if (error) {

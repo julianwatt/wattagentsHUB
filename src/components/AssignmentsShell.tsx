@@ -5,12 +5,13 @@ import { Session } from 'next-auth';
 import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
 
-type TabKey = 'today' | 'new' | 'history';
+type TabKey = 'today' | 'new' | 'history' | 'stores';
 
 const TABS: { key: TabKey; href: string; labelKey: string }[] = [
   { key: 'today',   href: '/assignments/today',   labelKey: 'assignments.tabToday' },
   { key: 'new',     href: '/assignments/new',     labelKey: 'assignments.tabNew' },
   { key: 'history', href: '/assignments/history', labelKey: 'assignments.tabHistory' },
+  { key: 'stores',  href: '/assignments/stores',  labelKey: 'assignments.tabStores' },
 ];
 
 interface Props {
@@ -25,6 +26,7 @@ export default function AssignmentsShell({ session, children }: Props) {
   const activeTab: TabKey =
     pathname?.startsWith('/assignments/new') ? 'new'
     : pathname?.startsWith('/assignments/history') ? 'history'
+    : pathname?.startsWith('/assignments/stores') ? 'stores'
     : 'today';
 
   return (
@@ -39,9 +41,11 @@ export default function AssignmentsShell({ session, children }: Props) {
           </p>
         </div>
 
-        {/* Tab bar — horizontally scrollable on narrow widths so it never
-            forces the page to scroll. Visual style mirrors NotificationsClient. */}
-        <div className="flex gap-0 border-b border-gray-200 dark:border-gray-700 overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0 scrollbar-none">
+        {/* Tab bar — horizontally scrollable on narrow widths.
+            overflow-y-hidden prevents the spurious vertical scrollbar that
+            shows up on desktop because of the active tab's `-mb-px` negative
+            margin (Block 2.2 fix). */}
+        <div className="flex gap-0 border-b border-gray-200 dark:border-gray-700 overflow-x-auto overflow-y-hidden -mx-3 sm:mx-0 px-3 sm:px-0 scrollbar-none">
           {TABS.map((tab) => {
             const active = activeTab === tab.key;
             return (
