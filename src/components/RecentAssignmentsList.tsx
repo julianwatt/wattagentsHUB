@@ -2,6 +2,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useLanguage } from './LanguageContext';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
+import { fmtTime } from '@/lib/i18n';
+import { formatStoreLabel } from '@/lib/stores';
 import type { AssignmentFormPreset } from './AssignmentForm';
 
 interface AssignmentRow {
@@ -41,7 +43,7 @@ const todayLocal = (): string => {
 };
 
 export default function RecentAssignmentsList({ refreshKey, onReassign }: Props) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [items, setItems] = useState<AssignmentRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -49,15 +51,21 @@ export default function RecentAssignmentsList({ refreshKey, onReassign }: Props)
     setLoading(true);
     try {
       const today = todayLocal();
-      // "Asignaciones creadas hoy por mí" — created_at within today, by me.
-      // We use shift_date>=today as a proxy plus assigned_by_me=1.
+      // Asignaciones del día creadas por mí: cap at the API maximum (500),
+      // exclude 'replaced' rows (historical noise that was hiding the live
+      // ones), and rely on the server's default ordering by created_at desc.
       const res = await fetch(
-        `/api/assignments?from=${today}&assigned_by_me=1&limit=50`,
+        `/api/assignments?from=${today}&assigned_by_me=1&limit=500&statuses=pending,accepted,rejected,in_progress,completed,incomplete,cancelled`,
         { cache: 'no-store' },
       );
       if (res.ok) {
         const data = await res.json();
-        setItems(data.assignments ?? []);
+        // Defensive sort by created_at desc on the client too — an old API
+        // response with a different default order shouldn't reshuffle the
+        // table back to ascending.
+        const list = (data.assignments ?? []) as AssignmentRow[];
+        list.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
+        setItems(list);
       }
     } catch {
       /* silent */
@@ -111,8 +119,11 @@ export default function RecentAssignmentsList({ refreshKey, onReassign }: Props)
                       {t(badge.labelKey)}
                     </span>
                   </div>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 tabular-nums">
-                    {a.store?.name ?? '—'} · {a.shift_date} · {a.scheduled_start_time}
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 break-words leading-snug">
+                    {a.store ? formatStoreLabel(a.store) : '—'}
+                  </p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
+                    {a.shift_date} · {fmtTime(a.scheduled_start_time, lang)}
                   </p>
                   {a.status === 'rejected' && a.rejection_reason && (
                     <p className="text-[10px] text-red-600 dark:text-red-400 mt-0.5 italic">

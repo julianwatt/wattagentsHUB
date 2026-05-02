@@ -65,7 +65,9 @@ export async function GET() {
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  // 1. Today's assignments with joined people + store
+  // 1. Today's assignments with joined people + store. Exclude 'replaced' —
+  //    those are historical rows superseded by a fresher one for the same
+  //    (agent, day) and should never reach the live "Hoy" panel.
   const { data: aData, error: aErr } = await supabase
     .from('assignments')
     .select(`
@@ -79,6 +81,7 @@ export async function GET() {
       store:stores ( id, name, address, latitude, longitude )
     `)
     .eq('shift_date', todayStr)
+    .neq('status', 'replaced')
     .order('scheduled_start_time', { ascending: true })
     .order('created_at', { ascending: true });
 

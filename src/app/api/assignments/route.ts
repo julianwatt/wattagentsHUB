@@ -159,20 +159,65 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Store not found' }, { status: 404 });
   }
 
-  // Pre-flight duplicate check (gives a nicer error than the partial unique
-  // index conflict). Race conditions are still caught by the index below.
-  const { data: existing } = await supabase
+  // Business rule: an agent can have ONLY ONE active assignment per day.
+  // Read the most recent existing row for this (agent, day) — regardless
+  // of status — and decide what to do based on its state.
+  const { data: priorRows } = await supabase
     .from('assignments')
     .select('id, status')
     .eq('agent_id', agent_id)
     .eq('shift_date', shift_date)
-    .in('status', ['pending', 'accepted', 'in_progress', 'completed', 'incomplete'])
-    .limit(1);
-  if (existing && existing.length > 0) {
+    .order('created_at', { ascending: false });
+
+  const priorList = (priorRows ?? []) as { id: string; status: string }[];
+  const livePrior = priorList.find((r) =>
+    ['accepted', 'in_progress', 'completed', 'incomplete'].includes(r.status),
+  );
+  if (livePrior) {
+    // Block: agent already has a binding/active row. CEO must cancel it
+    // before creating a new one. The UI surfaces this as a hard error.
     return NextResponse.json(
-      { error: 'duplicate', message: 'El agente ya tiene una asignación activa para esa fecha' },
+      {
+        error: 'duplicate_active',
+        message: 'El agente ya tiene una asignación activa hoy. Cancélala antes de crear una nueva.',
+        existing_id: livePrior.id,
+      },
       { status: 409 },
     );
+  }
+
+  // Pending row: ask for explicit confirmation before stamping it
+  // 'replaced'. The client passes ?replace=1 (or {replace:true} in body)
+  // when the CEO confirms the warning.
+  const replaceFlag = body?.replace === true
+    || new URL(req.url).searchParams.get('replace') === '1';
+  const pendingPrior = priorList.find((r) => r.status === 'pending');
+  if (pendingPrior && !replaceFlag) {
+    return NextResponse.json(
+      {
+        error: 'duplicate_pending',
+        message: 'El agente tiene una asignación pendiente. Confirma para reemplazarla.',
+        existing_id: pendingPrior.id,
+      },
+      { status: 409 },
+    );
+  }
+
+  // Mark all rejected/cancelled/pending priors as 'replaced' so they
+  // disappear from the active "Hoy" panel. The 'replaced' status is
+  // explicitly excluded from the partial-unique index, so the new INSERT
+  // below won't violate it.
+  const replaceableIds = priorList
+    .filter((r) => ['rejected', 'cancelled', 'pending'].includes(r.status))
+    .map((r) => r.id);
+  if (replaceableIds.length > 0) {
+    const { error: replaceErr } = await supabase
+      .from('assignments')
+      .update({ status: 'replaced' })
+      .in('id', replaceableIds);
+    if (replaceErr) {
+      console.error('[assignments POST] replace prior error:', replaceErr);
+    }
   }
 
   // Insert

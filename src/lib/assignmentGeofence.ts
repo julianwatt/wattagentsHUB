@@ -27,8 +27,12 @@ export const NOTIFICATION_DEBOUNCE_MS = 2 * 60 * 1000;
 export const PUNCTUALITY_GRACE_MIN = 5;
 
 /** Beyond grace, before this cutoff counts as "late" (partial credit).
- *  Past this cutoff (or never arriving) is "no_show". */
+ *  Past this cutoff transitions into the heavier "late_arrival" buckets. */
 export const PUNCTUALITY_LATE_CUTOFF_MIN = 30;
+
+/** Beyond LATE_CUTOFF, up to this many minutes counts as "late_arrival"
+ *  (Retardo). Past this cutoff is "late_severe" (Retardo significativo). */
+export const PUNCTUALITY_LATE_ARRIVAL_CUTOFF_MIN = 120;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 export type Ring = 'inner' | 'warn' | 'outer';
@@ -137,7 +141,18 @@ export function computeEffectiveMs(
 }
 
 // ── Compliance determination ─────────────────────────────────────────────────
-export type Punctuality = 'on_time' | 'late' | 'no_show';
+/**
+ * Five-bucket punctuality classification. The first three buckets reflect
+ * varying degrees of "still made the shift"; the last two flag missed or
+ * effectively missed shifts.
+ *
+ *   on_time       ≤ 5 min late (within grace)
+ *   late          5–30 min late (tarde tolerable, partial credit)
+ *   late_arrival  30 min – 2 h late (Retardo)
+ *   late_severe   > 2 h late but did arrive (Retardo significativo)
+ *   no_show       never arrived
+ */
+export type Punctuality = 'on_time' | 'late' | 'late_arrival' | 'late_severe' | 'no_show';
 
 export interface ComplianceResult {
   effective_minutes: number;
@@ -146,12 +161,59 @@ export interface ComplianceResult {
 }
 
 /**
+ * Single source of truth for translating an entry timestamp into a
+ * Punctuality bucket. Used everywhere the platform asks "how late was the
+ * agent?" so the thresholds never drift between UI and server.
+ */
+export function punctualityForEntry(args: {
+  shift_date: string;             // YYYY-MM-DD
+  scheduled_start_time: string;   // HH:MM[:SS]
+  actual_entry_at: string | null; // ISO; null means never arrived
+}): Punctuality {
+  if (!args.actual_entry_at) return 'no_show';
+  const time = args.scheduled_start_time.length === 5
+    ? `${args.scheduled_start_time}:00`
+    : args.scheduled_start_time;
+  const scheduled = new Date(`${args.shift_date}T${time}Z`);
+  const entry = new Date(args.actual_entry_at);
+  const diffMin = (entry.getTime() - scheduled.getTime()) / 60000;
+  if (diffMin <= PUNCTUALITY_GRACE_MIN) return 'on_time';
+  if (diffMin <= PUNCTUALITY_LATE_CUTOFF_MIN) return 'late';
+  if (diffMin <= PUNCTUALITY_LATE_ARRIVAL_CUTOFF_MIN) return 'late_arrival';
+  return 'late_severe';
+}
+
+/**
+ * Live status for an assignment that hasn't started yet (no actual_entry_at).
+ *   pending_arrival   now < scheduled
+ *   awaiting_arrival  scheduled ≤ now ≤ scheduled + 2h
+ *   no_show           now > scheduled + 2h, agent never arrived
+ *
+ * Once the agent enters the perimeter, callers should switch to
+ * punctualityForEntry() — that bucket has the authoritative answer.
+ */
+export type LivePunctuality = 'pending_arrival' | 'awaiting_arrival' | 'no_show';
+export function liveStatusBeforeEntry(args: {
+  shift_date: string;
+  scheduled_start_time: string;
+  now?: Date;
+}): LivePunctuality {
+  const time = args.scheduled_start_time.length === 5
+    ? `${args.scheduled_start_time}:00`
+    : args.scheduled_start_time;
+  const scheduled = new Date(`${args.shift_date}T${time}Z`);
+  const now = args.now ?? new Date();
+  const diffMin = (now.getTime() - scheduled.getTime()) / 60000;
+  if (diffMin < 0) return 'pending_arrival';
+  if (diffMin <= PUNCTUALITY_LATE_ARRIVAL_CUTOFF_MIN) return 'awaiting_arrival';
+  return 'no_show';
+}
+
+/**
  * Compute compliance indicators from the raw assignment data + events.
  *
  *  - met_duration : effective_minutes >= expected_duration_min
- *  - punctuality  : on_time   if entry within PUNCTUALITY_GRACE_MIN of scheduled
- *                   late      if entry within PUNCTUALITY_LATE_CUTOFF_MIN
- *                   no_show   if entry never recorded or > cutoff late
+ *  - punctuality  : delegated to punctualityForEntry (5 buckets).
  */
 export function computeCompliance(args: {
   shift_date: string;             // YYYY-MM-DD
@@ -164,35 +226,13 @@ export function computeCompliance(args: {
   const totalMs = computeEffectiveMs(args.events, args.liveNow);
   const minutes = Math.floor(totalMs / 60000);
 
-  const met_duration = minutes >= args.expected_duration_min;
-
-  // Build the scheduled start in the SAME reference frame as `actual_entry_at`
-  // (UTC ISO). `shift_date` (date) and `scheduled_start_time` (time) are
-  // timezone-naive; we compare them as UTC. This assumes the project operates
-  // in a single, consistent timezone — fine for the Watt Distributors
-  // internal tool. If a future deployment serves multiple timezones, store
-  // the offset on the assignment row and apply it here.
-  const time = args.scheduled_start_time.length === 5
-    ? `${args.scheduled_start_time}:00`
-    : args.scheduled_start_time;
-  const scheduled = new Date(`${args.shift_date}T${time}Z`);
-
-  let punctuality: Punctuality = 'no_show';
-  if (args.actual_entry_at) {
-    const entry = new Date(args.actual_entry_at);
-    const diffMin = (entry.getTime() - scheduled.getTime()) / 60000;
-    if (diffMin <= PUNCTUALITY_GRACE_MIN) {
-      punctuality = 'on_time';
-    } else if (diffMin <= PUNCTUALITY_LATE_CUTOFF_MIN) {
-      punctuality = 'late';
-    } else {
-      punctuality = 'no_show';
-    }
-  }
-
   return {
     effective_minutes: minutes,
-    met_duration,
-    punctuality,
+    met_duration: minutes >= args.expected_duration_min,
+    punctuality: punctualityForEntry({
+      shift_date: args.shift_date,
+      scheduled_start_time: args.scheduled_start_time,
+      actual_entry_at: args.actual_entry_at,
+    }),
   };
 }

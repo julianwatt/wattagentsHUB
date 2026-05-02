@@ -32,8 +32,9 @@ interface TodayAssignment {
   actual_exit_at: string | null;
   effective_minutes: number;
   met_duration: boolean | null;
-  punctuality: 'on_time' | 'late' | 'no_show' | null;
+  punctuality: 'on_time' | 'late' | 'late_arrival' | 'late_severe' | 'no_show' | null;
   rejection_reason: string | null;
+  created_at?: string;
   agent: { id: string; name: string; username: string } | null;
   store: { id: string; name: string; address: string | null } | null;
   last_event: LastEvent | null;
@@ -52,8 +53,16 @@ const formatDuration = (ms: number) => {
 type Group = 'attention' | 'inProgress' | 'pendingArrival' | 'completed';
 
 function groupOf(a: TodayAssignment): Group {
-  // Needs attention: pending, rejected (not yet replaced), or actively outside
-  if (a.status === 'pending' || a.status === 'rejected' || a.status === 'cancelled') return 'attention';
+  // Per the business spec:
+  //   pending without accept   → attention
+  //   rejected (not replaced)  → attention   (replaced rows are filtered upstream)
+  //   in_progress + outside    → attention
+  //   in_progress + inside     → inProgress
+  //   accepted (awaiting)      → pendingArrival
+  //   completed/incomplete     → completed
+  //   cancelled                → don't surface anywhere; the CEO already
+  //                              acted, the agent has no current assignment.
+  if (a.status === 'pending' || a.status === 'rejected') return 'attention';
   if (a.status === 'in_progress') {
     if (a.last_event?.event_type === 'exited_warn' || a.last_event?.event_type === 'exited_final') {
       return 'attention';
@@ -61,7 +70,9 @@ function groupOf(a: TodayAssignment): Group {
     return 'inProgress';
   }
   if (a.status === 'accepted') return 'pendingArrival';
-  return 'completed'; // completed | incomplete
+  if (a.status === 'completed' || a.status === 'incomplete') return 'completed';
+  // cancelled (and any future unknown status): hide from active panel
+  return 'completed';
 }
 
 // Subtle highlight animation for newly-changed rows
@@ -114,7 +125,22 @@ export default function AssignmentsTodayClient() {
       const res = await fetch('/api/assignments/today', { cache: 'no-store' });
       if (res.ok) {
         const j = await res.json();
-        const next: TodayAssignment[] = j.assignments ?? [];
+        const raw: TodayAssignment[] = j.assignments ?? [];
+        // Hide cancelled rows that are NOT replaced (the CEO acted; no
+        // need to surface the trace in the live panel) — though typically
+        // by the time a cancellation lands a new replacement has already
+        // been created, marking it 'replaced' (filtered upstream).
+        // Defensive dedupe across agents: if multiple non-cancelled rows
+        // exist for the same agent, keep only the most recently created.
+        const filtered = raw.filter((a) => a.status !== 'cancelled');
+        const byAgent = new Map<string, TodayAssignment>();
+        for (const a of filtered) {
+          const prev = byAgent.get(a.agent_id);
+          if (!prev || (a.created_at ?? '') > (prev.created_at ?? '')) {
+            byAgent.set(a.agent_id, a);
+          }
+        }
+        const next = Array.from(byAgent.values());
         setFetchedAt(Date.now());
         // Detect changes vs current items to fire highlight animations
         setItems((prev) => {

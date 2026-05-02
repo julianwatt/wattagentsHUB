@@ -91,6 +91,7 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [replacePrompt, setReplacePrompt] = useState<string | null>(null);
 
   // ── Load assignees + stores ─────────────────────────────────────────────
   useEffect(() => {
@@ -217,6 +218,10 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
       return;
     }
 
+    await postAssignment(false);
+  };
+
+  const postAssignment = async (replace: boolean) => {
     setSubmitting(true);
     try {
       const res = await fetch('/api/assignments', {
@@ -228,11 +233,17 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
           shift_date: shiftDate,
           scheduled_start_time: startTime,
           expected_duration_min: durationMin,
+          replace,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        if (res.status === 409 && data?.error === 'duplicate') {
+        if (res.status === 409 && data?.error === 'duplicate_active') {
+          setFormError(data.message ?? t('assignments.errorAlreadyAssigned'));
+        } else if (res.status === 409 && data?.error === 'duplicate_pending') {
+          // Surface a confirmation prompt instead of treating this as an error.
+          setReplacePrompt(data.message ?? t('assignments.replacePromptBody'));
+        } else if (res.status === 409 && data?.error === 'duplicate') {
           setFormError(data.message ?? t('assignments.errorAlreadyAssigned'));
         } else {
           setFormError(data?.error ?? t('assignments.errorGeneric'));
@@ -242,6 +253,7 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
       }
       const name = selectedAgent?.name ?? '';
       setSuccess(t('assignments.successCreated').replace('{agent}', name));
+      setReplacePrompt(null);
       resetForm();
       onCreated?.(data.assignment?.id);
     } catch {
@@ -503,10 +515,37 @@ export default function AssignmentForm({ preset, presetVersion, onCreated }: Pro
             ✓ {success}
           </p>
         )}
+        {/* Inline confirmation when the agent already has a *pending*
+            assignment for this date — the API returned 409 duplicate_pending
+            and is offering to replace it. Confirm = retry POST with
+            replace=true; Cancel = clear the prompt. */}
+        {replacePrompt && (
+          <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2.5 space-y-2">
+            <p className="text-xs text-amber-800 dark:text-amber-200 leading-snug">⚠️ {replacePrompt}</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setReplacePrompt(null)}
+                disabled={submitting}
+                className="flex-1 text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-60"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => postAssignment(true)}
+                disabled={submitting}
+                className="flex-1 text-[11px] font-bold px-3 py-1.5 rounded-lg text-white bg-amber-600 hover:bg-amber-700 transition-colors disabled:opacity-60"
+              >
+                {t('assignments.replaceConfirmBtn')}
+              </button>
+            </div>
+          </div>
+        )}
 
         <button
           type="submit"
-          disabled={submitting || !!selectedAgentBusy || !agentId}
+          disabled={submitting || !!selectedAgentBusy || !agentId || !!replacePrompt}
           className="w-full py-2.5 rounded-xl text-white font-bold text-sm transition-colors disabled:opacity-60"
           style={{ backgroundColor: 'var(--primary)' }}
         >

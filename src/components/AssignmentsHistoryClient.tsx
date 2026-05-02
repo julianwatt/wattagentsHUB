@@ -25,7 +25,7 @@ interface HistoryRow {
    *  serverNow; client extrapolates with (Date.now() - fetchedAt). */
   effective_ms_now?: number;
   met_duration: boolean | null;
-  punctuality: 'on_time' | 'late' | 'no_show' | null;
+  punctuality: 'on_time' | 'late' | 'late_arrival' | 'late_severe' | 'no_show' | null;
   status: string;
   rejection_reason: string | null;
   cancelled_at: string | null;
@@ -261,9 +261,11 @@ export default function AssignmentsHistoryClient() {
     return <span className="text-[10px] text-gray-400">—</span>;
   };
   const punctualityBadge = (p: HistoryRow['punctuality']) => {
-    if (p === 'on_time') return <Badge color="emerald">{t('assignments.punctualityOnTime')}</Badge>;
-    if (p === 'late')    return <Badge color="amber">{t('assignments.punctualityLate')}</Badge>;
-    if (p === 'no_show') return <Badge color="red">{t('assignments.punctualityNoShow')}</Badge>;
+    if (p === 'on_time')      return <Badge color="emerald">{t('assignments.punctualityOnTime')}</Badge>;
+    if (p === 'late')         return <Badge color="amber">{t('assignments.punctualityLate')}</Badge>;
+    if (p === 'late_arrival') return <Badge color="amber">{t('assignments.punctualityLateArrival')}</Badge>;
+    if (p === 'late_severe')  return <Badge color="red">{t('assignments.punctualityLateSevere')}</Badge>;
+    if (p === 'no_show')      return <Badge color="red">{t('assignments.punctualityNoShow')}</Badge>;
     return <span className="text-[10px] text-gray-400">—</span>;
   };
   const statusBadge = (s: string) => {
