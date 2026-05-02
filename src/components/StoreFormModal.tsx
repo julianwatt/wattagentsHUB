@@ -60,7 +60,11 @@ function usePlacesScript(): PlacesStatus {
 
     const s = document.createElement('script');
     s.id = PLACES_SCRIPT_ID;
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&v=weekly`;
+    // loading=async is the parameter Google now requires to silence the
+    // "loaded directly without loading=async" performance warning. Combined
+    // with the script's async/defer attrs, it gives Google's loader the
+    // freedom to schedule its parsing work during browser idle time.
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&loading=async&v=weekly`;
     s.async = true;
     s.defer = true;
     s.onload = () => {
