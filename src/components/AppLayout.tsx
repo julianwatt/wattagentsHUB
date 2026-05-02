@@ -15,6 +15,7 @@ import { usePushSubscription } from './usePushSubscription';
 import { fmtDistance } from '@/lib/geo';
 import { useIsStandaloneIOS } from './useStandalone';
 import { isLegacyShiftPanelEnabled } from '@/lib/flags';
+import { canManageAssignments } from '@/lib/permissions';
 
 interface Props {
   session: Session;
@@ -36,6 +37,7 @@ const BASE_NAV = [
   { href: '/dashboard', icon: DashIcon, key: 'nav.dashboard' },
 ];
 const TEAM_NAV = { href: '/team', icon: TeamIcon, key: 'nav.team' };
+const ASSIGNMENTS_NAV = { href: '/assignments', icon: AssignmentsIcon, key: 'nav.assignments' };
 const MANAGE_NAV = { href: '/manage/users', icon: AdminIcon, key: 'nav.manage' };
 const NOTIF_NAV = { href: '/notifications', icon: NotifNavIcon, key: 'admin.notifications' };
 
@@ -151,6 +153,7 @@ export default function AppLayout({ session, children }: Props) {
       return true;
     }),
     ...(canSeeTeam ? [TEAM_NAV] : []),
+    ...(canManageAssignments(role) ? [ASSIGNMENTS_NAV] : []),
     ...((isAdminReal && !previewRole) || role === 'ceo' ? [NOTIF_NAV] : []),
     ...(canSeeAdmin ? [MANAGE_NAV] : []),
   ];
@@ -587,6 +590,10 @@ function NotifNavIcon({ className }: { className: string }) {
 }
 function RosterIcon({ className }: { className: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>;
+}
+function AssignmentsIcon({ className }: { className: string }) {
+  // Clipboard with checklist — represents task / shift assignment management.
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 12l2 2 4-4M9 17h6" /></svg>;
 }
 function HamburgerIcon({ className }: { className: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>;
