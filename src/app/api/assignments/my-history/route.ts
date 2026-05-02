@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { supabase } from '@/lib/supabase';
+import {
+  computeEffectiveMs,
+  type AssignmentEvent,
+  type GeofenceEventType,
+} from '@/lib/assignmentGeofence';
 
 const noCache = {
   'Cache-Control': 'no-store, no-cache, must-revalidate',
@@ -83,8 +88,31 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Enrich in_progress rows with effective_ms_now (matches /api/assignments/history)
+  const rows = (data ?? []) as Array<Record<string, unknown> & { id: string; status: string }>;
+  const inProgressIds = rows.filter((r) => r.status === 'in_progress').map((r) => r.id);
+  if (inProgressIds.length > 0) {
+    const { data: eData } = await supabase
+      .from('assignment_geofence_events')
+      .select('assignment_id, event_type, occurred_at')
+      .in('assignment_id', inProgressIds)
+      .order('occurred_at', { ascending: true });
+    const events = (eData ?? []) as { assignment_id: string; event_type: GeofenceEventType; occurred_at: string }[];
+    const byAssignment = new Map<string, AssignmentEvent[]>();
+    for (const ev of events) {
+      if (!byAssignment.has(ev.assignment_id)) byAssignment.set(ev.assignment_id, []);
+      byAssignment.get(ev.assignment_id)!.push({ event_type: ev.event_type, occurred_at: ev.occurred_at });
+    }
+    const now = new Date();
+    for (const r of rows) {
+      if (r.status === 'in_progress') {
+        r.effective_ms_now = computeEffectiveMs(byAssignment.get(r.id) ?? [], now);
+      }
+    }
+  }
+
   return NextResponse.json(
-    { assignments: data ?? [], total: count ?? 0, page, pageSize },
+    { assignments: rows, total: count ?? 0, page, pageSize, serverNow: new Date().toISOString() },
     { headers: noCache },
   );
 }

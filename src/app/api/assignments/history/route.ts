@@ -3,6 +3,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { supabase } from '@/lib/supabase';
 import { canManageAssignments } from '@/lib/permissions';
+import {
+  computeEffectiveMs,
+  type AssignmentEvent,
+  type GeofenceEventType,
+} from '@/lib/assignmentGeofence';
 
 const noCache = {
   'Cache-Control': 'no-store, no-cache, must-revalidate',
@@ -135,8 +140,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Enrich in_progress rows with effective_ms_now so the client can render
+  // a live-updating value without needing to call /today on top of /history.
+  const enriched = await enrichInProgressRows(data ?? []);
+
   return NextResponse.json(
-    { assignments: data ?? [], total: count ?? 0, page, pageSize },
+    { assignments: enriched, total: count ?? 0, page, pageSize, serverNow: new Date().toISOString() },
     { headers: noCache },
   );
 }
@@ -234,4 +243,42 @@ function buildCsv(rows: HistoryRow[]): string {
     ].map(csvEscape).join(','));
   }
   return lines.join('\n');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enrich in_progress rows with `effective_ms_now` so the client can show a
+// live-updating value for currently-running shifts. Persisted rows
+// (completed/incomplete/etc.) keep their static `effective_minutes`. We only
+// fetch events for the in_progress subset to keep the query focused.
+// ─────────────────────────────────────────────────────────────────────────────
+type RowWithMaybeLive = Record<string, unknown> & {
+  id: string;
+  status: string;
+  actual_exit_at: string | null;
+};
+
+async function enrichInProgressRows(rows: RowWithMaybeLive[]): Promise<RowWithMaybeLive[]> {
+  const inProgressIds = rows.filter((r) => r.status === 'in_progress').map((r) => r.id);
+  if (inProgressIds.length === 0) return rows;
+
+  const { data: eData } = await supabase
+    .from('assignment_geofence_events')
+    .select('assignment_id, event_type, occurred_at')
+    .in('assignment_id', inProgressIds)
+    .order('occurred_at', { ascending: true });
+
+  const events = (eData ?? []) as { assignment_id: string; event_type: GeofenceEventType; occurred_at: string }[];
+
+  const byAssignment = new Map<string, AssignmentEvent[]>();
+  for (const ev of events) {
+    if (!byAssignment.has(ev.assignment_id)) byAssignment.set(ev.assignment_id, []);
+    byAssignment.get(ev.assignment_id)!.push({ event_type: ev.event_type, occurred_at: ev.occurred_at });
+  }
+
+  const now = new Date();
+  return rows.map((r) => {
+    if (r.status !== 'in_progress') return r;
+    const evs = byAssignment.get(r.id) ?? [];
+    return { ...r, effective_ms_now: computeEffectiveMs(evs, now) };
+  });
 }

@@ -18,6 +18,9 @@ interface MyHistoryRow {
   actual_entry_at: string | null;
   actual_exit_at: string | null;
   effective_minutes: number;
+  /** Present only when status === 'in_progress'. Server-computed up to its
+   *  serverNow; client extrapolates with (Date.now() - fetchedAt). */
+  effective_ms_now?: number;
   met_duration: boolean | null;
   punctuality: 'on_time' | 'late' | 'no_show' | null;
   status: string;
@@ -45,6 +48,10 @@ function formatHHMM(min: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
+function formatHHMMFromMs(ms: number): string {
+  return formatHHMM(Math.max(0, Math.floor(ms / 60000)));
+}
+
 const DURATION_BUCKETS = ['met', 'partial', 'unmet'] as const;
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -60,6 +67,14 @@ export default function MyPerformanceClient({ role }: Props) {
   const [page, setPage] = useState(1);
   const pageSize = 50;
   const [loading, setLoading] = useState(false);
+
+  // Live-tick for in-progress rows (mirrors AssignmentsHistoryClient).
+  const [fetchedAt, setFetchedAt] = useState<number>(() => Date.now());
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const [summary, setSummary] = useState<SummaryShape | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -85,6 +100,7 @@ export default function MyPerformanceClient({ role }: Props) {
         const j = await res.json();
         setRows(j.assignments ?? []);
         setTotal(j.total ?? 0);
+        setFetchedAt(Date.now());
       }
     } catch { /* silent */ }
     setLoading(false);
@@ -276,7 +292,16 @@ export default function MyPerformanceClient({ role }: Props) {
                     )}
                   </td>
                   <td className="px-3 py-2.5 tabular-nums text-gray-600 dark:text-gray-300">{fmtTime(r.actual_exit_at)}</td>
-                  <td className="px-3 py-2.5 tabular-nums text-right font-mono">{formatHHMM(r.effective_minutes)}</td>
+                  <td className="px-3 py-2.5 tabular-nums text-right font-mono">
+                    {r.status === 'in_progress' && typeof r.effective_ms_now === 'number' ? (
+                      <span className="text-emerald-600 dark:text-emerald-400">
+                        {formatHHMMFromMs(r.effective_ms_now + Math.max(0, Date.now() - fetchedAt))}
+                        <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" aria-label="live" />
+                      </span>
+                    ) : (
+                      formatHHMM(r.effective_minutes)
+                    )}
+                  </td>
                   <td className="px-3 py-2.5">{durationBadge(r)}</td>
                   <td className="px-3 py-2.5">{punctualityBadge(r.punctuality)}</td>
                 </tr>

@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, FormEvent, useCallback } from 'react';
+import usePlacesAutocomplete, { getGeocode, getLatLng } from 'use-places-autocomplete';
 import { useLanguage } from './LanguageContext';
 
 export interface StoreInitial {
@@ -20,29 +21,8 @@ interface Props {
 
 const PLACES_SCRIPT_ID = 'google-maps-places-script';
 
-// Minimal subset of the Places Autocomplete API that we use, typed
-// inline so we don't pull in @types/google.maps for one component.
-interface PlaceResult {
-  formatted_address?: string;
-  name?: string;
-  geometry?: { location?: { lat: () => number; lng: () => number } };
-}
-interface AutocompleteInstance {
-  addListener(event: string, handler: () => void): void;
-  getPlace(): PlaceResult;
-}
-interface GoogleMapsGlobal {
-  maps?: {
-    places?: {
-      Autocomplete: new (input: HTMLInputElement, opts?: Record<string, unknown>) => AutocompleteInstance;
-    };
-    event?: { clearInstanceListeners: (instance: unknown) => void };
-  };
-}
-
-declare global {
-  interface Window { google?: GoogleMapsGlobal; }
-}
+interface GoogleMapsGlobal { maps?: { places?: unknown } }
+declare global { interface Window { google?: GoogleMapsGlobal } }
 
 /**
  * Loads the Google Maps + Places JS SDK exactly once per page-load. We
@@ -67,9 +47,6 @@ function usePlacesScript(): PlacesStatus {
 
     const existing = document.getElementById(PLACES_SCRIPT_ID) as HTMLScriptElement | null;
     if (existing) {
-      // Another mount is already loading the script — poll for window.google
-      // and surface an error if it never arrives (typically a network issue
-      // or the SDK was injected but failed to initialise).
       const check = setInterval(() => {
         if (window.google?.maps?.places) { setStatus('ready'); clearInterval(check); }
       }, 100);
@@ -87,10 +64,8 @@ function usePlacesScript(): PlacesStatus {
     s.async = true;
     s.defer = true;
     s.onload = () => {
-      // Some auth failures don't fire .onerror (the SDK loads then logs to
-      // console). gm_authFailure is the canonical hook for those — wired
-      // separately by useGmAuthFailureWatch in the parent component.
       if (window.google?.maps?.places) {
+        console.info('[stores] Maps SDK loaded — places library ready');
         setStatus('ready');
       } else {
         console.warn('[stores] Maps SDK loaded but places library is missing');
@@ -120,7 +95,7 @@ function useGmAuthFailureWatch(onFail: () => void) {
     const w = window as W;
     const prev = w.gm_authFailure;
     w.gm_authFailure = () => {
-      console.warn('[stores] Maps SDK auth failure — falling back to manual entry');
+      console.warn('[stores] Maps SDK auth failure (gm_authFailure) — likely API restriction or billing/quota issue');
       onFail();
       if (typeof prev === 'function') prev();
     };
@@ -128,12 +103,132 @@ function useGmAuthFailureWatch(onFail: () => void) {
   }, [onFail]);
 }
 
+/**
+ * Inner Places combobox — only mounted when the SDK is `ready` so the
+ * usePlacesAutocomplete hook can call AutocompleteService immediately.
+ *
+ * Renders our own dropdown driven by predictions returned from Google's
+ * AutocompleteService (not the legacy widget). This avoids the widget's
+ * positioning/z-index issues inside our fixed-position modal AND surfaces
+ * any prediction-fetch errors directly to the console.
+ */
+function PlacesAddressInput({
+  value,
+  onChangeText,
+  onSelect,
+  placeholder,
+  hint,
+}: {
+  value: string;
+  onChangeText: (v: string) => void;
+  onSelect: (address: string, lat: number, lng: number) => void;
+  placeholder: string;
+  hint: string;
+}) {
+  const {
+    ready,
+    value: q,
+    setValue,
+    suggestions: { status: predStatus, data: predictions, loading: predLoading },
+    clearSuggestions,
+  } = usePlacesAutocomplete({
+    requestOptions: {
+      // Prefer addresses (street-level results). Empty geocode types fall
+      // through to mixed results — restricting to 'address' keeps the list
+      // tight and accurate for store entry.
+      types: ['address'],
+    },
+    debounce: 250,
+  });
+
+  // Sync external value (e.g. when initialStore loads in edit mode) into
+  // the hook's internal state. We only push when the parent's text differs
+  // so we don't loop with the user's typing.
+  useEffect(() => {
+    if (value !== q) setValue(value, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  // Log non-OK statuses so production debugging is possible without
+  // having to change code. ZERO_RESULTS for very short queries is normal.
+  useEffect(() => {
+    if (predStatus && predStatus !== 'OK' && predStatus !== '' && predStatus !== 'ZERO_RESULTS') {
+      console.warn('[stores] Places AutocompleteService status:', predStatus);
+    }
+  }, [predStatus]);
+
+  const [showList, setShowList] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!wrapRef.current?.contains(e.target as Node)) setShowList(false);
+    }
+    if (showList) document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [showList]);
+
+  const handlePick = async (description: string) => {
+    setValue(description, false);
+    onChangeText(description);
+    setShowList(false);
+    clearSuggestions();
+    try {
+      const results = await getGeocode({ address: description });
+      const { lat, lng } = await getLatLng(results[0]);
+      onSelect(description, lat, lng);
+    } catch (err) {
+      console.warn('[stores] geocode failed:', err);
+    }
+  };
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <input
+        type="text"
+        value={q}
+        disabled={!ready}
+        onChange={(e) => {
+          setValue(e.target.value);
+          onChangeText(e.target.value);
+          setShowList(true);
+        }}
+        onFocus={() => setShowList(true)}
+        placeholder={placeholder}
+        autoComplete="off"
+        className="w-full max-w-full box-border px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm"
+      />
+      {showList && predictions.length > 0 && (
+        <div className="absolute left-0 right-0 mt-1 z-30 max-h-72 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg">
+          {predictions.map((p) => (
+            <button
+              key={p.place_id}
+              type="button"
+              onClick={() => handlePick(p.description)}
+              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-b border-gray-50 dark:border-gray-800 last:border-0"
+            >
+              <span className="font-medium">{p.structured_formatting?.main_text ?? p.description}</span>
+              {p.structured_formatting?.secondary_text && (
+                <span className="block text-[10px] text-gray-400 truncate">{p.structured_formatting.secondary_text}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+      {showList && q.trim().length >= 3 && !predLoading && predictions.length === 0 && predStatus === 'ZERO_RESULTS' && (
+        <p className="text-[10px] text-gray-400 mt-1">{hint}</p>
+      )}
+      {ready && q.trim().length < 3 && (
+        <p className="text-[10px] text-gray-400 mt-1">{hint}</p>
+      )}
+    </div>
+  );
+}
+
 export default function StoreFormModal({ onClose, onSaved, initialStore }: Props) {
   const { t } = useLanguage();
   const placesStatusRaw = usePlacesScript();
 
-  // Local override that lets gm_authFailure flip the status to 'error'
-  // even after the script reported 'ready' (auth fails after script load).
   const [forcedError, setForcedError] = useState(false);
   const placesStatus: PlacesStatus = forcedError ? 'error' : placesStatusRaw;
   useGmAuthFailureWatch(useCallback(() => setForcedError(true), []));
@@ -152,56 +247,14 @@ export default function StoreFormModal({ onClose, onSaved, initialStore }: Props
     String(initialStore?.geofence_radius_meters ?? 200)
   );
 
-  // Coords are "locked" right after the user picks a Places suggestion:
-  // the inputs become read-only and a button lets them unlock for manual
-  // tweaks. In edit mode they start unlocked so the existing coords are
-  // editable; in create mode they start unlocked because nothing's filled
-  // yet (and locking only kicks in on suggestion selection).
+  // Coords are "locked" right after the user picks a Places suggestion.
+  // The lat/lng inputs become read-only with an "Edit manually" button.
+  // In edit mode we start unlocked so existing coords stay editable; in
+  // create mode we also start unlocked because nothing's filled yet.
   const [coordsLocked, setCoordsLocked] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-
-  const addressInputRef = useRef<HTMLInputElement>(null);
-  const autocompleteRef = useRef<AutocompleteInstance | null>(null);
-
-  // Wire the Places Autocomplete onto the address input when the SDK is
-  // ready. Selecting a suggestion fills lat/lng and locks them — the user
-  // can unlock to override manually if Places returned a slightly off pin.
-  useEffect(() => {
-    if (placesStatus !== 'ready') return;
-    if (!addressInputRef.current || autocompleteRef.current) return;
-    const places = window.google?.maps?.places;
-    if (!places) return;
-
-    const ac = new places.Autocomplete(addressInputRef.current, {
-      fields: ['formatted_address', 'name', 'geometry'],
-      types: ['address'],
-    });
-    ac.addListener('place_changed', () => {
-      const p = ac.getPlace();
-      if (p.geometry?.location) {
-        setLatitude(p.geometry.location.lat().toFixed(7));
-        setLongitude(p.geometry.location.lng().toFixed(7));
-        setCoordsLocked(true);
-      }
-      if (p.formatted_address) setAddress(p.formatted_address);
-    });
-    autocompleteRef.current = ac;
-    // Log once so we can confirm in production console that the widget
-    // attached. If suggestions still never appear after this log, the
-    // problem is in Google Cloud (Places API not enabled, billing off,
-    // or referrer restriction blocking the request).
-    console.info('[stores] Places Autocomplete attached to address input');
-
-    return () => {
-      const evt = window.google?.maps?.event;
-      if (evt && autocompleteRef.current) {
-        try { evt.clearInstanceListeners(autocompleteRef.current); } catch { /* noop */ }
-      }
-      autocompleteRef.current = null;
-    };
-  }, [placesStatus]);
 
   const handleSubmit = useCallback(async (e: FormEvent) => {
     e.preventDefault();
@@ -245,8 +298,6 @@ export default function StoreFormModal({ onClose, onSaved, initialStore }: Props
           });
 
       if (!res.ok) {
-        // Never expose raw server messages — they may leak schema names or
-        // env-var hints. Map to a localized generic error.
         setFormError(t(isEdit ? 'stores.errorUpdate' : 'stores.errorCreate'));
         setSubmitting(false);
         return;
@@ -314,26 +365,34 @@ export default function StoreFormModal({ onClose, onSaved, initialStore }: Props
             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
               {t('stores.fieldAddress')}
             </label>
-            <input
-              ref={addressInputRef}
-              type="text"
-              value={address}
-              onChange={(e) => {
-                setAddress(e.target.value);
-                // Typing freely unlocks coords so manual entry stays
-                // possible (and the coords don't appear "stuck" once the
-                // user starts modifying the address text).
-                if (coordsLocked) setCoordsLocked(false);
-              }}
-              placeholder={t('stores.addressPlaceholder')}
-              autoComplete="off"
-              className="w-full max-w-full box-border px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm"
-            />
+            {placesStatus === 'ready' ? (
+              <PlacesAddressInput
+                value={address}
+                onChangeText={(v) => {
+                  setAddress(v);
+                  if (coordsLocked) setCoordsLocked(false);
+                }}
+                onSelect={(addr, lat, lng) => {
+                  setAddress(addr);
+                  setLatitude(lat.toFixed(7));
+                  setLongitude(lng.toFixed(7));
+                  setCoordsLocked(true);
+                }}
+                placeholder={t('stores.addressPlaceholder')}
+                hint={t('stores.placesHint')}
+              />
+            ) : (
+              <input
+                type="text"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder={t('stores.addressPlaceholder')}
+                autoComplete="off"
+                className="w-full max-w-full box-border px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm"
+              />
+            )}
             {placesStatus === 'loading' && (
               <p className="text-[10px] text-gray-400 mt-1">{t('stores.placesLoading')}</p>
-            )}
-            {placesStatus === 'ready' && !coordsLocked && (
-              <p className="text-[10px] text-gray-400 mt-1">{t('stores.placesHint')}</p>
             )}
           </div>
 
