@@ -1,10 +1,74 @@
-import { supabase, ActivityEntry, CampaignType } from './supabase';
+import { supabase, ActivityEntry, CampaignType, Modality } from './supabase';
 
 export type { ActivityEntry, CampaignType };
 
 export type D2DField = 'knocks' | 'contacts' | 'bills' | 'sales';
 export type RetailField = 'stops' | 'zipcodes' | 'credit_checks' | 'sales';
 export type ActivityField = D2DField | RetailField;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Modality / assignment helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The agent's modality determines which campaign types they may register.
+ * Used by the API to reject mismatched submissions even if the client UI
+ * is bypassed.
+ */
+export function isCampaignAllowed(modality: Modality, campaign: CampaignType): boolean {
+  if (modality === 'both') return true;
+  if (modality === 'retail') return campaign === 'Retail';
+  return campaign === 'D2D';
+}
+
+/** Active assignment for an agent on a given date (the one the activity
+ *  should link to). Null if none exists or it's not in an active status. */
+export interface ResolvedAssignment {
+  assignment_id: string;
+  store_id: string;
+  store_name: string;
+  store_address: string | null;
+  status: string;
+}
+
+export async function resolveActiveAssignment(
+  agentId: string,
+  date: string,
+): Promise<ResolvedAssignment | null> {
+  const { data } = await supabase
+    .from('assignments')
+    .select(`
+      id, store_id, status,
+      store:stores ( id, name, address )
+    `)
+    .eq('agent_id', agentId)
+    .eq('shift_date', date)
+    .in('status', ['accepted', 'in_progress', 'completed', 'incomplete'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!data) return null;
+  const store = data.store as unknown as { id: string; name: string; address: string | null } | null;
+  if (!store) return null;
+  return {
+    assignment_id: data.id,
+    store_id: store.id,
+    store_name: store.name,
+    store_address: store.address,
+    status: data.status,
+  };
+}
+
+/** Read the agent's modality. Returns 'd2d' when the user row is missing
+ *  for any reason (defensive — matches the column default). */
+export async function getUserModality(userId: string): Promise<Modality> {
+  const { data } = await supabase
+    .from('users')
+    .select('modality')
+    .eq('id', userId)
+    .single();
+  return (data?.modality as Modality | undefined) ?? 'd2d';
+}
 
 export interface D2DMetrics { knocks: number; contacts: number; bills: number; sales: number; }
 export interface RetailMetrics { stops: number; zipcodes: number; credit_checks: number; sales: number; }
@@ -27,6 +91,7 @@ export async function upsertActivity(
   campaignType: CampaignType,
   metrics: Partial<D2DMetrics & RetailMetrics>,
   location: { zip_code?: string; store_chain?: string; store_address?: string },
+  assignmentId?: string | null,
 ): Promise<ActivityEntry> {
   const now = new Date().toISOString();
   const { data: existing } = await supabase
@@ -49,6 +114,7 @@ export async function upsertActivity(
     zip_code: location.zip_code ?? null,
     store_chain: location.store_chain ?? null,
     store_address: location.store_address ?? null,
+    assignment_id: assignmentId ?? null,
     knocks: metrics.knocks ?? 0,
     contacts: metrics.contacts ?? 0,
     bills: metrics.bills ?? 0,
@@ -82,6 +148,7 @@ export async function incrementField(
   field: ActivityField,
   delta: 1 | -1,
   location: { zip_code?: string; store_chain?: string; store_address?: string },
+  assignmentId?: string | null,
 ): Promise<ActivityEntry> {
   const now = new Date().toISOString();
 
@@ -109,6 +176,7 @@ export async function incrementField(
       zip_code: location.zip_code ?? null,
       store_chain: location.store_chain ?? null,
       store_address: location.store_address ?? null,
+      assignment_id: assignmentId ?? null,
       knocks: 0, contacts: 0, bills: 0,
       stops: 0, zipcodes: 0, credit_checks: 0,
       sales: 0,
@@ -138,6 +206,7 @@ export async function incrementField(
       zip_code: location.zip_code ?? existing.zip_code,
       store_chain: location.store_chain ?? existing.store_chain,
       store_address: location.store_address ?? existing.store_address,
+      assignment_id: assignmentId ?? existing.assignment_id ?? null,
     })
     .eq('id', existing.id)
     .select()

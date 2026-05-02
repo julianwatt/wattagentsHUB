@@ -39,6 +39,19 @@ export function getSupabaseAdmin(): SupabaseClient | null {
 export type UserRole = 'agent' | 'jr_manager' | 'sr_manager' | 'admin' | 'ceo';
 export type CampaignType = 'D2D' | 'Retail';
 
+/**
+ * Agent's primary working modality. Drives which Activity sub-section
+ * (D2D / Retail) is visible and whether the activity entry needs to be
+ * linked to an assignment.
+ *   - 'd2d'    : door-to-door only — no store, no assignment
+ *   - 'retail' : in-store only — store comes from the day's accepted assignment
+ *   - 'both'   : agent toggles between D2D and Retail per entry
+ *
+ * Defaults to 'd2d' for all existing agents. The CEO can change it from
+ * Manage Users.
+ */
+export type Modality = 'd2d' | 'retail' | 'both';
+
 export interface DbUser {
   id: string;
   name: string;
@@ -50,6 +63,7 @@ export interface DbUser {
   must_change_password: boolean;
   is_active: boolean;
   hire_date: string;
+  modality: Modality;
   created_at: string;
 }
 
@@ -61,6 +75,9 @@ export interface ActivityEntry {
   zip_code: string | null;
   store_chain: string | null;
   store_address: string | null;
+  /** FK to assignments.id when the entry was logged under an active
+   *  Retail assignment for that date. Null otherwise. */
+  assignment_id: string | null;
   // D2D
   knocks: number;
   contacts: number;

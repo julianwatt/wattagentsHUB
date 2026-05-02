@@ -14,6 +14,9 @@ import { getSupabaseBrowser } from '@/lib/supabase-browser';
 import { usePushSubscription } from './usePushSubscription';
 import { fmtDistance } from '@/lib/geo';
 import { useIsStandaloneIOS } from './useStandalone';
+import { isLegacyShiftPanelEnabled } from '@/lib/flags';
+import { canManageAssignments, canSeeOwnPerformance } from '@/lib/permissions';
+import AssignmentCards from './AssignmentCards';
 
 interface Props {
   session: Session;
@@ -24,13 +27,19 @@ function HomeIcon({ className }: { className: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>;
 }
 const HOME_NAV = { href: '/home', icon: HomeIcon, key: 'nav.home' };
+// Legacy /shift entry is gated behind the LEGACY_SHIFT_PANEL feature flag.
+// When the flag is off the entry is removed entirely from the nav.
 const BASE_NAV = [
   { href: '/activity', icon: ActivityIcon, key: 'nav.activity', hideForAdmin: true },
-  { href: '/shift', icon: ShiftIcon, key: 'nav.shift', hideForAdmin: true },
+  ...(isLegacyShiftPanelEnabled()
+    ? [{ href: '/shift', icon: ShiftIcon, key: 'nav.shift', hideForAdmin: true }]
+    : []),
   { href: '/simulator', icon: SimIcon, key: 'nav.simulator' },
   { href: '/dashboard', icon: DashIcon, key: 'nav.dashboard' },
 ];
 const TEAM_NAV = { href: '/team', icon: TeamIcon, key: 'nav.team' };
+const ASSIGNMENTS_NAV = { href: '/assignments', icon: AssignmentsIcon, key: 'nav.assignments' };
+const MY_PERFORMANCE_NAV = { href: '/my-performance', icon: PerformanceIcon, key: 'nav.myPerformance' };
 const MANAGE_NAV = { href: '/manage/users', icon: AdminIcon, key: 'nav.manage' };
 const NOTIF_NAV = { href: '/notifications', icon: NotifNavIcon, key: 'admin.notifications' };
 
@@ -146,12 +155,14 @@ export default function AppLayout({ session, children }: Props) {
       return true;
     }),
     ...(canSeeTeam ? [TEAM_NAV] : []),
+    ...(canSeeOwnPerformance(role) ? [MY_PERFORMANCE_NAV] : []),
+    ...(canManageAssignments(role) ? [ASSIGNMENTS_NAV] : []),
     ...((isAdminReal && !previewRole) || role === 'ceo' ? [NOTIF_NAV] : []),
     ...(canSeeAdmin ? [MANAGE_NAV] : []),
   ];
 
   // ── Notification bell (admin only) ──
-  interface NotifData { actor_name?: string; alert_type?: string; store_name?: string; distance_meters?: number; event_type?: string; shift_log_id?: string; }
+  interface NotifData { actor_name?: string; alert_type?: string; store_name?: string; distance_meters?: number; event_type?: string; shift_log_id?: string; assignment_id?: string; shift_date?: string; scheduled_start_time?: string; rejection_reason?: string; }
   interface NotifItem { id: string; type: string; user_name?: string; user_username?: string; data?: NotifData | null; status: string; created_at: string; }
   const notifTypeLabel = (type: string) => {
     if (type === 'password_reset') return t('notifications.passwordReset');
@@ -159,6 +170,12 @@ export default function AppLayout({ session, children }: Props) {
     if (type === 'user_deactivated') return t('notifications.userDeactivated');
     if (type === 'user_activated') return t('notifications.userActivated');
     if (type === 'geofence_alert') return `⚠️ ${t('notifications.geofenceFilterLabel')}`;
+    if (type === 'assignment_accepted') return `✅ ${t('assignments.statusAccepted')}`;
+    if (type === 'assignment_rejected') return `❌ ${t('assignments.statusRejected')}`;
+    if (type === 'assignment_arrived') return `✅ ${t('assignments.bellArrived')}`;
+    if (type === 'assignment_exited_warn') return `⚠️ ${t('assignments.bellExitedWarn')}`;
+    if (type === 'assignment_exited_final') return `🛑 ${t('assignments.bellExitedFinal')}`;
+    if (type === 'assignment_reentered') return `🔄 ${t('assignments.bellReentered')}`;
     return type;
   };
   const notifBadgeColor = (type: string) => {
@@ -167,6 +184,12 @@ export default function AppLayout({ session, children }: Props) {
     if (type === 'user_deactivated') return 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300';
     if (type === 'user_activated') return 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300';
     if (type === 'geofence_alert') return 'bg-red-200 dark:bg-red-900/50 text-red-700 dark:text-red-200 ring-1 ring-red-300 dark:ring-red-700';
+    if (type === 'assignment_accepted') return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300';
+    if (type === 'assignment_rejected') return 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300';
+    if (type === 'assignment_arrived') return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300';
+    if (type === 'assignment_exited_warn') return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300';
+    if (type === 'assignment_exited_final') return 'bg-red-200 dark:bg-red-900/50 text-red-700 dark:text-red-200 ring-1 ring-red-300 dark:ring-red-700';
+    if (type === 'assignment_reentered') return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300';
     return 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300';
   };
   const notifPreviewText = (n: NotifItem) => {
@@ -179,6 +202,29 @@ export default function AppLayout({ session, children }: Props) {
       const store = d?.store_name ?? '';
       const dist = d?.distance_meters ? fmtDistance(d.distance_meters) : '';
       return `🚨 ${n.user_name ?? '—'} ${t('notifications.geofenceBellOutside')}${store ? ` — ${store}` : ''}${dist ? ` (${dist})` : ''}`;
+    }
+    if (n.type === 'assignment_accepted') {
+      const d = n.data;
+      const store = d?.store_name ?? '';
+      const date = d?.shift_date ?? '';
+      const time = d?.scheduled_start_time ?? '';
+      return `${n.user_name ?? '—'} · ${store}${date ? ` · ${date}` : ''}${time ? ` · ${time}` : ''}`;
+    }
+    if (n.type === 'assignment_rejected') {
+      const d = n.data;
+      const reason = d?.rejection_reason ? ` — "${d.rejection_reason}"` : '';
+      return `${n.user_name ?? '—'} · ${t('notifications.assignmentNeedsReassign')}${reason}`;
+    }
+    if (
+      n.type === 'assignment_arrived' ||
+      n.type === 'assignment_exited_warn' ||
+      n.type === 'assignment_exited_final' ||
+      n.type === 'assignment_reentered'
+    ) {
+      const d = n.data;
+      const store = d?.store_name ? ` · ${d.store_name}` : '';
+      const dist = d?.distance_meters ? ` (${fmtDistance(d.distance_meters)})` : '';
+      return `${n.user_name ?? '—'}${store}${dist}`;
     }
     return n.user_name ?? '—';
   };
@@ -516,6 +562,11 @@ export default function AppLayout({ session, children }: Props) {
       {/* Push notification opt-in banner (CEO / admin) */}
       {showBell && <PushOptInBanner />}
 
+      {/* Agent assignment cards — visible across the whole platform while
+          the agent has a pending or active assignment. The component
+          self-gates on role and renders nothing for non-agents. */}
+      <AssignmentCards role={role} />
+
       {/* Main content — bottom padding for tab bar (mobile + tablet) */}
       <main className="flex-1 min-h-0 main-bottom-nav">
         {children}
@@ -582,6 +633,14 @@ function NotifNavIcon({ className }: { className: string }) {
 }
 function RosterIcon({ className }: { className: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>;
+}
+function AssignmentsIcon({ className }: { className: string }) {
+  // Clipboard with checklist — represents task / shift assignment management.
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 12l2 2 4-4M9 17h6" /></svg>;
+}
+function PerformanceIcon({ className }: { className: string }) {
+  // Trending-up chart — agent's own performance metrics.
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>;
 }
 function HamburgerIcon({ className }: { className: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>;
