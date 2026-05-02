@@ -25,6 +25,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from('stores')
     .select(STORE_SELECT)
+    .is('deleted_at', null)
     .order('is_active', { ascending: false })
     .order('name', { ascending: true });
 
@@ -144,4 +145,59 @@ export async function PATCH(req: NextRequest) {
 
   console.info(`[stores PATCH] id=${id} keys=${Object.keys(patch).join(',')} by=${session.user.id}`);
   return NextResponse.json({ store: data }, { headers: noCache });
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// DELETE — remove a store. Soft-deletes (sets deleted_at) when the store is
+// referenced by any assignment row, hard-deletes otherwise. Either way the
+// row stops appearing in /api/stores and /api/shift/stores.
+//
+// Body: { id }
+// ──────────────────────────────────────────────────────────────────────────────
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!canManageAssignments(session.user.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const id: string | undefined = typeof body?.id === 'string' ? body.id : undefined;
+  if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
+
+  // Check for any assignment referencing this store. We look at HEAD count
+  // only — the rows themselves don't matter, just the existence.
+  const { count: assignmentCount, error: countErr } = await supabase
+    .from('assignments')
+    .select('id', { count: 'exact', head: true })
+    .eq('store_id', id);
+
+  if (countErr) {
+    console.error('[stores DELETE] count error:', countErr);
+    return NextResponse.json({ error: countErr.message }, { status: 500 });
+  }
+
+  const hasHistory = (assignmentCount ?? 0) > 0;
+
+  if (hasHistory) {
+    // Soft delete — preserve the row for assignment-history joins.
+    const { error: softErr } = await supabase
+      .from('stores')
+      .update({ deleted_at: new Date().toISOString(), is_active: false })
+      .eq('id', id);
+    if (softErr) {
+      console.error('[stores DELETE] soft delete error:', softErr);
+      return NextResponse.json({ error: softErr.message }, { status: 500 });
+    }
+    console.info(`[stores DELETE] id=${id} soft-deleted by=${session.user.id} (had ${assignmentCount} assignments)`);
+    return NextResponse.json({ ok: true, mode: 'soft' }, { headers: noCache });
+  }
+
+  const { error: hardErr } = await supabase.from('stores').delete().eq('id', id);
+  if (hardErr) {
+    console.error('[stores DELETE] hard delete error:', hardErr);
+    return NextResponse.json({ error: hardErr.message }, { status: 500 });
+  }
+  console.info(`[stores DELETE] id=${id} hard-deleted by=${session.user.id}`);
+  return NextResponse.json({ ok: true, mode: 'hard' }, { headers: noCache });
 }

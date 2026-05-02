@@ -15,6 +15,7 @@ export async function GET() {
     .from('stores')
     .select('id, name, address, latitude, longitude, geofence_radius_meters')
     .eq('is_active', true)
+    .is('deleted_at', null)
     .order('name', { ascending: true });
 
   if (error) {
