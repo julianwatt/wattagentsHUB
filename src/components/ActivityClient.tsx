@@ -11,6 +11,8 @@ import { fmtDate, fmtTime } from '@/lib/i18n';
 import { ActivityEntry, CampaignType, effectivenessRate, getAllowedActivityModalities } from '@/lib/activity';
 import { formatStoreLabel } from '@/lib/stores';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
+import { ACTIVE_STATUSES } from '@/lib/assignmentGeofence';
+import { BLOCKING_STATUSES, isBlocking } from '@/lib/assignmentStatus';
 
 type Modality = 'd2d' | 'retail' | 'both';
 
@@ -86,7 +88,7 @@ export default function ActivityClient({ session }: { session: Session }) {
         .select('id, status, store:stores(name, address)')
         .eq('agent_id', activeUserId)
         .eq('shift_date', d)
-        .in('status', ['accepted', 'in_progress', 'completed', 'incomplete'])
+        .in('status', [...BLOCKING_STATUSES])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -204,7 +206,7 @@ export default function ActivityClient({ session }: { session: Session }) {
   const formReady = modalityLoaded && assignmentLoaded;
   const hasActiveAssignment =
     !!assignmentForDate
-    && (assignmentForDate.status === 'accepted' || assignmentForDate.status === 'in_progress');
+    && (ACTIVE_STATUSES as readonly string[]).includes(assignmentForDate.status);
   const allowedModalities: CampaignType[] = formReady
     ? getAllowedActivityModalities(userModality, hasActiveAssignment)
     : ['D2D']; // placeholder while the form is gated below
@@ -386,7 +388,7 @@ export default function ActivityClient({ session }: { session: Session }) {
   // Retail logging requires an active accepted assignment for the date.
   // Disable the +/- buttons when one isn't present.
   const retailReady = campaignType !== 'Retail'
-    || (assignmentForDate && ['accepted', 'in_progress', 'completed', 'incomplete'].includes(assignmentForDate.status));
+    || (assignmentForDate && isBlocking(assignmentForDate.status));
   const retailBlocked = campaignType === 'Retail' && !retailReady;
 
   const scheduleAutoSave = useCallback((
@@ -507,7 +509,7 @@ export default function ActivityClient({ session }: { session: Session }) {
                       <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
                       {t('common.loading')}
                     </div>
-                  ) : assignmentForDate && (assignmentForDate.status === 'accepted' || assignmentForDate.status === 'in_progress' || assignmentForDate.status === 'completed' || assignmentForDate.status === 'incomplete') ? (
+                  ) : assignmentForDate && isBlocking(assignmentForDate.status) ? (
                     <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
                       <span className="text-sm">📍</span>
                       <div className="min-w-0">

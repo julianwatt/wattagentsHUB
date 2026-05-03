@@ -7,6 +7,7 @@ import { fmtDistance } from '@/lib/geo';
 import { fmtTime } from '@/lib/i18n';
 import AssignmentTimelineModal from './AssignmentTimelineModal';
 import type { GeofenceEventType } from '@/lib/assignmentGeofence';
+import { isLive, isTerminal } from '@/lib/assignmentStatus';
 import { formatStoreLabel } from '@/lib/stores';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -51,13 +52,6 @@ const formatDuration = (ms: number) => {
 };
 
 type Group = 'attention' | 'inProgress' | 'pendingArrival' | 'completed';
-
-// Statuses that represent a "live" (non-terminated) assignment for an agent
-// on a given day. Used by the dedup pass below to prefer a live row over
-// a cancelled/rejected one when both exist for the same agent.
-const LIVE_STATUSES = new Set([
-  'pending', 'accepted', 'in_progress', 'completed', 'incomplete',
-]);
 
 function groupOf(a: TodayAssignment): Group {
   // Per the business spec:
@@ -147,8 +141,8 @@ export default function AssignmentsTodayClient() {
         for (const a of raw) {
           const prev = byAgent.get(a.agent_id);
           if (!prev) { byAgent.set(a.agent_id, a); continue; }
-          const aLive = LIVE_STATUSES.has(a.status);
-          const prevLive = LIVE_STATUSES.has(prev.status);
+          const aLive = isLive(a.status);
+          const prevLive = isLive(prev.status);
           if (aLive && !prevLive) {
             byAgent.set(a.agent_id, a);
           } else if (aLive === prevLive && (a.created_at ?? '') > (prev.created_at ?? '')) {
@@ -573,7 +567,10 @@ const Card = function Card({ a, tick, fetchedAt, highlighted, acting, lang, t, o
     }
   })();
 
-  const canCancel = !['completed', 'incomplete', 'cancelled', 'cancelled_in_progress', 'rejected'].includes(a.status);
+  // Cancellable while the row is still mutable (pending / accepted / in_progress).
+  // `replaced` rows are filtered upstream and never reach this component, so
+  // isTerminal() catches every non-cancellable status the UI ever sees.
+  const canCancel = !isTerminal(a.status);
   const canReassign = a.status === 'rejected' || a.status === 'cancelled' || a.status === 'cancelled_in_progress';
 
   // Card tint by status — green for actively-working, red for problem

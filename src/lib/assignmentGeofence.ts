@@ -108,32 +108,11 @@ export type Ring = 'inner' | 'warn' | 'outer';
  *  Matches the DB CHECK constraint from Sesión 1. */
 export type GeofenceEventType = 'entered' | 'exited_warn' | 'exited_final' | 'reentered';
 
-/** Statuses for an assignment that allow new geofence events to be recorded. */
+/** Statuses for an assignment that allow new geofence events to be recorded.
+ *  Geofence-specific (the only states where a position update from the
+ *  agent's device can change the row). For broader status taxonomy
+ *  (LIVE, BLOCKING, TERMINAL, etc.), import from `lib/assignmentStatus.ts`. */
 export const ACTIVE_STATUSES = ['accepted', 'in_progress'] as const;
-
-/**
- * "Active assignment" set — the statuses that count as the agent CURRENTLY
- * having an assignment for the day. Drives the one-per-day uniqueness rule
- * and the "Hoy" panel filter.
- *
- *   pending      — created but not yet accepted; still ties up the day
- *   accepted     — agent committed; awaiting arrival
- *   in_progress  — agent inside the perimeter
- *   completed    — terminal but counts as "today's assignment was X"
- *   incomplete   — terminal, didn't hit the duration; still the day's record
- *
- * Statuses NOT in this set (cancelled, cancelled_in_progress, rejected,
- * replaced, no_show) are inactive: a new assignment can be created for the
- * same agent + day without conflict, and they don't surface in the active
- * panel.
- */
-export const ACTIVE_ASSIGNMENT_STATUSES: readonly string[] = [
-  'pending', 'accepted', 'in_progress', 'completed', 'incomplete',
-];
-
-export function isActiveAssignmentStatus(status: string | null | undefined): boolean {
-  return !!status && ACTIVE_ASSIGNMENT_STATUSES.includes(status);
-}
 
 // ── Ring determination ───────────────────────────────────────────────────────
 /**

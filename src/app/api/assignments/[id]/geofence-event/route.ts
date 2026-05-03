@@ -10,6 +10,7 @@ import {
   computeEffectiveMs,
   computeCompliance,
   NOTIFICATION_DEBOUNCE_MS,
+  ACTIVE_STATUSES,
   type Ring,
   type GeofenceEventType,
   type AssignmentEvent,
@@ -85,7 +86,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (assignment.agent_id !== session.user.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  if (!['accepted', 'in_progress'].includes(assignment.status)) {
+  if (!(ACTIVE_STATUSES as readonly string[]).includes(assignment.status)) {
     return NextResponse.json(
       { error: 'invalid_state', status: assignment.status, message: 'Assignment is not active' },
       { status: 409 },

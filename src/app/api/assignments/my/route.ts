@@ -8,6 +8,7 @@ import {
   type AssignmentEvent,
   type GeofenceEventType,
 } from '@/lib/assignmentGeofence';
+import { IN_FLIGHT_STATUSES } from '@/lib/assignmentStatus';
 
 const noCache = {
   'Cache-Control': 'no-store, no-cache, must-revalidate',
@@ -64,7 +65,7 @@ export async function GET() {
     .select(baseSelect)
     .eq('agent_id', userId)
     .gte('shift_date', todayStr)
-    .in('status', ['pending', 'accepted', 'in_progress'])
+    .in('status', [...IN_FLIGHT_STATUSES])
     .order('shift_date', { ascending: true })
     .order('scheduled_start_time', { ascending: true });
 

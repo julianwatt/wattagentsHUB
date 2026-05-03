@@ -9,6 +9,7 @@ import {
   type AssignmentEvent,
   type GeofenceEventType,
 } from '@/lib/assignmentGeofence';
+import { isCancelled, isTerminal } from '@/lib/assignmentStatus';
 
 const noCache = {
   'Cache-Control': 'no-store, no-cache, must-revalidate',
@@ -29,13 +30,9 @@ const noCache = {
  *  - accept/reject  → notifies the assigner about the agent's response
  *  - cancel         → notifies the agent that the CEO cancelled
  */
-const TERMINAL_STATUSES = new Set([
-  'completed', 'incomplete', 'cancelled', 'cancelled_in_progress', 'rejected', 'replaced',
-]);
-// Statuses that mean "already cancelled by an admin" — used for the
-// idempotency check so a double-click doesn't overwrite cancelled_at and
-// doesn't fan out a second notification to the agent.
-const CANCELLED_STATUSES = new Set(['cancelled', 'cancelled_in_progress']);
+// Status taxonomy lives in lib/assignmentStatus — predicates `isTerminal`
+// and `isCancelled` capture the sets used here. Re-exporting locally would
+// just be duplication.
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -189,7 +186,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   // Idempotency: already cancelled by an admin → return success without
   // touching the row. A double-click in the UI no longer rewrites
   // cancelled_at or sends a second push.
-  if (CANCELLED_STATUSES.has(assignment.status)) {
+  if (isCancelled(assignment.status)) {
     console.info(
       `[assignments PATCH cancel] id=${id} agent=${assignment.agent_id} `
       + `idempotent — already ${assignment.status}, no-op`,
@@ -202,7 +199,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
   // Other terminal states (completed/incomplete/rejected/replaced): cannot
   // be cancelled retroactively. Surface a clear 409.
-  if (TERMINAL_STATUSES.has(assignment.status)) {
+  if (isTerminal(assignment.status)) {
     return NextResponse.json(
       { error: 'invalid_state', message: `Assignment is already ${assignment.status}` },
       { status: 409 },

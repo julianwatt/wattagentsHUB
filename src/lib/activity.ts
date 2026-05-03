@@ -1,4 +1,5 @@
 import { supabase, ActivityEntry, CampaignType, Modality } from './supabase';
+import { BLOCKING_STATUSES } from './assignmentStatus';
 
 export type { ActivityEntry, CampaignType };
 
@@ -75,7 +76,7 @@ export async function resolveActiveAssignment(
     `)
     .eq('agent_id', agentId)
     .eq('shift_date', date)
-    .in('status', ['accepted', 'in_progress', 'completed', 'incomplete'])
+    .in('status', [...BLOCKING_STATUSES])
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();

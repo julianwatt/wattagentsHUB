@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { canManageAssignments } from '@/lib/permissions';
 import { sendPushToUser } from '@/lib/push';
 import { localToday } from '@/lib/time';
+import { isBlocking } from '@/lib/assignmentStatus';
 
 const noCache = {
   'Cache-Control': 'no-store, no-cache, must-revalidate',
@@ -175,9 +176,10 @@ export async function POST(req: NextRequest) {
     .order('created_at', { ascending: false });
 
   const priorList = (priorRows ?? []) as { id: string; status: string }[];
-  const livePrior = priorList.find((r) =>
-    ['accepted', 'in_progress', 'completed', 'incomplete'].includes(r.status),
-  );
+  // BLOCKING_STATUSES = accepted/in_progress/completed/incomplete. `pending`
+  // is intentionally NOT in this filter — it gets the soft confirmation flow
+  // below (CONFIRMATION_REQUIRED_STATUSES).
+  const livePrior = priorList.find((r) => isBlocking(r.status));
   if (livePrior) {
     // Block: agent already has a binding/active row. CEO must cancel it
     // before creating a new one. The UI surfaces this as a hard error.

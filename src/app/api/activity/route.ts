@@ -13,6 +13,7 @@ import {
   CampaignType,
 } from '@/lib/activity';
 import { getVisibleUserIds, getUserById, type UserRole } from '@/lib/users';
+import { ACTIVE_STATUSES } from '@/lib/assignmentGeofence';
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
   const activeAssignment = await resolveActiveAssignment(session.user.id, date);
   const hasActiveAssignment =
     !!activeAssignment
-    && (activeAssignment.status === 'accepted' || activeAssignment.status === 'in_progress');
+    && (ACTIVE_STATUSES as readonly string[]).includes(activeAssignment.status);
   const allowed = getAllowedActivityModalities(modality, hasActiveAssignment);
 
   if (!allowed.includes(ct)) {

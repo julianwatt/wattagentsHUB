@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { supabase } from '@/lib/supabase';
+import { wasWorked } from '@/lib/assignmentStatus';
 
 const noCache = {
   'Cache-Control': 'no-store, no-cache, must-revalidate',
@@ -75,13 +76,13 @@ export async function GET(req: NextRequest) {
   }
 
   // "Total" counts only assignments where the agent actually entered the
-  // store perimeter — pending/rejected/replaced and cancelled-without-entry
-  // rows don't represent shifts the agent actually worked. All compliance
-  // metrics below derive from this same filtered set so they tell a
-  // coherent story (rate denominators all scoped to "shifts you showed up
-  // for").
+  // store perimeter (operational rule, see lib/assignmentStatus.wasWorked).
+  // pending/rejected/replaced and cancelled-without-entry rows don't
+  // represent shifts the agent actually worked. All compliance metrics
+  // below derive from this same filtered set so they tell a coherent
+  // story (rate denominators all scoped to "shifts you showed up for").
   const allRows = (data ?? []) as SummaryRow[];
-  const rows = allRows.filter((r) => r.actual_entry_at !== null);
+  const rows = allRows.filter(wasWorked);
   const total = rows.length;
 
   let met = 0;
