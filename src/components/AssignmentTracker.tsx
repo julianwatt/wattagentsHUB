@@ -58,7 +58,14 @@ export default function AssignmentTracker({ assignment }: Props) {
         assignment.store.latitude,
         assignment.store.longitude,
       );
-      const ring = ringForDistance(dist);
+      // Compute geo_method first so ringForDistance can apply the wider
+      // outer threshold (500m) for low-confidence readings — keeping the
+      // client's ring computation aligned with the server's, otherwise the
+      // client thinks "outer" at 350m gps_low and stops sending updates
+      // even though the server (correctly) keeps that as 'warn'.
+      const accuracy = pos.coords.accuracy;
+      const geo_method = accuracy != null && accuracy <= 50 ? 'gps_high' : 'gps_low';
+      const ring = ringForDistance(dist, geo_method);
 
       // Only POST when ring changed AND there isn't a pending request
       if (ring === lastSentRingRef.current) return;
@@ -66,8 +73,6 @@ export default function AssignmentTracker({ assignment }: Props) {
       inFlightRef.current = true;
 
       try {
-        const accuracy = pos.coords.accuracy;
-        const geo_method = accuracy != null && accuracy <= 50 ? 'gps_high' : 'gps_low';
         const res = await fetch(`/api/assignments/${assignment.id}/geofence-event`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

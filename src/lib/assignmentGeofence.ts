@@ -18,6 +18,18 @@ export const RING_WARN_RADIUS_M = 300;
 
 /** Anything beyond warn radius is "outside_final" — auto-end of shift. */
 
+/** Outer-ring threshold for low-confidence (gps_low) readings. A gps_low
+ *  reading means the browser reported `pos.coords.accuracy > 50m`, i.e. the
+ *  true position can be hundreds of meters off the reported point. Using
+ *  the strict 300m threshold caused a single borderline reading (~464m
+ *  gps_low, prod incident 2026-05-03) to auto-close a shift even though
+ *  the agent was almost certainly still inside the warn ring expanded by
+ *  the GPS error margin. For low-confidence readings we push the outer
+ *  threshold to 500m — readings between 300–500m stay 'warn' (effective
+ *  time pauses, CEO sees the warning) instead of triggering exited_final.
+ *  Readings >500m still close the shift; gps_high keeps the original 300m. */
+export const RING_OUTER_LOW_CONFIDENCE_M = 500;
+
 /** Minimum gap between two CEO notifications of the same type for the same
  *  assignment, to avoid spam if the agent oscillates between rings. */
 export const NOTIFICATION_DEBOUNCE_MS = 2 * 60 * 1000;
@@ -124,9 +136,20 @@ export function isActiveAssignmentStatus(status: string | null | undefined): boo
 }
 
 // ── Ring determination ───────────────────────────────────────────────────────
-export function ringForDistance(meters: number): Ring {
+/**
+ * Returns the ring the agent is in given distance to store and GPS confidence.
+ *
+ * `geoMethod === 'gps_low'` widens the warn→outer threshold from 300m to 500m
+ * (see RING_OUTER_LOW_CONFIDENCE_M) — a borderline gps_low reading shouldn't
+ * close a shift on its own. `geoMethod` undefined or any other value uses the
+ * strict 300m threshold (legacy behaviour).
+ */
+export function ringForDistance(meters: number, geoMethod?: string | null): Ring {
   if (meters <= RING_INNER_RADIUS_M) return 'inner';
-  if (meters <= RING_WARN_RADIUS_M) return 'warn';
+  const outerThreshold = geoMethod === 'gps_low'
+    ? RING_OUTER_LOW_CONFIDENCE_M
+    : RING_WARN_RADIUS_M;
+  if (meters <= outerThreshold) return 'warn';
   return 'outer';
 }
 

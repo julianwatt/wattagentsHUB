@@ -103,7 +103,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const distance_meters = Math.round(
     haversineMeters(latitude, longitude, store.latitude, store.longitude),
   );
-  const currentRing: Ring = ringForDistance(distance_meters);
+  // Pass geo_method so low-confidence readings get the wider 500m outer
+  // threshold (see RING_OUTER_LOW_CONFIDENCE_M). Without this, a single
+  // gps_low reading at 300–500m would auto-close the shift even though
+  // the agent's true position is likely still within the warn ring.
+  const currentRing: Ring = ringForDistance(distance_meters, geo_method);
 
   // ── Look up the last event to know previous ring ──────────────────────────
   const { data: lastEventRow } = await supabase
