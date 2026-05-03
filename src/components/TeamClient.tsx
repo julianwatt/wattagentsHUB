@@ -5,6 +5,7 @@ import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
 import { usePreviewRole, useActiveUserId } from './PreviewRoleContext';
 import { fmtDate, fmtTime } from '@/lib/i18n';
+import { localToday, localDaysAgo } from '@/lib/time';
 import { ActivityEntryWithAgent, effectivenessRate } from '@/lib/activity';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
 import ToggleSwitch from './ToggleSwitch';
@@ -25,7 +26,6 @@ interface TeamData {
   entries: ActivityEntryWithAgent[];
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
 function daysSince(date: string): number {
   const ms = Date.now() - new Date(date).getTime();
   return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
@@ -152,12 +152,11 @@ export default function TeamClient({ session }: { session: Session }) {
 
   // First/last sale of today (fallback to yesterday if no sales today)
   const todaysSales = useMemo(() => {
-    const todayStr = today();
+    const todayStr = localToday();
     let salesEntries = memberEntries.filter((e) => e.date === todayStr && e.sales > 0);
     let dateUsed = todayStr;
     if (salesEntries.length === 0) {
-      const yd = new Date(); yd.setDate(yd.getDate() - 1);
-      const yesterdayStr = yd.toISOString().slice(0, 10);
+      const yesterdayStr = localDaysAgo(1);
       salesEntries = memberEntries.filter((e) => e.date === yesterdayStr && e.sales > 0);
       dateUsed = yesterdayStr;
     }
@@ -172,13 +171,9 @@ export default function TeamClient({ session }: { session: Session }) {
 
   // Top rep: week / month / year (sales)
   const topRep = useMemo(() => {
-    const now = new Date();
-    const weekCut = new Date(now); weekCut.setDate(now.getDate() - 7);
-    const monthCut = new Date(now); monthCut.setDate(now.getDate() - 30);
-    const yearCut = new Date(now); yearCut.setDate(now.getDate() - 365);
-    const wk = weekCut.toISOString().slice(0, 10);
-    const mo = monthCut.toISOString().slice(0, 10);
-    const yr = yearCut.toISOString().slice(0, 10);
+    const wk = localDaysAgo(7);
+    const mo = localDaysAgo(30);
+    const yr = localDaysAgo(365);
 
     const sumSalesSince = (cutoff: string) => {
       const m = new Map<string, number>();
@@ -192,15 +187,14 @@ export default function TeamClient({ session }: { session: Session }) {
       if (!a) return null;
       return { agent: a, sales: topVal };
     };
-    const todayStr = today();
+    const todayStr = localToday();
     return { week: sumSalesSince(wk), month: sumSalesSince(mo), year: sumSalesSince(yr), day: sumSalesSince(todayStr) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memberEntries, members]);
 
   // Mini chart data per agent (last 14 days, sales)
   function miniSeries(agentId: string) {
-    const cut = new Date(); cut.setDate(cut.getDate() - 14);
-    const cutStr = cut.toISOString().slice(0, 10);
+    const cutStr = localDaysAgo(14);
     return memberEntries
       .filter((e) => e.agent_id === agentId && e.date >= cutStr)
       .sort((a, b) => a.date.localeCompare(b.date))

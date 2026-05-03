@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useLanguage } from './LanguageContext';
 import { fmtTime as fmtTimeI18n } from '@/lib/i18n';
+import { localToday, localDaysAgo } from '@/lib/time';
 import AssignmentTimelineModal from './AssignmentTimelineModal';
 import { formatStoreLabel } from '@/lib/stores';
 
@@ -65,10 +66,6 @@ interface SummaryShape {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-const todayLocal = (): string => new Date().toISOString().slice(0, 10);
-const daysAgoLocal = (n: number): string =>
-  new Date(Date.now() - n * 86400_000).toISOString().slice(0, 10);
-
 function formatHHMM(min: number): string {
   if (min <= 0) return '00:00';
   const h = Math.floor(min / 60);
@@ -81,7 +78,7 @@ function formatHHMMFromMs(ms: number): string {
 }
 
 const DURATION_BUCKETS = ['met', 'partial', 'unmet'] as const;
-const PUNCTUALITY_BUCKETS = ['on_time', 'late', 'no_show'] as const;
+const PUNCTUALITY_BUCKETS = ['on_time', 'late', 'late_arrival', 'late_severe', 'no_show'] as const;
 const STATUS_BUCKETS = ['completed', 'incomplete', 'rejected', 'cancelled'] as const;
 
 type SortKey = 'shift_date' | 'effective_minutes' | 'created_at';
@@ -96,8 +93,8 @@ export default function AssignmentsHistoryClient() {
   const [stores, setStores] = useState<StoreLite[]>([]);
 
   // Filters
-  const [from, setFrom] = useState(daysAgoLocal(30));
-  const [to, setTo] = useState(todayLocal());
+  const [from, setFrom] = useState(localDaysAgo(30));
+  const [to, setTo] = useState(localToday());
   const [agentFilter, setAgentFilter] = useState<Set<string>>(new Set());
   const [storeFilter, setStoreFilter] = useState<Set<string>>(new Set());
   const [durationFilter, setDurationFilter] = useState<Set<string>>(new Set());
@@ -212,8 +209,8 @@ export default function AssignmentsHistoryClient() {
     });
 
   const resetFilters = () => {
-    setFrom(daysAgoLocal(30));
-    setTo(todayLocal());
+    setFrom(localDaysAgo(30));
+    setTo(localToday());
     setAgentFilter(new Set());
     setStoreFilter(new Set());
     setDurationFilter(new Set());
@@ -264,17 +261,27 @@ export default function AssignmentsHistoryClient() {
     if (p === 'on_time')      return <Badge color="emerald">{t('assignments.punctualityOnTime')}</Badge>;
     if (p === 'late')         return <Badge color="amber">{t('assignments.punctualityLate')}</Badge>;
     if (p === 'late_arrival') return <Badge color="amber">{t('assignments.punctualityLateArrival')}</Badge>;
-    if (p === 'late_severe')  return <Badge color="red">{t('assignments.punctualityLateSevere')}</Badge>;
+    if (p === 'late_severe')  return <Badge color="orange">{t('assignments.punctualityLateSevere')}</Badge>;
     if (p === 'no_show')      return <Badge color="red">{t('assignments.punctualityNoShow')}</Badge>;
     return <span className="text-[10px] text-gray-400">—</span>;
   };
+  // Status badge color spec:
+  //   completed    → emerald (Verde)
+  //   in_progress  → blue    (En curso = azul; verde reservado para Completada)
+  //   incomplete   → orange
+  //   rejected     → red
+  //   cancelled    → gray
+  //   replaced     → gray    (historical noise; usually filtered upstream)
+  //   accepted     → sky     (Por llegar / azul claro)
+  //   pending/etc  → amber   (atención)
   const statusBadge = (s: string) => {
     const cls = s === 'completed' ? 'emerald'
-              : s === 'in_progress' ? 'emerald'  // En curso → verde, igual que el panel Hoy
+              : s === 'in_progress' ? 'blue'
               : s === 'incomplete' ? 'orange'
               : s === 'rejected' ? 'red'
               : s === 'cancelled' ? 'gray'
-              : s === 'accepted' ? 'sky'         // Por llegar / accepted → azul
+              : s === 'replaced' ? 'gray'
+              : s === 'accepted' ? 'sky'
               : 'amber';
     return <Badge color={cls as Color}>{t(`assignments.status${capitalize(s)}`)}</Badge>;
   };
@@ -282,7 +289,7 @@ export default function AssignmentsHistoryClient() {
   // Active filter count for the mobile summary
   const activeFilterCount =
     (agentFilter.size + storeFilter.size + durationFilter.size + punctFilter.size + statusFilter.size) +
-    (from !== daysAgoLocal(30) || to !== todayLocal() ? 1 : 0);
+    (from !== localDaysAgo(30) || to !== localToday() ? 1 : 0);
 
   return (
     <div className="space-y-4">
@@ -353,9 +360,11 @@ export default function AssignmentsHistoryClient() {
             label={t('assignments.filterPunctuality')}
             options={PUNCTUALITY_BUCKETS.map((b) => ({
               value: b,
-              label: b === 'on_time' ? t('assignments.punctualityOnTime')
-                   : b === 'late' ? t('assignments.punctualityLate')
-                   : t('assignments.punctualityNoShow'),
+              label: b === 'on_time'      ? t('assignments.punctualityOnTime')
+                   : b === 'late'         ? t('assignments.punctualityLate')
+                   : b === 'late_arrival' ? t('assignments.punctualityLateArrival')
+                   : b === 'late_severe'  ? t('assignments.punctualityLateSevere')
+                   :                        t('assignments.punctualityNoShow'),
             }))}
             selected={punctFilter}
             onToggle={(v) => toggleSet(setPunctFilter, v)}

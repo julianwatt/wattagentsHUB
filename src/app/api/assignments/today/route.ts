@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { supabase } from '@/lib/supabase';
 import { canManageAssignments } from '@/lib/permissions';
+import { localToday } from '@/lib/time';
 import {
   computeEffectiveMs,
   type AssignmentEvent,
@@ -63,7 +64,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localToday();
 
   // 1. Today's assignments with joined people + store. Exclude 'replaced' —
   //    those are historical rows superseded by a fresher one for the same

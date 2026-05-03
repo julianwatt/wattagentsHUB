@@ -52,17 +52,24 @@ const formatDuration = (ms: number) => {
 
 type Group = 'attention' | 'inProgress' | 'pendingArrival' | 'completed';
 
+// Statuses that represent a "live" (non-terminated) assignment for an agent
+// on a given day. Used by the dedup pass below to prefer a live row over
+// a cancelled/rejected one when both exist for the same agent.
+const LIVE_STATUSES = new Set([
+  'pending', 'accepted', 'in_progress', 'completed', 'incomplete',
+]);
+
 function groupOf(a: TodayAssignment): Group {
   // Per the business spec:
   //   pending without accept   → attention
   //   rejected (not replaced)  → attention   (replaced rows are filtered upstream)
+  //   cancelled (sole row)     → attention   (only surfaces when the agent has
+  //                              no live row for the day; CEO needs to act)
   //   in_progress + outside    → attention
   //   in_progress + inside     → inProgress
   //   accepted (awaiting)      → pendingArrival
   //   completed/incomplete     → completed
-  //   cancelled                → don't surface anywhere; the CEO already
-  //                              acted, the agent has no current assignment.
-  if (a.status === 'pending' || a.status === 'rejected') return 'attention';
+  if (a.status === 'pending' || a.status === 'rejected' || a.status === 'cancelled') return 'attention';
   if (a.status === 'in_progress') {
     if (a.last_event?.event_type === 'exited_warn' || a.last_event?.event_type === 'exited_final') {
       return 'attention';
@@ -71,7 +78,7 @@ function groupOf(a: TodayAssignment): Group {
   }
   if (a.status === 'accepted') return 'pendingArrival';
   if (a.status === 'completed' || a.status === 'incomplete') return 'completed';
-  // cancelled (and any future unknown status): hide from active panel
+  // any future unknown status: hide from active panel
   return 'completed';
 }
 
@@ -126,17 +133,22 @@ export default function AssignmentsTodayClient() {
       if (res.ok) {
         const j = await res.json();
         const raw: TodayAssignment[] = j.assignments ?? [];
-        // Hide cancelled rows that are NOT replaced (the CEO acted; no
-        // need to surface the trace in the live panel) — though typically
-        // by the time a cancellation lands a new replacement has already
-        // been created, marking it 'replaced' (filtered upstream).
-        // Defensive dedupe across agents: if multiple non-cancelled rows
-        // exist for the same agent, keep only the most recently created.
-        const filtered = raw.filter((a) => a.status !== 'cancelled');
+        // One row per agent for the day. Among rows for the same agent,
+        // a live row (pending/accepted/in_progress/completed/incomplete)
+        // always wins over a non-live one (cancelled/rejected). Within the
+        // same tier, the most recently created wins. A cancelled/rejected
+        // row only surfaces when the agent has no live row for the day —
+        // signalling the CEO needs to (re)act. 'replaced' rows were
+        // already excluded server-side.
         const byAgent = new Map<string, TodayAssignment>();
-        for (const a of filtered) {
+        for (const a of raw) {
           const prev = byAgent.get(a.agent_id);
-          if (!prev || (a.created_at ?? '') > (prev.created_at ?? '')) {
+          if (!prev) { byAgent.set(a.agent_id, a); continue; }
+          const aLive = LIVE_STATUSES.has(a.status);
+          const prevLive = LIVE_STATUSES.has(prev.status);
+          if (aLive && !prevLive) {
+            byAgent.set(a.agent_id, a);
+          } else if (aLive === prevLive && (a.created_at ?? '') > (prev.created_at ?? '')) {
             byAgent.set(a.agent_id, a);
           }
         }
@@ -265,8 +277,8 @@ export default function AssignmentsTodayClient() {
         {/* ── Summary bar ─────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3">
           <Stat label={t('assignments.summaryTotal')} value={summary.total} />
-          <Stat label={t('assignments.summaryInProgress')} value={summary.inProgress} accent="emerald" />
-          <Stat label={t('assignments.summaryCompleted')} value={summary.completed} accent="blue" />
+          <Stat label={t('assignments.summaryInProgress')} value={summary.inProgress} accent="blue" />
+          <Stat label={t('assignments.summaryCompleted')} value={summary.completed} accent="emerald" />
           <Stat label={t('assignments.summaryAttention')} value={summary.attention} accent="amber" />
           <Stat
             label={t('assignments.summaryPunctuality')}
@@ -306,7 +318,7 @@ export default function AssignmentsTodayClient() {
         />
         <Section
           title={t('assignments.groupInProgress')}
-          accent="emerald"
+          accent="blue"
           items={grouped.inProgress}
           empty={t('assignments.groupInProgressEmpty')}
           renderCard={(a) => (
@@ -401,7 +413,7 @@ function Section({
   title, accent, items, empty, renderCard,
 }: {
   title: string;
-  accent: 'amber' | 'emerald' | 'sky' | 'gray';
+  accent: 'amber' | 'emerald' | 'sky' | 'blue' | 'gray';
   items: TodayAssignment[];
   empty: string;
   renderCard: (a: TodayAssignment) => React.ReactNode;
@@ -410,6 +422,7 @@ function Section({
     accent === 'amber' ? 'text-amber-600 dark:text-amber-400 border-l-amber-400 dark:border-l-amber-600'
     : accent === 'emerald' ? 'text-emerald-600 dark:text-emerald-400 border-l-emerald-400 dark:border-l-emerald-600'
     : accent === 'sky' ? 'text-sky-600 dark:text-sky-400 border-l-sky-400 dark:border-l-sky-600'
+    : accent === 'blue' ? 'text-blue-600 dark:text-blue-400 border-l-blue-400 dark:border-l-blue-600'
     : 'text-gray-500 dark:text-gray-400 border-l-gray-300 dark:border-l-gray-600';
   return (
     <section>
@@ -473,16 +486,26 @@ const Card = function Card({ a, tick, fetchedAt, highlighted, acting, lang, t, o
     if (a.last_event?.event_type === 'exited_final') {
       return { color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300', label: t('assignments.subStateExitedFinal') };
     }
-    return { color: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300', label: t('assignments.statusInProgress') };
+    return { color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300', label: t('assignments.statusInProgress') };
   })();
 
-  const punctuality = a.punctuality === 'on_time'
-    ? { color: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300', label: '✓ ' + t('assignments.punctualityOnTime') }
-    : a.punctuality === 'late'
-      ? { color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300', label: t('assignments.punctualityLate') }
-      : a.punctuality === 'no_show'
-        ? { color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300', label: t('assignments.punctualityNoShow') }
-        : null;
+  // Punctuality color spec (5 buckets):
+  //   on_time      → emerald (Verde, "A tiempo")
+  //   late         → amber   (Tarde tolerable)
+  //   late_arrival → amber   (Retardo — same family as `late`, escalation
+  //                           communicated via the label, not the color)
+  //   late_severe  → orange  (Retardo significativo — visual escalation)
+  //   no_show      → red     (No llegó)
+  const punctuality = (() => {
+    switch (a.punctuality) {
+      case 'on_time':      return { color: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300', label: '✓ ' + t('assignments.punctualityOnTime') };
+      case 'late':         return { color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',         label: t('assignments.punctualityLate') };
+      case 'late_arrival': return { color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',         label: t('assignments.punctualityLateArrival') };
+      case 'late_severe':  return { color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300',     label: t('assignments.punctualityLateSevere') };
+      case 'no_show':      return { color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300',                 label: t('assignments.punctualityNoShow') };
+      default:             return null;
+    }
+  })();
 
   const canCancel = !['completed', 'incomplete', 'cancelled', 'rejected'].includes(a.status);
   const canReassign = a.status === 'rejected' || a.status === 'cancelled';
@@ -492,9 +515,10 @@ const Card = function Card({ a, tick, fetchedAt, highlighted, acting, lang, t, o
   // when present so the per-row "just-changed" animation stays visible.
   const tintClass = (() => {
     if (a.status === 'in_progress') {
-      // Subtle green wash + green border when actively working AND inside.
+      // Subtle blue wash + blue border when actively working AND inside.
+      // Amber when temporarily/finally outside the perimeter.
       const inside = a.last_event?.event_type !== 'exited_warn' && a.last_event?.event_type !== 'exited_final';
-      if (inside) return 'border-emerald-300 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-900/10';
+      if (inside) return 'border-blue-300 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-900/10';
       return 'border-amber-300 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-900/10';
     }
     if (a.status === 'rejected' || a.status === 'cancelled') {

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { supabase } from '@/lib/supabase';
+import { localToday } from '@/lib/time';
 import {
   computeEffectiveMs,
   type AssignmentEvent,
@@ -45,7 +46,7 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const userId = session.user.id;
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localToday();
   const yesterdayIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   const baseSelect = `

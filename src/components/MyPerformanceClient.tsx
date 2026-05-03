@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useLanguage } from './LanguageContext';
 import { fmtTime as fmtTimeI18n } from '@/lib/i18n';
+import { localToday, localDaysAgo } from '@/lib/time';
 import AssignmentCards from './AssignmentCards';
 import AssignmentTimelineModal from './AssignmentTimelineModal';
 import { formatStoreLabel } from '@/lib/stores';
@@ -55,10 +56,6 @@ interface SummaryShape {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-const todayLocal = (): string => new Date().toISOString().slice(0, 10);
-const daysAgoLocal = (n: number): string =>
-  new Date(Date.now() - n * 86400_000).toISOString().slice(0, 10);
-
 function formatHHMM(min: number): string {
   if (min <= 0) return '00:00';
   const h = Math.floor(min / 60);
@@ -76,8 +73,8 @@ const DURATION_BUCKETS = ['met', 'partial', 'unmet'] as const;
 export default function MyPerformanceClient({ role }: Props) {
   const { t, lang } = useLanguage();
 
-  const [from, setFrom] = useState(daysAgoLocal(30));
-  const [to, setTo] = useState(todayLocal());
+  const [from, setFrom] = useState(localDaysAgo(30));
+  const [to, setTo] = useState(localToday());
   const [durationFilter, setDurationFilter] = useState<Set<string>>(new Set());
 
   const [rows, setRows] = useState<MyHistoryRow[]>([]);
@@ -147,8 +144,8 @@ export default function MyPerformanceClient({ role }: Props) {
     });
 
   const resetFilters = () => {
-    setFrom(daysAgoLocal(30));
-    setTo(todayLocal());
+    setFrom(localDaysAgo(30));
+    setTo(localToday());
     setDurationFilter(new Set());
   };
 
@@ -168,7 +165,7 @@ export default function MyPerformanceClient({ role }: Props) {
     if (p === 'on_time')      return <Badge color="emerald">{t('assignments.punctualityOnTime')}</Badge>;
     if (p === 'late')         return <Badge color="amber">{t('assignments.punctualityLate')}</Badge>;
     if (p === 'late_arrival') return <Badge color="amber">{t('assignments.punctualityLateArrival')}</Badge>;
-    if (p === 'late_severe')  return <Badge color="red">{t('assignments.punctualityLateSevere')}</Badge>;
+    if (p === 'late_severe')  return <Badge color="orange">{t('assignments.punctualityLateSevere')}</Badge>;
     if (p === 'no_show')      return <Badge color="red">{t('assignments.punctualityNoShow')}</Badge>;
     return <span className="text-[10px] text-gray-400">—</span>;
   };
@@ -374,7 +371,7 @@ export default function MyPerformanceClient({ role }: Props) {
 }
 
 // ── Sub-components ──────────────────────────────────────────────────────────
-type Color = 'emerald' | 'red' | 'amber' | 'blue';
+type Color = 'emerald' | 'red' | 'amber' | 'blue' | 'orange';
 
 function Badge({ color, children }: { color: Color; children: React.ReactNode }) {
   const cls = {
@@ -382,6 +379,7 @@ function Badge({ color, children }: { color: Color; children: React.ReactNode })
     red:     'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300',
     amber:   'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
     blue:    'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
+    orange:  'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300',
   }[color];
   return <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full whitespace-nowrap ${cls}`}>{children}</span>;
 }

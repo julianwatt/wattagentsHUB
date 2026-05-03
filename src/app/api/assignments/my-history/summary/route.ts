@@ -11,9 +11,10 @@ const noCache = {
 const SUMMARY_ROW_CAP = 5000;
 
 interface SummaryRow {
+  actual_entry_at: string | null;
   effective_minutes: number;
   met_duration: boolean | null;
-  punctuality: 'on_time' | 'late' | 'no_show' | null;
+  punctuality: 'on_time' | 'late' | 'late_arrival' | 'late_severe' | 'no_show' | null;
 }
 
 /**
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest) {
 
   let q = supabase
     .from('assignments')
-    .select('effective_minutes, met_duration, punctuality')
+    .select('actual_entry_at, effective_minutes, met_duration, punctuality')
     .eq('agent_id', userId);
 
   if (from) q = q.gte('shift_date', from);
@@ -65,7 +66,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const rows = (data ?? []) as SummaryRow[];
+  // "Total" counts only assignments where the agent actually entered the
+  // store perimeter — pending/rejected/replaced and cancelled-without-entry
+  // rows don't represent shifts the agent actually worked. All compliance
+  // metrics below derive from this same filtered set so they tell a
+  // coherent story (rate denominators all scoped to "shifts you showed up
+  // for").
+  const allRows = (data ?? []) as SummaryRow[];
+  const rows = allRows.filter((r) => r.actual_entry_at !== null);
   const total = rows.length;
 
   let met = 0;

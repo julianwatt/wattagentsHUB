@@ -110,8 +110,8 @@ export default function AssignmentProgressCard({ assignment: a, liveDistanceMete
     },
     inProgress: {
       label: t('assignments.progressStateInProgress'),
-      color: 'text-emerald-700 dark:text-emerald-300',
-      bg: 'bg-emerald-100 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-800',
+      color: 'text-blue-700 dark:text-blue-300',
+      bg: 'bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-800',
       emoji: '✅',
     },
     tempExit: {

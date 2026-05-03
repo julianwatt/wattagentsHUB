@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { supabase } from '@/lib/supabase';
 import { canManageAssignments } from '@/lib/permissions';
 import { sendPushToUser } from '@/lib/push';
+import { localToday } from '@/lib/time';
 
 const noCache = {
   'Cache-Control': 'no-store, no-cache, must-revalidate',
@@ -117,9 +118,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Date validation: not in the past (compared to today, agent's local time
-  // is unknown so we compare in server local-day terms)
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // Date validation: not in the past (compared to today in the project's
+  // local timezone — see src/lib/time.ts).
+  const todayStr = localToday();
   if (shift_date < todayStr) {
     return NextResponse.json({ error: 'shift_date cannot be in the past' }, { status: 400 });
   }

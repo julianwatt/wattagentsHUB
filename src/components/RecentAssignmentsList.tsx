@@ -27,12 +27,20 @@ interface Props {
   onReassign: (preset: AssignmentFormPreset) => void;
 }
 
+// Status colors per the project spec:
+//   pending      → ámbar (Necesita atención)
+//   accepted     → sky   (Por llegar / Esperando llegada — azul claro)
+//   rejected     → rojo
+//   in_progress  → azul  (En curso)
+//   completed    → verde (Completada)
+//   incomplete   → naranja (terminó sin cumplir horas)
+//   cancelled    → gris
 const STATUS_BADGE: Record<string, { color: string; labelKey: string }> = {
   pending:     { color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300', labelKey: 'assignments.statusPending' },
-  accepted:    { color: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300', labelKey: 'assignments.statusAccepted' },
+  accepted:    { color: 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300', labelKey: 'assignments.statusAccepted' },
   rejected:    { color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300', labelKey: 'assignments.statusRejected' },
-  in_progress: { color: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300', labelKey: 'assignments.statusInProgress' },
-  completed:   { color: 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300', labelKey: 'assignments.statusCompleted' },
+  in_progress: { color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300', labelKey: 'assignments.statusInProgress' },
+  completed:   { color: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300', labelKey: 'assignments.statusCompleted' },
   incomplete:  { color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300', labelKey: 'assignments.statusIncomplete' },
   cancelled:   { color: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300', labelKey: 'assignments.statusCancelled' },
 };

@@ -22,7 +22,7 @@ interface SummaryRow {
   actual_entry_at: string | null;
   effective_minutes: number;
   met_duration: boolean | null;
-  punctuality: 'on_time' | 'late' | 'no_show' | null;
+  punctuality: 'on_time' | 'late' | 'late_arrival' | 'late_severe' | 'no_show' | null;
   status: string;
   agent: { id: string; name: string } | null;
 }
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
   const total = rows.length;
 
   let met = 0, partial = 0, unmet = 0;
-  let onTime = 0, late = 0, noShow = 0, withVerdict = 0;
+  let onTime = 0, late = 0, lateArrival = 0, lateSevere = 0, noShow = 0, withVerdict = 0;
   let effectiveSum = 0, effectiveCount = 0;
   let lateMinutesSum = 0, lateMinutesCount = 0;
 
@@ -115,6 +115,8 @@ export async function GET(req: NextRequest) {
       withVerdict++;
       if (r.punctuality === 'on_time') onTime++;
       else if (r.punctuality === 'late') late++;
+      else if (r.punctuality === 'late_arrival') lateArrival++;
+      else if (r.punctuality === 'late_severe') lateSevere++;
       else if (r.punctuality === 'no_show') noShow++;
     }
 
@@ -124,8 +126,15 @@ export async function GET(req: NextRequest) {
       effectiveCount++;
     }
 
-    // Avg late minutes among late entries
-    if (r.punctuality === 'late' && r.actual_entry_at) {
+    // Avg late minutes among any-late entries (late, late_arrival, late_severe).
+    // 'no_show' has no actual_entry_at by definition, 'on_time' is within
+    // grace and excluded. Buckets late/late_arrival/late_severe all imply
+    // an entry timestamp — feed them all into the average so the headline
+    // metric reflects real tardiness across the full late spectrum.
+    if (
+      (r.punctuality === 'late' || r.punctuality === 'late_arrival' || r.punctuality === 'late_severe')
+      && r.actual_entry_at
+    ) {
       const time = r.scheduled_start_time.length === 5
         ? `${r.scheduled_start_time}:00`
         : r.scheduled_start_time;
@@ -177,7 +186,14 @@ export async function GET(req: NextRequest) {
       met_rate: pct(met, total),
       partial_rate: pct(partial, total),
       unmet_rate: pct(unmet, total),
-      punctuality: { on_time: onTime, late, no_show: noShow, with_verdict: withVerdict },
+      punctuality: {
+        on_time: onTime,
+        late,
+        late_arrival: lateArrival,
+        late_severe: lateSevere,
+        no_show: noShow,
+        with_verdict: withVerdict,
+      },
       punctuality_rate: pct(onTime, withVerdict),
       avg_effective_minutes: effectiveCount === 0 ? 0 : Math.round(effectiveSum / effectiveCount),
       avg_late_minutes: lateMinutesCount === 0 ? 0 : Math.round(lateMinutesSum / lateMinutesCount),

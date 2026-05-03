@@ -3,6 +3,7 @@ import { useState, useEffect, FormEvent } from 'react';
 import { Session } from 'next-auth';
 import AppLayout from './AppLayout';
 import { useLanguage } from './LanguageContext';
+import { localToday } from '@/lib/time';
 import ToggleSwitch from './ToggleSwitch';
 // Theme picker removed — Watt Gold only
 
@@ -20,8 +21,6 @@ interface User {
   hire_date: string;
   created_at: string;
 }
-
-const today = () => new Date().toISOString().slice(0, 10);
 
 function roleBadgeClass(role: UserRole): string {
   switch (role) {
@@ -60,7 +59,7 @@ export default function AdminClient({ session }: { session: Session }) {
     username: '', name: '', email: '',
     role: 'agent' as UserRole,
     manager_id: '', sr_manager_filter: '',
-    hire_date: today(),
+    hire_date: localToday(),
   });
   const [formError, setFormError] = useState('');
   const [created, setCreated] = useState<CreatedUserInfo | null>(null);
@@ -115,7 +114,7 @@ export default function AdminClient({ session }: { session: Session }) {
         emailSent: data.emailSent,
         email: data.email,
       });
-      setForm({ username: '', name: '', email: '', role: 'agent', manager_id: '', sr_manager_filter: '', hire_date: today() });
+      setForm({ username: '', name: '', email: '', role: 'agent', manager_id: '', sr_manager_filter: '', hire_date: localToday() });
       fetchUsers();
     } else {
       const d = await res.json();
