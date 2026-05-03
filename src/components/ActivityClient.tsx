@@ -17,7 +17,7 @@ type Modality = 'd2d' | 'retail' | 'both';
 /** Per-date assignment context used by Retail-mode UX. */
 interface AssignmentForDate {
   id: string;
-  status: 'pending' | 'accepted' | 'rejected' | 'in_progress' | 'completed' | 'incomplete' | 'cancelled';
+  status: 'pending' | 'accepted' | 'rejected' | 'in_progress' | 'completed' | 'incomplete' | 'cancelled' | 'cancelled_in_progress';
   store_name: string;
   store_address: string | null;
 }

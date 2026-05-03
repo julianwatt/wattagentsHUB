@@ -29,7 +29,13 @@ const noCache = {
  *  - accept/reject  → notifies the assigner about the agent's response
  *  - cancel         → notifies the agent that the CEO cancelled
  */
-const TERMINAL_STATUSES = new Set(['completed', 'incomplete', 'cancelled', 'rejected']);
+const TERMINAL_STATUSES = new Set([
+  'completed', 'incomplete', 'cancelled', 'cancelled_in_progress', 'rejected', 'replaced',
+]);
+// Statuses that mean "already cancelled by an admin" — used for the
+// idempotency check so a double-click doesn't overwrite cancelled_at and
+// doesn't fan out a second notification to the agent.
+const CANCELLED_STATUSES = new Set(['cancelled', 'cancelled_in_progress']);
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -164,11 +170,38 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   }
 
   // ────────────────────────────────────────────────────────────────────────
-  // Branch 2: CEO/Admin cancel
+  // Branch 2: CEO/Admin cancel — STRICT INVARIANTS
+  //   - The UPDATE only ever runs against `id = $1` (the one row identified
+  //     by the URL param). It never touches any other assignment, agent,
+  //     or store. Verified: this branch contains exactly one .update().eq('id', id).
+  //   - It does NOT insert into assignment_geofence_events. Cancellation is
+  //     a separate flow from a real perimeter exit; the two share no code.
+  //   - It does NOT call into computeCompliance or any geofence-detection
+  //     code that could fan out to other rows.
+  //   - It is idempotent: re-cancelling an already-cancelled assignment
+  //     short-circuits with a 200 and does NOT overwrite cancelled_at,
+  //     cancelled_by, effective_minutes, or fan out a second notification.
   // ────────────────────────────────────────────────────────────────────────
   if (!canManageAssignments(session.user.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+
+  // Idempotency: already cancelled by an admin → return success without
+  // touching the row. A double-click in the UI no longer rewrites
+  // cancelled_at or sends a second push.
+  if (CANCELLED_STATUSES.has(assignment.status)) {
+    console.info(
+      `[assignments PATCH cancel] id=${id} agent=${assignment.agent_id} `
+      + `idempotent — already ${assignment.status}, no-op`,
+    );
+    return NextResponse.json(
+      { ok: true, id, status: assignment.status, idempotent: true },
+      { headers: noCache },
+    );
+  }
+
+  // Other terminal states (completed/incomplete/rejected/replaced): cannot
+  // be cancelled retroactively. Surface a clear 409.
   if (TERMINAL_STATUSES.has(assignment.status)) {
     return NextResponse.json(
       { error: 'invalid_state', message: `Assignment is already ${assignment.status}` },
@@ -179,29 +212,21 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   const nowDate = new Date();
   const now = nowDate.toISOString();
 
-  // If the cancellation hits an actively-running shift (the agent already
-  // arrived at the store), we freeze the tally as if the agent had clocked
-  // out at this exact moment. This preserves all the work the agent did up
-  // to the cancellation:
-  //   - actual_exit_at        ← cancelled_at
-  //   - effective_minutes     ← computeEffectiveMs over the events, with
-  //                             liveNow = now (closes any open "inside"
-  //                             interval right at the cancellation time)
-  //   - met_duration          ← whether they hit the expected duration
-  // For cancellations BEFORE arrival (status pending/accepted, no
-  // actual_entry_at), we leave those fields null — there's nothing to
-  // preserve and the row should look like a plain pre-shift cancellation.
-  const wasActive =
-    assignment.actual_entry_at !== null
-    && (assignment.status === 'in_progress' || assignment.status === 'accepted');
+  // wasActive = the agent already arrived at the perimeter. The only signal
+  // we trust is `actual_entry_at` being non-null on a non-terminal row —
+  // status alone is ambiguous because in_progress can race with cancel.
+  const wasActive = assignment.actual_entry_at !== null;
+  const newStatus = wasActive ? 'cancelled_in_progress' : 'cancelled';
 
   const updatePayload: Record<string, unknown> = {
-    status: 'cancelled',
+    status: newStatus,
     cancelled_at: now,
     cancelled_by: session.user.id,
   };
 
   if (wasActive) {
+    // Read events ONLY for this assignment id. Used to compute the effective
+    // time at the moment of cancellation; never inserts new events.
     const { data: evRows } = await supabase
       .from('assignment_geofence_events')
       .select('event_type, occurred_at')
@@ -216,6 +241,10 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     updatePayload.met_duration = effMin >= assignment.expected_duration_min;
   }
 
+  // The single mutation. Note `.eq('id', id)` — this is the ONLY filter on
+  // the UPDATE. No agent_id, no store_id, no shift_date filter ever appears
+  // here. If a future change adds another filter to this UPDATE, that's a
+  // bug — keep the surface minimal so cross-row contamination is impossible.
   const { error: cancelErr } = await supabase
     .from('assignments')
     .update(updatePayload)
@@ -226,7 +255,13 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     return NextResponse.json({ error: cancelErr.message }, { status: 500 });
   }
 
-  console.info(`[assignments PATCH] id=${id} cancelled by=${session.user.id}`);
+  // Audit log: id, agent, ceo, prev→new status, eff minutes if applicable.
+  // This is the trail to investigate any future "ghost cancellation" claim.
+  console.info(
+    `[assignments PATCH cancel] id=${id} agent=${assignment.agent_id} `
+    + `by=${session.user.id} prev=${assignment.status} → ${newStatus}`
+    + (wasActive ? ` effective_minutes=${updatePayload.effective_minutes}` : ''),
+  );
 
   // Notify the agent
   const { data: ceoRow } = await supabase
@@ -269,5 +304,9 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     console.error('[assignments PATCH cancel] push error (non-fatal):', err);
   }
 
-  return NextResponse.json({ ok: true, status: 'cancelled' }, { headers: noCache });
+  // Echo the id back so the client can confirm it cancelled the right row.
+  return NextResponse.json(
+    { ok: true, id, status: newStatus },
+    { headers: noCache },
+  );
 }

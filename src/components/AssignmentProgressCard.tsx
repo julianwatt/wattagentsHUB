@@ -19,7 +19,7 @@ interface LastEvent {
 
 interface AssignmentForProgress {
   id: string;
-  status: 'accepted' | 'in_progress' | 'completed' | 'incomplete' | 'cancelled' | 'pending' | 'rejected';
+  status: 'accepted' | 'in_progress' | 'completed' | 'incomplete' | 'cancelled' | 'cancelled_in_progress' | 'pending' | 'rejected';
   shift_date: string;
   scheduled_start_time: string;
   expected_duration_min: number;

@@ -208,20 +208,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Mark all rejected/cancelled/pending priors as 'replaced' so they
-  // disappear from the active "Hoy" panel. The 'replaced' status is
-  // explicitly excluded from the partial-unique index, so the new INSERT
-  // below won't violate it.
-  const replaceableIds = priorList
-    .filter((r) => ['rejected', 'cancelled', 'pending'].includes(r.status))
+  // Reassignment policy:
+  //   pending  → mark 'replaced' (the agent never accepted; the new row
+  //              supersedes it cleanly).
+  //   rejected, cancelled, cancelled_in_progress, no_show → DO NOT touch.
+  //              These are historical terminal states with their own audit
+  //              value and the partial-unique index already lets a fresh
+  //              row coexist beside them. Rewriting them as 'replaced' was
+  //              destroying the historical record.
+  const pendingPriorIds = priorList
+    .filter((r) => r.status === 'pending')
     .map((r) => r.id);
-  if (replaceableIds.length > 0) {
+  if (pendingPriorIds.length > 0) {
     const { error: replaceErr } = await supabase
       .from('assignments')
       .update({ status: 'replaced' })
-      .in('id', replaceableIds);
+      .in('id', pendingPriorIds);
     if (replaceErr) {
-      console.error('[assignments POST] replace prior error:', replaceErr);
+      console.error('[assignments POST] replace pending prior error:', replaceErr);
     }
   }
 

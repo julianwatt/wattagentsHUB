@@ -38,7 +38,8 @@ function endedByLabel(
   row: { status: string; actual_entry_at: string | null; cancelled_by_user?: CancelledByUser | null },
   t: (k: string) => string,
 ): string | null {
-  if (row.status !== 'cancelled' || !row.cancelled_by_user) return null;
+  if (row.status !== 'cancelled' && row.status !== 'cancelled_in_progress') return null;
+  if (!row.cancelled_by_user) return null;
   if (!row.actual_entry_at) return null;
   const role = row.cancelled_by_user.role;
   if (role === 'admin') return t('assignments.endedByAdmin');

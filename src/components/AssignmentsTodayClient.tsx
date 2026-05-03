@@ -27,7 +27,7 @@ interface TodayAssignment {
   shift_date: string;
   scheduled_start_time: string;
   expected_duration_min: number;
-  status: 'pending' | 'accepted' | 'rejected' | 'in_progress' | 'completed' | 'incomplete' | 'cancelled';
+  status: 'pending' | 'accepted' | 'rejected' | 'in_progress' | 'completed' | 'incomplete' | 'cancelled' | 'cancelled_in_progress';
   actual_entry_at: string | null;
   actual_exit_at: string | null;
   effective_minutes: number;
@@ -70,6 +70,9 @@ function groupOf(a: TodayAssignment): Group {
   //   accepted (awaiting)      → pendingArrival
   //   completed/incomplete     → completed
   if (a.status === 'pending' || a.status === 'rejected' || a.status === 'cancelled') return 'attention';
+  // cancelled_in_progress is terminal but had real work — surface alongside
+  // completed/incomplete rather than as "needs attention".
+  if (a.status === 'cancelled_in_progress') return 'completed';
   if (a.status === 'in_progress') {
     if (a.last_event?.event_type === 'exited_warn' || a.last_event?.event_type === 'exited_final') {
       return 'attention';
@@ -235,20 +238,38 @@ export default function AssignmentsTodayClient() {
     return { total, completed, inProgress, attention, punctualityPct };
   }, [items, grouped]);
 
-  // ── Action handlers ─────────────────────────────────────────────────────
-  const cancel = useCallback(async (id: string) => {
-    if (!confirm(t('assignments.confirmCancelBody'))) return;
+  // ── Cancel flow ─────────────────────────────────────────────────────────
+  // The custom modal below is the last-line defence against a wrong cancel:
+  // we ALWAYS look up the row by id at the moment the CEO clicked, show
+  // agent + store + time + status visually, and only POST after explicit
+  // confirmation. This makes the spec's "Bloque 3" requirement explicit:
+  // the id sent to the server is always the id we just rendered.
+  const [confirmingCancel, setConfirmingCancel] = useState<TodayAssignment | null>(null);
+  const requestCancel = useCallback((a: TodayAssignment) => {
+    setConfirmingCancel(a);
+  }, []);
+  const performCancel = useCallback(async () => {
+    if (!confirmingCancel) return;
+    const id = confirmingCancel.id;
     setActing(id);
     try {
-      await fetch(`/api/assignments/${id}`, {
+      const res = await fetch(`/api/assignments/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'cancel' }),
       });
+      // The server echoes the affected id back. If for any reason the echo
+      // doesn't match, log loudly — this is the trip-wire that would have
+      // caught a cross-row contamination bug long before production.
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.id && data.id !== id) {
+        console.error(`[cancel] server returned id=${data.id} but we sent ${id}`);
+      }
       await fetchToday();
     } catch { /* silent */ }
+    setConfirmingCancel(null);
     setActing(null);
-  }, [fetchToday, t]);
+  }, [confirmingCancel, fetchToday]);
 
   // ── Render ──────────────────────────────────────────────────────────────
   if (!loaded) {
@@ -312,7 +333,7 @@ export default function AssignmentsTodayClient() {
               lang={lang}
               t={t}
               onTimeline={(p) => setTimelineFor(p)}
-              onCancel={cancel}
+              onCancel={() => requestCancel(a)}
             />
           )}
         />
@@ -332,7 +353,7 @@ export default function AssignmentsTodayClient() {
               lang={lang}
               t={t}
               onTimeline={(p) => setTimelineFor(p)}
-              onCancel={cancel}
+              onCancel={() => requestCancel(a)}
             />
           )}
         />
@@ -352,7 +373,7 @@ export default function AssignmentsTodayClient() {
               lang={lang}
               t={t}
               onTimeline={(p) => setTimelineFor(p)}
-              onCancel={cancel}
+              onCancel={() => requestCancel(a)}
             />
           )}
         />
@@ -372,7 +393,7 @@ export default function AssignmentsTodayClient() {
               lang={lang}
               t={t}
               onTimeline={(p) => setTimelineFor(p)}
-              onCancel={cancel}
+              onCancel={() => requestCancel(a)}
             />
           )}
         />
@@ -386,6 +407,50 @@ export default function AssignmentsTodayClient() {
           storeName={timelineFor.storeName}
           onClose={() => setTimelineFor(null)}
         />
+      )}
+
+      {/* Cancel-confirmation modal — shows the exact row the CEO is about
+          to cancel: agent, store, time, current status. The id used for the
+          POST is read from confirmingCancel.id, captured at click time. */}
+      {confirmingCancel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-sm flex flex-col">
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+              <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">
+                {t('assignments.confirmCancelTitle')}
+              </h3>
+            </div>
+            <div className="px-5 py-4 space-y-2">
+              <p className="text-sm text-gray-700 dark:text-gray-200">
+                {t('assignments.confirmCancelBody')}
+              </p>
+              <ul className="text-[11px] text-gray-600 dark:text-gray-300 space-y-0.5 bg-gray-50 dark:bg-gray-800/50 rounded-xl px-3 py-2">
+                <li><strong>{t('assignments.fieldAgent')}:</strong> {confirmingCancel.agent?.name ?? '—'}</li>
+                <li><strong>{t('assignments.fieldStore')}:</strong> {confirmingCancel.store?.name ?? '—'}</li>
+                <li><strong>{t('assignments.fieldStartTime')}:</strong> {fmtTime(confirmingCancel.scheduled_start_time, lang)}</li>
+                <li><strong>{t('assignments.fieldStatus')}:</strong> {confirmingCancel.status}</li>
+              </ul>
+            </div>
+            <div className="flex gap-2 px-5 py-3 border-t border-gray-100 dark:border-gray-800">
+              <button
+                type="button"
+                onClick={() => setConfirmingCancel(null)}
+                disabled={acting !== null}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-60"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={performCancel}
+                disabled={acting !== null}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-red-600 hover:bg-red-700 transition-colors disabled:opacity-60"
+              >
+                {acting ? '…' : t('assignments.confirmCancelYes')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
@@ -453,7 +518,7 @@ interface CardProps {
   lang: 'es' | 'en';
   t: (k: string) => string;
   onTimeline: (p: { id: string; agentName: string; storeName: string }) => void;
-  onCancel: (id: string) => void;
+  onCancel: () => void;
 }
 
 const Card = function Card({ a, tick, fetchedAt, highlighted, acting, lang, t, onTimeline, onCancel }: CardProps) {
@@ -476,6 +541,7 @@ const Card = function Card({ a, tick, fetchedAt, highlighted, acting, lang, t, o
     if (a.status === 'pending') return { color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300', label: t('assignments.statusPending') };
     if (a.status === 'rejected') return { color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300', label: t('assignments.statusRejected') };
     if (a.status === 'cancelled') return { color: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300', label: t('assignments.statusCancelled') };
+    if (a.status === 'cancelled_in_progress') return { color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300', label: t('assignments.statusCancelledInProgress') };
     if (a.status === 'accepted') return { color: 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300', label: t('assignments.statusAccepted') };
     if (a.status === 'completed') return { color: 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300', label: t('assignments.statusCompleted') };
     if (a.status === 'incomplete') return { color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300', label: t('assignments.statusIncomplete') };
@@ -507,8 +573,8 @@ const Card = function Card({ a, tick, fetchedAt, highlighted, acting, lang, t, o
     }
   })();
 
-  const canCancel = !['completed', 'incomplete', 'cancelled', 'rejected'].includes(a.status);
-  const canReassign = a.status === 'rejected' || a.status === 'cancelled';
+  const canCancel = !['completed', 'incomplete', 'cancelled', 'cancelled_in_progress', 'rejected'].includes(a.status);
+  const canReassign = a.status === 'rejected' || a.status === 'cancelled' || a.status === 'cancelled_in_progress';
 
   // Card tint by status — green for actively-working, red for problem
   // states, neutral for the rest. The highlight ring (primary brand) wins
@@ -625,7 +691,7 @@ const Card = function Card({ a, tick, fetchedAt, highlighted, acting, lang, t, o
         )}
         {canCancel && (
           <button
-            onClick={() => onCancel(a.id)}
+            onClick={() => onCancel()}
             disabled={acting}
             className="text-[10px] font-bold px-2 py-1 rounded-lg border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-60"
           >

@@ -25,7 +25,7 @@ interface MyAssignment {
   shift_date: string;            // YYYY-MM-DD
   scheduled_start_time: string;  // HH:MM:SS or HH:MM
   expected_duration_min: number;
-  status: 'pending' | 'accepted' | 'rejected' | 'in_progress' | 'completed' | 'incomplete' | 'cancelled';
+  status: 'pending' | 'accepted' | 'rejected' | 'in_progress' | 'completed' | 'incomplete' | 'cancelled' | 'cancelled_in_progress';
   rejection_reason: string | null;
   agent_response_at: string | null;
   actual_entry_at: string | null;

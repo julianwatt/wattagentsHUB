@@ -43,7 +43,8 @@ function endedByLabel(
   row: { status: string; actual_entry_at: string | null; cancelled_by_user?: CancelledByUser | null },
   t: (k: string) => string,
 ): string | null {
-  if (row.status !== 'cancelled' || !row.cancelled_by_user) return null;
+  if (row.status !== 'cancelled' && row.status !== 'cancelled_in_progress') return null;
+  if (!row.cancelled_by_user) return null;
   // Pre-shift cancellations (agent never arrived) don't need the badge.
   if (!row.actual_entry_at) return null;
   const role = row.cancelled_by_user.role;
@@ -280,6 +281,7 @@ export default function AssignmentsHistoryClient() {
               : s === 'incomplete' ? 'orange'
               : s === 'rejected' ? 'red'
               : s === 'cancelled' ? 'gray'
+              : s === 'cancelled_in_progress' ? 'orange'
               : s === 'replaced' ? 'gray'
               : s === 'accepted' ? 'sky'
               : 'amber';
