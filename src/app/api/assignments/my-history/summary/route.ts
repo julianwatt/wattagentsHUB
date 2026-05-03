@@ -48,7 +48,15 @@ export async function GET(req: NextRequest) {
 
   if (from) q = q.gte('shift_date', from);
   if (to)   q = q.lte('shift_date', to);
-  if (statuses && statuses.size > 0) q = q.in('status', Array.from(statuses));
+  if (statuses && statuses.size > 0) {
+    q = q.in('status', Array.from(statuses));
+  } else {
+    // Mirror /api/assignments/my-history default: hide 'replaced' rows so
+    // the KPI count matches the table count. Without this, replaced rows
+    // that happened to have actual_entry_at set (because they were
+    // superseded mid-shift) would inflate the agent's "total".
+    q = q.neq('status', 'replaced');
+  }
   if (punctuality && punctuality.size > 0) q = q.in('punctuality', Array.from(punctuality));
   if (duration && duration.size > 0 && duration.size < 3) {
     const ors: string[] = [];

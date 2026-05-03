@@ -73,7 +73,14 @@ export async function GET(req: NextRequest) {
   if (to)   q = q.lte('shift_date', to);
   if (agents && agents.length) q = q.in('agent_id', agents);
   if (stores && stores.length) q = q.in('store_id', stores);
-  if (statuses && statuses.length) q = q.in('status', statuses);
+  if (statuses && statuses.length) {
+    q = q.in('status', statuses);
+  } else {
+    // Mirror /api/assignments/history default: hide 'replaced' rows so the
+    // KPI count matches the table count. Without this the KPI counts
+    // historical noise the table is hiding.
+    q = q.neq('status', 'replaced');
+  }
   if (punctuality && punctuality.length) q = q.in('punctuality', punctuality);
 
   if (duration && duration.length && duration.length < 3) {
