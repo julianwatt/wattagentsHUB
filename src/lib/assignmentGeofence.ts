@@ -22,6 +22,61 @@ export const RING_WARN_RADIUS_M = 300;
  *  assignment, to avoid spam if the agent oscillates between rings. */
 export const NOTIFICATION_DEBOUNCE_MS = 2 * 60 * 1000;
 
+/**
+ * Operational timezone of the business. The CEO enters `scheduled_start_time`
+ * in this timezone (Texas / Central Time), and the column stores it as a
+ * naive `time without time zone`. Pairing it with `shift_date` and treating
+ * the result as UTC is wrong — that was the source of the 4–6h "late_severe"
+ * bug. Use scheduledStartUtc() to do the conversion correctly through DST.
+ *
+ * Configurable via NEXT_PUBLIC_BUSINESS_TZ at build time if the operation
+ * ever expands to other regions; defaults to America/Chicago.
+ */
+export const BUSINESS_TIMEZONE: string =
+  process.env.NEXT_PUBLIC_BUSINESS_TZ ?? 'America/Chicago';
+
+/**
+ * Compute the UTC `Date` instant that corresponds to the wall-clock
+ * "shift_date + scheduled_start_time" in the business timezone, including
+ * the correct DST offset for that day.
+ *
+ *   scheduledStartUtc('2026-05-03', '10:00:00')
+ *     → 2026-05-03T15:00:00Z   (CDT = UTC-5 in May)
+ */
+export function scheduledStartUtc(
+  shiftDate: string,
+  scheduledStartTime: string,
+  tz: string = BUSINESS_TIMEZONE,
+): Date {
+  const time = scheduledStartTime.length === 5
+    ? `${scheduledStartTime}:00`
+    : scheduledStartTime;
+  // First, treat the literal date+time as if it were UTC. This gives us a
+  // reference Date object whose absolute UTC components match the wall-clock
+  // we want — but the moment itself is wrong by exactly the tz offset.
+  const naive = new Date(`${shiftDate}T${time}Z`);
+  // Now ask Intl what wall-clock that naive UTC moment maps to in `tz`.
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  });
+  const parts = dtf.formatToParts(naive);
+  const o: Record<string, string> = {};
+  for (const p of parts) o[p.type] = p.value;
+  const hour = Number(o.hour) === 24 ? 0 : Number(o.hour); // Intl edge case
+  const localAsUtc = Date.UTC(
+    Number(o.year), Number(o.month) - 1, Number(o.day),
+    hour, Number(o.minute), Number(o.second),
+  );
+  // The offset (in ms) between the naive UTC and the local-time-as-UTC.
+  // For Chicago in May: offset = -5h. We need to shift `naive` BACK by that
+  // offset to land on the true UTC moment.
+  const offsetMs = localAsUtc - naive.getTime();
+  return new Date(naive.getTime() - offsetMs);
+}
+
 /** Punctuality grace period — arriving within this window of the scheduled
  *  start time still counts as "on time". */
 export const PUNCTUALITY_GRACE_MIN = 5;
@@ -167,14 +222,11 @@ export interface ComplianceResult {
  */
 export function punctualityForEntry(args: {
   shift_date: string;             // YYYY-MM-DD
-  scheduled_start_time: string;   // HH:MM[:SS]
-  actual_entry_at: string | null; // ISO; null means never arrived
+  scheduled_start_time: string;   // HH:MM[:SS], in BUSINESS_TIMEZONE wall-clock
+  actual_entry_at: string | null; // ISO UTC; null means never arrived
 }): Punctuality {
   if (!args.actual_entry_at) return 'no_show';
-  const time = args.scheduled_start_time.length === 5
-    ? `${args.scheduled_start_time}:00`
-    : args.scheduled_start_time;
-  const scheduled = new Date(`${args.shift_date}T${time}Z`);
+  const scheduled = scheduledStartUtc(args.shift_date, args.scheduled_start_time);
   const entry = new Date(args.actual_entry_at);
   const diffMin = (entry.getTime() - scheduled.getTime()) / 60000;
   if (diffMin <= PUNCTUALITY_GRACE_MIN) return 'on_time';
@@ -198,10 +250,7 @@ export function liveStatusBeforeEntry(args: {
   scheduled_start_time: string;
   now?: Date;
 }): LivePunctuality {
-  const time = args.scheduled_start_time.length === 5
-    ? `${args.scheduled_start_time}:00`
-    : args.scheduled_start_time;
-  const scheduled = new Date(`${args.shift_date}T${time}Z`);
+  const scheduled = scheduledStartUtc(args.shift_date, args.scheduled_start_time);
   const now = args.now ?? new Date();
   const diffMin = (now.getTime() - scheduled.getTime()) / 60000;
   if (diffMin < 0) return 'pending_arrival';

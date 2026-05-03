@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { canManageAssignments } from '@/lib/permissions';
 import {
   PUNCTUALITY_GRACE_MIN,
+  scheduledStartUtc,
 } from '@/lib/assignmentGeofence';
 
 const noCache = {
@@ -135,17 +136,18 @@ export async function GET(req: NextRequest) {
 
     // Avg late minutes among any-late entries (late, late_arrival, late_severe).
     // 'no_show' has no actual_entry_at by definition, 'on_time' is within
-    // grace and excluded. Buckets late/late_arrival/late_severe all imply
-    // an entry timestamp — feed them all into the average so the headline
-    // metric reflects real tardiness across the full late spectrum.
+    // grace and excluded. All three "late" buckets imply a real entry — feed
+    // them all into the average so the headline metric reflects real tardiness
+    // across the full late spectrum.
+    // The scheduled instant is built via scheduledStartUtc so the wall-clock
+    // time the CEO entered (Texas local) is anchored to America/Chicago, not
+    // misinterpreted as UTC. Without that anchor every late row was off by
+    // 5–6 hours.
     if (
       (r.punctuality === 'late' || r.punctuality === 'late_arrival' || r.punctuality === 'late_severe')
       && r.actual_entry_at
     ) {
-      const time = r.scheduled_start_time.length === 5
-        ? `${r.scheduled_start_time}:00`
-        : r.scheduled_start_time;
-      const scheduled = new Date(`${r.shift_date}T${time}Z`);
+      const scheduled = scheduledStartUtc(r.shift_date, r.scheduled_start_time);
       const entry = new Date(r.actual_entry_at);
       const diffMin = (entry.getTime() - scheduled.getTime()) / 60000 - PUNCTUALITY_GRACE_MIN;
       if (Number.isFinite(diffMin) && diffMin > 0) {

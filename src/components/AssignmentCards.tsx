@@ -6,7 +6,7 @@ import { haversineMeters, fmtDistance } from '@/lib/geo';
 import { fmtTime } from '@/lib/i18n';
 import AssignmentTracker from './AssignmentTracker';
 import AssignmentProgressCard from './AssignmentProgressCard';
-import type { GeofenceEventType } from '@/lib/assignmentGeofence';
+import { scheduledStartUtc, type GeofenceEventType } from '@/lib/assignmentGeofence';
 import { formatStoreLabel } from '@/lib/stores';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -55,13 +55,13 @@ const todayLocal = (): string => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-/** Build a Date for the assignment's local start time.
- *  shift_date is YYYY-MM-DD, scheduled_start_time is HH:MM[:SS]. */
+/** UTC instant the shift is scheduled to start, anchored to the business
+ *  timezone. Using scheduledStartUtc keeps the countdown accurate regardless
+ *  of the agent's device timezone — `new Date('YYYY-MM-DDTHH:MM:SS')` (no
+ *  trailing Z) silently uses the device locale, which drifts whenever the
+ *  agent's phone is set to a non-Texas timezone. */
 function startDateTime(a: MyAssignment): Date {
-  const time = a.scheduled_start_time.length === 5
-    ? `${a.scheduled_start_time}:00`
-    : a.scheduled_start_time;
-  return new Date(`${a.shift_date}T${time}`);
+  return scheduledStartUtc(a.shift_date, a.scheduled_start_time);
 }
 
 /** "Faltan 1h 23min para tu turno" / "Hora de entrada: hace 5 minutos" */
