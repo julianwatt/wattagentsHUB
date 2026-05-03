@@ -62,7 +62,7 @@ const es = {
 
     // ── Recent list ──────────────────────────────────────────────────────
     recentTitle: 'Asignaciones de hoy',
-    recentEmpty: 'Aún no has creado asignaciones hoy.',
+    recentEmpty: 'No hay asignaciones para hoy.',
     reassignBtn: 'Reasignar',
 
     // ── Status labels ────────────────────────────────────────────────────
@@ -846,7 +846,7 @@ const en: typeof es = {
 
     // ── Recent list ──────────────────────────────────────────────────────
     recentTitle: "Today's assignments",
-    recentEmpty: "You haven't created any assignments today yet.",
+    recentEmpty: 'No assignments scheduled for today.',
     reassignBtn: 'Reassign',
 
     // ── Status labels ────────────────────────────────────────────────────

@@ -59,11 +59,13 @@ export default function RecentAssignmentsList({ refreshKey, onReassign }: Props)
     setLoading(true);
     try {
       const today = todayLocal();
-      // Asignaciones del día creadas por mí: cap at the API maximum (500),
-      // exclude 'replaced' rows (historical noise that was hiding the live
-      // ones), and rely on the server's default ordering by created_at desc.
+      // All today's assignments — not just the ones the current CEO/admin
+      // created. Listing here is a global view of what's scheduled today.
+      // The API caps at 500; we pass an explicit statuses list to exclude
+      // 'replaced' (historical noise) while keeping cancelled visible
+      // alongside live rows.
       const res = await fetch(
-        `/api/assignments?from=${today}&assigned_by_me=1&limit=500&statuses=pending,accepted,rejected,in_progress,completed,incomplete,cancelled`,
+        `/api/assignments?from=${today}&limit=500&statuses=pending,accepted,rejected,in_progress,completed,incomplete,cancelled`,
         { cache: 'no-store' },
       );
       if (res.ok) {
