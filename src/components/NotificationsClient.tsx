@@ -177,6 +177,12 @@ export default function NotificationsClient({ session }: { session: Session }) {
     if (type === 'user_deactivated') return t('notifications.userDeactivated');
     if (type === 'user_activated') return t('notifications.userActivated');
     if (type === 'geofence_alert') return `\u26A0\uFE0F ${t('notifications.geofenceAlertLabel')}`;
+    if (type === 'assignment_arrived') return `\u2705 ${t('notifications.assignmentArrivedLabel')}`;
+    if (type === 'assignment_exited_warn') return `\u26A0\uFE0F ${t('notifications.assignmentExitedWarnLabel')}`;
+    if (type === 'assignment_exited_final') return `\u{1F6D1} ${t('notifications.assignmentExitedFinalLabel')}`;
+    if (type === 'assignment_reentered') return `\u{1F504} ${t('notifications.assignmentReenteredLabel')}`;
+    if (type === 'assignment_accepted') return `\u2705 ${t('notifications.assignmentAcceptedLabel')}`;
+    if (type === 'assignment_rejected') return `\u274C ${t('notifications.assignmentRejectedLabel')}`;
     return type;
   };
 
@@ -186,6 +192,15 @@ export default function NotificationsClient({ session }: { session: Session }) {
     if (type === 'user_deactivated') return 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300';
     if (type === 'user_activated') return 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300';
     if (type === 'geofence_alert') return 'bg-red-200 dark:bg-red-900/50 text-red-700 dark:text-red-200 ring-1 ring-red-300 dark:ring-red-700';
+    // Assignment perimeter events \u2014 color matches the project's status spec
+    // (verde=positivo, \u00E1mbar=temporal, rojo=problema, azul=recuperaci\u00F3n).
+    if (type === 'assignment_arrived') return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300';
+    if (type === 'assignment_exited_warn') return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300';
+    if (type === 'assignment_exited_final') return 'bg-red-200 dark:bg-red-900/50 text-red-700 dark:text-red-200 ring-1 ring-red-300 dark:ring-red-700';
+    if (type === 'assignment_reentered') return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300';
+    // Agent accept/reject — emerald for positive ack, red for refusal.
+    if (type === 'assignment_accepted') return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300';
+    if (type === 'assignment_rejected') return 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300';
     return 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300';
   };
 
@@ -208,6 +223,38 @@ export default function NotificationsClient({ session }: { session: Session }) {
       const dist = d?.distance_meters ? ` a ${fmtDistance(d.distance_meters)}` : '';
       return `${alertType}${eventLabel}${storeName}${dist}`;
     }
+    if (
+      n.type === 'assignment_arrived' ||
+      n.type === 'assignment_exited_warn' ||
+      n.type === 'assignment_exited_final' ||
+      n.type === 'assignment_reentered'
+    ) {
+      const d = n.data;
+      const action =
+        n.type === 'assignment_arrived'      ? t('notifications.assignmentArrivedDesc')
+        : n.type === 'assignment_exited_warn'  ? t('notifications.assignmentExitedWarnDesc')
+        : n.type === 'assignment_exited_final' ? t('notifications.assignmentExitedFinalDesc')
+        :                                        t('notifications.assignmentReenteredDesc');
+      const storeName = d?.store_name ? ` \u2014 ${d.store_name}` : '';
+      // Distance only meaningful for the two exit events.
+      const dist = (n.type === 'assignment_exited_warn' || n.type === 'assignment_exited_final') && d?.distance_meters
+        ? ` (${fmtDistance(d.distance_meters)})`
+        : '';
+      return `${action}${storeName}${dist}`;
+    }
+    if (n.type === 'assignment_accepted' || n.type === 'assignment_rejected') {
+      const d = n.data;
+      const action = n.type === 'assignment_accepted'
+        ? t('notifications.assignmentAcceptedDesc')
+        : t('notifications.assignmentRejectedDesc');
+      const storeName = d?.store_name ? ` \u2014 ${d.store_name}` : '';
+      // Reject reason flows through the same `data` blob from the PATCH route.
+      const dRej = d as (typeof d & { rejection_reason?: string });
+      const reason = n.type === 'assignment_rejected' && dRej?.rejection_reason
+        ? ` (\u201c${dRej.rejection_reason}\u201d)`
+        : '';
+      return `${action}${storeName}${reason}`;
+    }
     return '';
   };
 
@@ -216,10 +263,20 @@ export default function NotificationsClient({ session }: { session: Session }) {
 
   const visibleSummaries = showAll ? summaries : summaries.slice(0, 7);
 
+  // Assignment perimeter events live under the same "Geofence" filter as
+  // the legacy geofence_alert — same operational dimension (agente fuera
+  // de su lugar) just emitted by a different code path.
+  const isPerimeterEvent = (type: string) =>
+    type === 'geofence_alert' ||
+    type === 'assignment_arrived' ||
+    type === 'assignment_exited_warn' ||
+    type === 'assignment_exited_final' ||
+    type === 'assignment_reentered';
+
   const filteredNotifs = notifications.filter((n) => {
     if (filterType === 'password') return n.type === 'password_reset' || n.type === 'password_change';
     if (filterType === 'users') return n.type === 'user_deactivated' || n.type === 'user_activated';
-    if (filterType === 'geofence') return n.type === 'geofence_alert';
+    if (filterType === 'geofence') return isPerimeterEvent(n.type);
     return true;
   });
 
@@ -233,7 +290,7 @@ export default function NotificationsClient({ session }: { session: Session }) {
 
   const pendingCount = notifications.filter((n) => n.status === 'pending').length;
 
-  const geofenceCount = notifications.filter((n) => n.type === 'geofence_alert' && n.status === 'pending').length;
+  const geofenceCount = notifications.filter((n) => isPerimeterEvent(n.type) && n.status === 'pending').length;
 
   const FILTERS: Array<{ key: FilterType; label: string; badge?: number }> = [
     { key: 'all', label: t('notifications.filterAll') },

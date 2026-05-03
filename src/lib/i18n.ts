@@ -604,6 +604,20 @@ const es = {
     records: 'registros',
     agentsToday: 'agentes hoy',
     assignmentNeedsReassign: 'requiere reasignación',
+    // Geofence events emitted by the assignment system (per-shift perimeter).
+    assignmentArrivedLabel: 'Llegó al perímetro',
+    assignmentExitedWarnLabel: 'Salida temporal',
+    assignmentExitedFinalLabel: 'Salió del perímetro',
+    assignmentReenteredLabel: 'Volvió al perímetro',
+    assignmentArrivedDesc: 'llegó al perímetro',
+    assignmentExitedWarnDesc: 'salida temporal',
+    assignmentExitedFinalDesc: 'salió del perímetro',
+    assignmentReenteredDesc: 'volvió al perímetro',
+    // Agent response to a pending assignment (accept/reject).
+    assignmentAcceptedLabel: 'Asignación aceptada',
+    assignmentRejectedLabel: 'Asignación rechazada',
+    assignmentAcceptedDesc: 'aceptó la asignación',
+    assignmentRejectedDesc: 'rechazó la asignación',
   },
   common: {
     loading: 'Cargando...',
@@ -1387,6 +1401,20 @@ const en: typeof es = {
     records: 'records',
     agentsToday: 'agents today',
     assignmentNeedsReassign: 'needs reassignment',
+    // Geofence events emitted by the assignment system (per-shift perimeter).
+    assignmentArrivedLabel: 'Arrived at perimeter',
+    assignmentExitedWarnLabel: 'Temporary exit',
+    assignmentExitedFinalLabel: 'Left perimeter',
+    assignmentReenteredLabel: 'Returned to perimeter',
+    assignmentArrivedDesc: 'arrived at the perimeter',
+    assignmentExitedWarnDesc: 'temporary exit',
+    assignmentExitedFinalDesc: 'left the perimeter',
+    assignmentReenteredDesc: 'returned to the perimeter',
+    // Agent response to a pending assignment (accept/reject).
+    assignmentAcceptedLabel: 'Assignment accepted',
+    assignmentRejectedLabel: 'Assignment rejected',
+    assignmentAcceptedDesc: 'accepted the assignment',
+    assignmentRejectedDesc: 'rejected the assignment',
   },
   common: {
     loading: 'Loading...',
