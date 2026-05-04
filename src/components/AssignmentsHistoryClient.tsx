@@ -78,6 +78,16 @@ function formatHHMMFromMs(ms: number): string {
   return formatHHMM(Math.max(0, Math.floor(ms / 60000)));
 }
 
+// "Human-readable" duration in minutes — "45 min", "1h 8m", "2h" — used in
+// dialog warnings where a leading zero (00:45) reads worse than plain prose.
+function formatMinutesHuman(min: number): string {
+  if (min <= 0) return '0 min';
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
 const DURATION_BUCKETS = ['met', 'partial', 'unmet'] as const;
 const PUNCTUALITY_BUCKETS = ['on_time', 'late', 'late_arrival', 'late_severe', 'no_show'] as const;
 const STATUS_BUCKETS = ['completed', 'incomplete', 'rejected', 'cancelled'] as const;
@@ -130,6 +140,38 @@ export default function AssignmentsHistoryClient() {
 
   // Detail modal state
   const [detailFor, setDetailFor] = useState<HistoryRow | null>(null);
+
+  // Reopen flow — same UX as the Today panel. Reopen is only offered for
+  // TODAY's terminal-by-closure rows (incomplete/completed). Reopening a
+  // historical row from days ago doesn't free a useful day-slot — it just
+  // creates retroactive ambiguity — so we gate by shift_date.
+  const todayStr = localToday();
+  const [confirmingReopen, setConfirmingReopen] = useState<HistoryRow | null>(null);
+  const [reopenActing, setReopenActing] = useState<string | null>(null);
+  const requestReopen = useCallback((r: HistoryRow) => {
+    setConfirmingReopen(r);
+  }, []);
+  const performReopen = useCallback(async () => {
+    if (!confirmingReopen) return;
+    const id = confirmingReopen.id;
+    setReopenActing(id);
+    try {
+      const res = await fetch(`/api/assignments/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reopen' }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        console.error(`[reopen] failed status=${res.status}`, data);
+      }
+      // Re-fetch this page so the row's status flips visually.
+      await fetchPage();
+    } catch { /* silent */ }
+    setConfirmingReopen(null);
+    setReopenActing(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [confirmingReopen]);
 
   // ── Load lookups on mount ───────────────────────────────────────────────
   useEffect(() => {
@@ -491,6 +533,21 @@ export default function AssignmentsHistoryClient() {
                           ⏹ {endedByLabel(r, t)}
                         </span>
                       )}
+                      {/* Reopen action: only for TODAY's incomplete/completed rows.
+                          Reopening a historical row would create retroactive
+                          ambiguity for no business benefit. */}
+                      {r.shift_date === todayStr
+                        && (r.status === 'incomplete' || r.status === 'completed') && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); requestReopen(r); }}
+                          disabled={reopenActing !== null}
+                          className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-orange-200 dark:border-orange-900 text-orange-700 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors disabled:opacity-60 whitespace-nowrap"
+                          title={t('assignments.actionReopenHint')}
+                        >
+                          🔄 {t('assignments.actionReopen')}
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -529,6 +586,51 @@ export default function AssignmentsHistoryClient() {
           storeName={detailFor.store ? formatStoreLabel(detailFor.store) : '—'}
           onClose={() => setDetailFor(null)}
         />
+      )}
+
+      {/* Reopen-confirmation modal */}
+      {confirmingReopen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-sm flex flex-col">
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+              <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">
+                🔄 {t('assignments.confirmReopenTitle')}
+              </h3>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <ul className="text-[11px] text-gray-600 dark:text-gray-300 space-y-0.5 bg-gray-50 dark:bg-gray-800/50 rounded-xl px-3 py-2">
+                <li><strong>{t('assignments.fieldAgent')}:</strong> {confirmingReopen.agent?.name ?? '—'}</li>
+                <li><strong>{t('assignments.fieldStore')}:</strong> {confirmingReopen.store?.name ?? '—'}</li>
+                <li><strong>{t('assignments.fieldStartTime')}:</strong> {fmtTimeI18n(confirmingReopen.scheduled_start_time, lang)}</li>
+                <li><strong>{t('assignments.fieldStatus')}:</strong> {confirmingReopen.status}</li>
+              </ul>
+              <p className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2 leading-snug">
+                {t('assignments.confirmReopenWarning').replace(
+                  '{time}',
+                  formatMinutesHuman(confirmingReopen.effective_minutes ?? 0),
+                )}
+              </p>
+            </div>
+            <div className="flex gap-2 px-5 py-3 border-t border-gray-100 dark:border-gray-800">
+              <button
+                type="button"
+                onClick={() => setConfirmingReopen(null)}
+                disabled={reopenActing !== null}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-60"
+              >
+                {t('assignments.confirmReopenAbort')}
+              </button>
+              <button
+                type="button"
+                onClick={performReopen}
+                disabled={reopenActing !== null}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-orange-600 hover:bg-orange-700 transition-colors disabled:opacity-60"
+              >
+                {reopenActing ? '…' : t('assignments.confirmReopenConfirm')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

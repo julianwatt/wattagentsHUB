@@ -82,6 +82,16 @@ const es = {
     endedByCeo: 'Terminada por CEO',
     endedByGeneric: 'Terminada por gestión',
 
+    // ── Reopen action (admin escape hatch for incomplete/completed rows) ──
+    actionReopen: 'Reabrir',
+    actionReopenHint: 'Libera el día para reasignar al agente. Conserva el tiempo trabajado en histórico.',
+    confirmReopenTitle: '¿Reabrir esta asignación para reasignación?',
+    confirmReopenWarning: 'El agente conserva crédito por el tiempo trabajado ({time}), pero el día queda liberado para que crees una nueva asignación. La fila actual se marca como cancelada por gestión en el histórico.',
+    confirmReopenAbort: 'Cancelar acción',
+    confirmReopenConfirm: 'Sí, reabrir y permitir reasignación',
+    toastReopenSuccess: 'Asignación reabierta. Ahora puedes crear una nueva para este agente hoy.',
+    toastReopenError: 'No se pudo reabrir la asignación. Intenta de nuevo.',
+
     // ── Agent cards ──────────────────────────────────────────────────────
     cardPendingTitle: 'Tienes una asignación pendiente',
     cardActiveTitleToday: 'Tu turno de hoy',
@@ -883,6 +893,16 @@ const en: typeof es = {
     endedByAdmin: 'Ended by Admin',
     endedByCeo: 'Ended by CEO',
     endedByGeneric: 'Ended by management',
+
+    // ── Reopen action (admin escape hatch for incomplete/completed rows) ──
+    actionReopen: 'Reopen',
+    actionReopenHint: 'Frees the day-slot so the agent can be re-assigned. Preserves the time worked in history.',
+    confirmReopenTitle: 'Reopen this assignment for re-assignment?',
+    confirmReopenWarning: 'The agent keeps credit for the time worked ({time}), but the day-slot is freed so you can create a new assignment. The current row is marked as cancelled by management in history.',
+    confirmReopenAbort: 'Cancel action',
+    confirmReopenConfirm: 'Yes, reopen and allow re-assignment',
+    toastReopenSuccess: 'Assignment reopened. You can now create a new one for this agent today.',
+    toastReopenError: 'Could not reopen the assignment. Try again.',
 
     // ── Agent cards ──────────────────────────────────────────────────────
     cardPendingTitle: 'You have a pending assignment',

@@ -51,6 +51,16 @@ const formatDuration = (ms: number) => {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 };
 
+// "Human-readable" duration in minutes — "45 min", "1h 8m", "2h" — used in
+// dialog warnings where a leading zero (00:45) reads worse than plain prose.
+const formatMinutes = (min: number): string => {
+  if (min <= 0) return '0 min';
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+};
+
 type Group = 'attention' | 'inProgress' | 'pendingArrival' | 'completed';
 
 function groupOf(a: TodayAssignment): Group {
@@ -265,6 +275,38 @@ export default function AssignmentsTodayClient() {
     setActing(null);
   }, [confirmingCancel, fetchToday]);
 
+  // ── Reopen flow ─────────────────────────────────────────────────────────
+  // Reopen is the admin escape hatch for terminal-by-closure rows
+  // (incomplete/completed): flips them to cancelled_in_progress so the
+  // agent's day-slot is freed for a new assignment. Same UX guardrails as
+  // cancel — modal showing the exact row before the POST.
+  const [confirmingReopen, setConfirmingReopen] = useState<TodayAssignment | null>(null);
+  const requestReopen = useCallback((a: TodayAssignment) => {
+    setConfirmingReopen(a);
+  }, []);
+  const performReopen = useCallback(async () => {
+    if (!confirmingReopen) return;
+    const id = confirmingReopen.id;
+    setActing(id);
+    try {
+      const res = await fetch(`/api/assignments/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reopen' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.id && data.id !== id) {
+        console.error(`[reopen] server returned id=${data.id} but we sent ${id}`);
+      }
+      if (!res.ok) {
+        console.error(`[reopen] failed status=${res.status}`, data);
+      }
+      await fetchToday();
+    } catch { /* silent */ }
+    setConfirmingReopen(null);
+    setActing(null);
+  }, [confirmingReopen, fetchToday]);
+
   // ── Render ──────────────────────────────────────────────────────────────
   if (!loaded) {
     return (
@@ -328,6 +370,7 @@ export default function AssignmentsTodayClient() {
               t={t}
               onTimeline={(p) => setTimelineFor(p)}
               onCancel={() => requestCancel(a)}
+              onReopen={() => requestReopen(a)}
             />
           )}
         />
@@ -348,6 +391,7 @@ export default function AssignmentsTodayClient() {
               t={t}
               onTimeline={(p) => setTimelineFor(p)}
               onCancel={() => requestCancel(a)}
+              onReopen={() => requestReopen(a)}
             />
           )}
         />
@@ -368,6 +412,7 @@ export default function AssignmentsTodayClient() {
               t={t}
               onTimeline={(p) => setTimelineFor(p)}
               onCancel={() => requestCancel(a)}
+              onReopen={() => requestReopen(a)}
             />
           )}
         />
@@ -388,6 +433,7 @@ export default function AssignmentsTodayClient() {
               t={t}
               onTimeline={(p) => setTimelineFor(p)}
               onCancel={() => requestCancel(a)}
+              onReopen={() => requestReopen(a)}
             />
           )}
         />
@@ -441,6 +487,55 @@ export default function AssignmentsTodayClient() {
                 className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-red-600 hover:bg-red-700 transition-colors disabled:opacity-60"
               >
                 {acting ? '…' : t('assignments.confirmCancelYes')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reopen-confirmation modal — same UX guardrails as cancel: shows
+          the exact row about to be reopened (agent / store / time / status),
+          plus a warning explaining that the agent's time worked is
+          preserved. The id used for the POST is read from
+          confirmingReopen.id, captured at click time. */}
+      {confirmingReopen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-sm flex flex-col">
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+              <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">
+                🔄 {t('assignments.confirmReopenTitle')}
+              </h3>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <ul className="text-[11px] text-gray-600 dark:text-gray-300 space-y-0.5 bg-gray-50 dark:bg-gray-800/50 rounded-xl px-3 py-2">
+                <li><strong>{t('assignments.fieldAgent')}:</strong> {confirmingReopen.agent?.name ?? '—'}</li>
+                <li><strong>{t('assignments.fieldStore')}:</strong> {confirmingReopen.store?.name ?? '—'}</li>
+                <li><strong>{t('assignments.fieldStartTime')}:</strong> {fmtTime(confirmingReopen.scheduled_start_time, lang)}</li>
+                <li><strong>{t('assignments.fieldStatus')}:</strong> {confirmingReopen.status}</li>
+              </ul>
+              <p className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2 leading-snug">
+                {t('assignments.confirmReopenWarning').replace(
+                  '{time}',
+                  formatMinutes(confirmingReopen.effective_minutes ?? 0),
+                )}
+              </p>
+            </div>
+            <div className="flex gap-2 px-5 py-3 border-t border-gray-100 dark:border-gray-800">
+              <button
+                type="button"
+                onClick={() => setConfirmingReopen(null)}
+                disabled={acting !== null}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-60"
+              >
+                {t('assignments.confirmReopenAbort')}
+              </button>
+              <button
+                type="button"
+                onClick={performReopen}
+                disabled={acting !== null}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-orange-600 hover:bg-orange-700 transition-colors disabled:opacity-60"
+              >
+                {acting ? '…' : t('assignments.confirmReopenConfirm')}
               </button>
             </div>
           </div>
@@ -513,9 +608,10 @@ interface CardProps {
   t: (k: string) => string;
   onTimeline: (p: { id: string; agentName: string; storeName: string }) => void;
   onCancel: () => void;
+  onReopen: () => void;
 }
 
-const Card = function Card({ a, tick, fetchedAt, highlighted, acting, lang, t, onTimeline, onCancel }: CardProps) {
+const Card = function Card({ a, tick, fetchedAt, highlighted, acting, lang, t, onTimeline, onCancel, onReopen }: CardProps) {
   // Per-card live elapsed time. For in_progress, extrapolate from the
   // server's effective_ms_now by adding the wall-clock time elapsed since
   // the last fetch. `tick` is referenced only to force a re-render every
@@ -572,6 +668,11 @@ const Card = function Card({ a, tick, fetchedAt, highlighted, acting, lang, t, o
   // isTerminal() catches every non-cancellable status the UI ever sees.
   const canCancel = !isTerminal(a.status);
   const canReassign = a.status === 'rejected' || a.status === 'cancelled' || a.status === 'cancelled_in_progress';
+  // Reopen converts a terminal-by-closure row (incomplete/completed) into
+  // cancelled_in_progress, releasing the day-slot. Only those two states
+  // qualify — pending/accepted/in_progress have their own cancel flow,
+  // and already-cancelled / rejected / replaced are non-reopenable.
+  const canReopen = a.status === 'incomplete' || a.status === 'completed';
 
   // Card tint by status — green for actively-working, red for problem
   // states, neutral for the rest. The highlight ring (primary brand) wins
@@ -693,6 +794,16 @@ const Card = function Card({ a, tick, fetchedAt, highlighted, acting, lang, t, o
             className="text-[10px] font-bold px-2 py-1 rounded-lg border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-60"
           >
             {acting ? '…' : t('assignments.cancelBtn')}
+          </button>
+        )}
+        {canReopen && (
+          <button
+            onClick={() => onReopen()}
+            disabled={acting}
+            className="text-[10px] font-bold px-2 py-1 rounded-lg border border-orange-200 dark:border-orange-900 text-orange-700 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors disabled:opacity-60"
+            title={t('assignments.actionReopenHint')}
+          >
+            {acting ? '…' : `🔄 ${t('assignments.actionReopen')}`}
           </button>
         )}
       </div>
