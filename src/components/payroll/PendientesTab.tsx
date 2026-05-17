@@ -10,8 +10,9 @@ import type {
 } from '@/types/payroll';
 import type { SaleStatus } from '@/lib/payroll/constants';
 import SalesByWeekView from './SalesByWeekView';
+import PayfilePreviewView from './PayfilePreviewView';
 
-type PendientesSubTab = 'uploads' | 'salesByWeek';
+type PendientesSubTab = 'uploads' | 'salesByWeek' | 'payfiles';
 
 /**
  * Pendientes tab — block 04.
@@ -61,7 +62,7 @@ export default function PendientesTab() {
     <div className="space-y-4">
       {/* Sub-tab switcher (block 05 — added "Ventas por semana" view) */}
       <div className="inline-flex rounded-xl border border-gray-200 dark:border-gray-700 p-0.5 bg-gray-50 dark:bg-gray-800">
-        {(['uploads', 'salesByWeek'] as PendientesSubTab[]).map((id) => (
+        {(['uploads', 'salesByWeek', 'payfiles'] as PendientesSubTab[]).map((id) => (
           <button
             key={id}
             onClick={() => setSubTab(id)}
@@ -78,6 +79,8 @@ export default function PendientesTab() {
 
       {subTab === 'salesByWeek' ? (
         <SalesByWeekView />
+      ) : subTab === 'payfiles' ? (
+        <PayfilePreviewView />
       ) : (
         <UploadsView
           t={t} lang={lang}

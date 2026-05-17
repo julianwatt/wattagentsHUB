@@ -187,8 +187,10 @@ export interface PayfileLineItem {
   amount: number;
   original_amount: number;
   is_manually_edited: boolean;
+  is_manually_added: boolean;
   is_over_received_amount: boolean;
   is_over_3x_received: boolean;
+  requires_ceo_approval: boolean;
   edit_note: string | null;
   edited_by: string | null;
   edited_at: string | null;
@@ -205,6 +207,7 @@ export interface PayfileOverride {
   amount: number;
   original_amount: number;
   is_manually_edited: boolean;
+  is_manually_added: boolean;
   payfile_line_item_id: string | null;
   created_at: string;
 }
