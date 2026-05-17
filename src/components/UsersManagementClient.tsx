@@ -8,6 +8,7 @@ import { getSupabaseBrowser } from '@/lib/supabase-browser';
 
 type UserRole = 'agent' | 'jr_manager' | 'sr_manager' | 'admin' | 'ceo';
 type Modality = 'd2d' | 'retail' | 'both';
+type UserPayrollStatus = 'active' | 'inactive';
 type Tab = 'users' | 'roster';
 type ActiveFilter = 'all' | 'active' | 'inactive';
 
@@ -22,6 +23,7 @@ interface User {
   is_active: boolean;
   hire_date: string;
   modality: Modality;
+  payroll_status: UserPayrollStatus;
   created_at: string;
 }
 
@@ -769,6 +771,7 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
   const [managerId, setManagerId] = useState(initialMgr);
   const [isActive, setIsActive] = useState(user.is_active);
   const [modality, setModality] = useState<Modality>(user.modality ?? 'd2d');
+  const [payrollStatus, setPayrollStatus] = useState<UserPayrollStatus>(user.payroll_status ?? 'active');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -795,6 +798,7 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
       manager_id: resolvedManagerId,
       // Modality only persisted for agents (other roles always 'd2d')
       modality: role === 'agent' ? modality : 'd2d',
+      payroll_status: payrollStatus,
     };
 
     try {
@@ -891,18 +895,6 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
               disabled={ceoViewingAdmin}
               className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm disabled:opacity-60" />
           </div>
-          {role === 'agent' && (
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.modalityLabel')}</label>
-              <select value={modality} onChange={(e) => setModality(e.target.value as Modality)}
-                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm">
-                <option value="d2d">{t('admin.modalityD2D')}</option>
-                <option value="retail">{t('admin.modalityRetail')}</option>
-                <option value="both">{t('admin.modalityBoth')}</option>
-              </select>
-              <p className="text-[10px] text-gray-400 mt-1">{t('admin.modalityHint')}</p>
-            </div>
-          )}
           <div>
             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.role')}</label>
             <select value={role} onChange={(e) => { setRole(e.target.value as UserRole); setManagerId(''); setSrManager(''); }}
@@ -950,6 +942,35 @@ function EditUserModal({ user, users, viewerRole, ceoExists, onClose, onSaved, t
                 ))}
               </select>
             </div>
+          )}
+
+          {/* ── Payroll data section ───────────────────────────────────────────
+              These fields are bidirectional with the Payroll → Roster tab.
+              Role, manager and hire date stay in the sections above because
+              they're not payroll-exclusive — they drive auth/hierarchy too.
+          ─────────────────────────────────────────────────────────────────── */}
+          {!ceoViewingAdmin && (role === 'agent' || role === 'jr_manager' || role === 'sr_manager') && (
+            <>
+              <FormSection num={4} label={t('admin.formSectionPayroll')} />
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">{t('admin.modalityLabel')}</label>
+                <select value={modality} onChange={(e) => setModality(e.target.value as Modality)}
+                  disabled={role !== 'agent'}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-sm disabled:opacity-60">
+                  <option value="d2d">{t('admin.modalityD2D')}</option>
+                  <option value="retail">{t('admin.modalityRetail')}</option>
+                  <option value="both">{t('admin.modalityBoth')}</option>
+                </select>
+                <p className="text-[10px] text-gray-400 mt-1">{t('admin.modalityHint')}</p>
+              </div>
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-gray-700 dark:text-gray-200">{t('admin.payrollStatusLabel')}</p>
+                  <p className="text-[10px] text-gray-400">{t('admin.payrollStatusHint')}</p>
+                </div>
+                <ToggleSwitch checked={payrollStatus === 'active'} onChange={(v) => setPayrollStatus(v ? 'active' : 'inactive')} />
+              </div>
+            </>
           )}
 
           {error && <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl px-3 py-2">{error}</p>}

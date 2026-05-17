@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
-import { supabase, DbUser, UserRole, Modality } from './supabase';
+import { supabase, DbUser, UserRole, Modality, UserPayrollStatus } from './supabase';
 
-export type { UserRole, Modality };
+export type { UserRole, Modality, UserPayrollStatus };
 
 export interface PublicUser {
   id: string;
@@ -14,10 +14,11 @@ export interface PublicUser {
   is_active: boolean;
   hire_date: string;
   modality: Modality;
+  payroll_status: UserPayrollStatus;
   created_at: string;
 }
 
-const PUBLIC_FIELDS = 'id, username, name, email, role, manager_id, must_change_password, is_active, hire_date, modality, created_at';
+const PUBLIC_FIELDS = 'id, username, name, email, role, manager_id, must_change_password, is_active, hire_date, modality, payroll_status, created_at';
 
 export async function getUsers(): Promise<PublicUser[]> {
   const { data, error } = await supabase
@@ -65,6 +66,7 @@ export async function createUser(
   must_change_password = false,
   hire_date?: string | null,
   modality: Modality = 'd2d',
+  payroll_status: UserPayrollStatus = 'active',
 ): Promise<PublicUser> {
   const password_hash = await bcrypt.hash(password, 10);
   const { data, error } = await supabase
@@ -79,6 +81,7 @@ export async function createUser(
       must_change_password,
       hire_date: hire_date ?? new Date().toISOString().slice(0, 10),
       modality,
+      payroll_status,
     })
     .select(PUBLIC_FIELDS)
     .single();
@@ -110,6 +113,7 @@ export async function updateUser(
     hire_date?: string;
     is_active?: boolean;
     modality?: Modality;
+    payroll_status?: UserPayrollStatus;
   },
 ): Promise<void> {
   const patch: Record<string, unknown> = {};
@@ -122,6 +126,7 @@ export async function updateUser(
   if (updates.hire_date !== undefined) patch.hire_date = updates.hire_date;
   if (updates.is_active !== undefined) patch.is_active = updates.is_active;
   if (updates.modality !== undefined) patch.modality = updates.modality;
+  if (updates.payroll_status !== undefined) patch.payroll_status = updates.payroll_status;
   console.log('[updateUser] id:', id, 'manager_id value:', patch.manager_id, 'type:', typeof patch.manager_id, 'full patch:', JSON.stringify(patch, null, 2));
   const { data, error } = await supabase.from('users').update(patch).eq('id', id).select('id, name, manager_id, role').single();
   console.log('[updateUser] Supabase response — data:', JSON.stringify(data), 'error:', JSON.stringify(error));

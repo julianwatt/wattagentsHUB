@@ -43,6 +43,7 @@ const ASSIGNMENTS_NAV = { href: '/assignments', icon: AssignmentsIcon, key: 'nav
 // the live assignment cards + personal history.
 const MY_ASSIGNMENTS_NAV = { href: '/my-performance', icon: AssignmentsIcon, key: 'nav.assignments' };
 const MANAGE_NAV = { href: '/manage/users', icon: AdminIcon, key: 'nav.manage' };
+const PAYROLL_NAV = { href: '/payroll', icon: PayrollIcon, key: 'nav.payroll' };
 const NOTIF_NAV = { href: '/notifications', icon: NotifNavIcon, key: 'admin.notifications' };
 
 export default function AppLayout({ session, children }: Props) {
@@ -132,6 +133,7 @@ export default function AppLayout({ session, children }: Props) {
   const canAccess = (r: string, path: string): boolean => {
     if (path.startsWith('/home')) return true;
     if (path.startsWith('/manage')) return r === 'admin' || r === 'ceo';
+    if (path.startsWith('/payroll')) return r === 'admin' || r === 'ceo';
     if (path.startsWith('/admin')) return r === 'admin' || r === 'ceo';
     if (path.startsWith('/team')) return r !== 'agent';
     if (path.startsWith('/roster')) return false; // redirects to /manage/users
@@ -190,7 +192,7 @@ export default function AppLayout({ session, children }: Props) {
     ...(canSeeOwnPerformance(role) ? [MY_ASSIGNMENTS_NAV] : []),
     ...(canManageAssignments(role) ? [ASSIGNMENTS_NAV] : []),
     ...((isAdminReal && !previewRole) || role === 'ceo' ? [NOTIF_NAV] : []),
-    ...(canSeeAdmin ? [MANAGE_NAV] : []),
+    ...(canSeeAdmin ? [MANAGE_NAV, PAYROLL_NAV] : []),
   ];
 
   // ── Notification bell (admin only) ──
@@ -678,6 +680,10 @@ function NotifNavIcon({ className }: { className: string }) {
 }
 function RosterIcon({ className }: { className: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>;
+}
+function PayrollIcon({ className }: { className: string }) {
+  // Dollar bill — represents payroll / payouts.
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 }
 function AssignmentsIcon({ className }: { className: string }) {
   // Clipboard with checklist — represents task / shift assignment management.

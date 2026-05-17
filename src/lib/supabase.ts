@@ -52,6 +52,15 @@ export type CampaignType = 'D2D' | 'Retail';
  */
 export type Modality = 'd2d' | 'retail' | 'both';
 
+/**
+ * Payroll-side status, separate from the auth-level `is_active` flag.
+ *   is_active       — can this user log in?
+ *   payroll_status  — does this user accrue commissions/overrides in payroll?
+ * They can diverge (off-boarded agent still owes chargebacks; locked
+ * account still earns this week).
+ */
+export type UserPayrollStatus = 'active' | 'inactive';
+
 export interface DbUser {
   id: string;
   name: string;
@@ -64,6 +73,7 @@ export interface DbUser {
   is_active: boolean;
   hire_date: string;
   modality: Modality;
+  payroll_status: UserPayrollStatus;
   created_at: string;
 }
 

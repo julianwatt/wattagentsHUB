@@ -11,6 +11,42 @@ async function requireAdminOrCeo() {
   return session;
 }
 
+// Master plan §Roles y permisos:
+//   - agent → direct manager required
+//   - jr_manager → direct manager must be a sr_manager
+//   - sr_manager → direct manager (if set) must be another sr_manager
+//   - admin / ceo → no manager required
+// Returns an error string when the combination is invalid, or null when it's
+// fine. Only enforced when `manager_id` is explicitly provided in the request.
+async function validateHierarchyForRole(
+  role: UserRole | undefined,
+  manager_id: string | null | undefined,
+): Promise<string | null> {
+  if (!role) return null;
+  if (role === 'admin' || role === 'ceo') return null;
+
+  if (role === 'agent') {
+    if (!manager_id) return 'Un agente debe tener un manager directo.';
+  }
+  if ((role === 'jr_manager' || role === 'sr_manager') && manager_id === undefined) {
+    return null; // field absent — caller didn't intend to change hierarchy
+  }
+  if (!manager_id) {
+    return role === 'jr_manager'
+      ? 'Un Jr Manager debe reportar a un Sr Manager.'
+      : null;
+  }
+  const target = await getUserById(manager_id);
+  if (!target) return 'Manager directo no encontrado.';
+  if (role === 'jr_manager' && target.role !== 'sr_manager') {
+    return 'El manager directo de un Jr Manager debe ser un Sr Manager.';
+  }
+  if (role === 'sr_manager' && target.role !== 'sr_manager') {
+    return 'El manager directo de un Sr Manager debe ser otro Sr Manager.';
+  }
+  return null;
+}
+
 export async function GET() {
   const session = await requireAdminOrCeo();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -22,7 +58,7 @@ export async function POST(req: NextRequest) {
   const session = await requireAdminOrCeo();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { username, name, role, manager_id, email, hire_date, modality } = await req.json();
+  const { username, name, role, manager_id, email, hire_date, modality, payroll_status } = await req.json();
   if (!username || !name) {
     return NextResponse.json({ error: 'username and name are required' }, { status: 400 });
   }
@@ -33,6 +69,9 @@ export async function POST(req: NextRequest) {
   if (role === 'admin') {
     return NextResponse.json({ error: 'No se permite crear nuevos usuarios con rol Admin' }, { status: 403 });
   }
+
+  const hierarchyError = await validateHierarchyForRole(role as UserRole, manager_id);
+  if (hierarchyError) return NextResponse.json({ error: hierarchyError }, { status: 400 });
 
   // Auto-generate temp password — admin doesn't set passwords manually anymore
   const tempPassword = generateTempPassword();
@@ -49,6 +88,7 @@ export async function POST(req: NextRequest) {
       hire_date || null,
       // Only agents have a meaningful modality; non-agents default to 'd2d'
       role === 'agent' && (modality === 'retail' || modality === 'both') ? modality : 'd2d',
+      payroll_status === 'inactive' ? 'inactive' : 'active',
     );
 
     // Try to email the temp password if email was provided
@@ -108,6 +148,19 @@ export async function PATCH(req: NextRequest) {
     if (target?.role !== 'admin') {
       return NextResponse.json({ error: 'No se permite promover usuarios al rol Admin' }, { status: 403 });
     }
+  }
+
+  // Hierarchy validation when the update touches role or manager_id.
+  // Resolve the effective values: the patch's value if present, otherwise
+  // the existing one. Skip the check entirely when neither field is in play
+  // — we don't want to refetch + validate on every password / hire_date edit.
+  if ('role' in updates || 'manager_id' in updates) {
+    const target = await getUserById(id);
+    if (!target) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
+    const effectiveRole = (updates.role ?? target.role) as UserRole;
+    const effectiveManagerId = 'manager_id' in updates ? updates.manager_id : target.manager_id;
+    const hierarchyError = await validateHierarchyForRole(effectiveRole, effectiveManagerId);
+    if (hierarchyError) return NextResponse.json({ error: hierarchyError }, { status: 400 });
   }
 
   try {
