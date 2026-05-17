@@ -59,18 +59,15 @@ CREATE TABLE public.payroll_standard_rates (
     CHECK (amount >= 0)
 );
 
--- Unique combo: NULL participates via COALESCE so a Retail row (tier/term
--- both NULL) still collides with another identical Retail row.
+-- Unique combo. NULLS NOT DISTINCT (PG 15+) makes Postgres treat two NULLs
+-- as equal for the purpose of this index, so a Retail row (tier/term/
+-- manager_level all NULL) still collides with another identical Retail
+-- row — without the unstable COALESCE-on-cast expression that PG 17 refuses
+-- to mark IMMUTABLE.
 CREATE UNIQUE INDEX payroll_standard_rates_unique_combo
-  ON public.payroll_standard_rates (
-    campaign,
-    COALESCE(tier::text, '_'),
-    COALESCE(term_months::text, '_'),
-    position,
-    COALESCE(manager_level::text, '_'),
-    rate_type,
-    valid_from
-  );
+  ON public.payroll_standard_rates
+     (campaign, tier, term_months, position, manager_level, rate_type, valid_from)
+  NULLS NOT DISTINCT;
 
 CREATE INDEX payroll_standard_rates_lookup_idx
   ON public.payroll_standard_rates (campaign, position, rate_type, valid_from DESC);
