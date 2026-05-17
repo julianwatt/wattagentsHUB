@@ -101,12 +101,15 @@ CREATE TYPE public.payroll_audit_action AS ENUM (
 -- SHARED: updated_at trigger function (one for all payroll tables)
 -- =========================================================================
 CREATE OR REPLACE FUNCTION public.tg_payroll_set_updated_at()
-RETURNS trigger AS $$
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public, pg_temp
+AS $$
 BEGIN
   NEW.updated_at = now();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 -- =========================================================================
 -- TABLE: payroll_uploads
