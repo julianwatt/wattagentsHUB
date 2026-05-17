@@ -44,6 +44,10 @@ const ASSIGNMENTS_NAV = { href: '/assignments', icon: AssignmentsIcon, key: 'nav
 const MY_ASSIGNMENTS_NAV = { href: '/my-performance', icon: AssignmentsIcon, key: 'nav.assignments' };
 const MANAGE_NAV = { href: '/manage/users', icon: AdminIcon, key: 'nav.manage' };
 const PAYROLL_NAV = { href: '/payroll', icon: PayrollIcon, key: 'nav.payroll' };
+// Block 12 — agent / jr_manager / sr_manager facing entry for their own
+// weekly payfile. Uses the same dollar icon as the admin's Payroll nav for
+// cross-role consistency.
+const MY_PAY_NAV = { href: '/my-pay', icon: PayrollIcon, key: 'nav.myPay' };
 const NOTIF_NAV = { href: '/notifications', icon: NotifNavIcon, key: 'admin.notifications' };
 
 export default function AppLayout({ session, children }: Props) {
@@ -134,6 +138,7 @@ export default function AppLayout({ session, children }: Props) {
     if (path.startsWith('/home')) return true;
     if (path.startsWith('/manage')) return r === 'admin' || r === 'ceo';
     if (path.startsWith('/payroll')) return r === 'admin' || r === 'ceo';
+    if (path.startsWith('/my-pay')) return r === 'agent' || r === 'jr_manager' || r === 'sr_manager';
     if (path.startsWith('/admin')) return r === 'admin' || r === 'ceo';
     if (path.startsWith('/team')) return r !== 'agent';
     if (path.startsWith('/roster')) return false; // redirects to /manage/users
@@ -193,6 +198,9 @@ export default function AppLayout({ session, children }: Props) {
     ...(canManageAssignments(role) ? [ASSIGNMENTS_NAV] : []),
     ...((isAdminReal && !previewRole) || role === 'ceo' ? [NOTIF_NAV] : []),
     ...(canSeeAdmin ? [MANAGE_NAV, PAYROLL_NAV] : []),
+    // Block 12 — Mis Pagos for everyone who *receives* a payfile. Admin /
+    // CEO use the full /payroll surface instead.
+    ...(role === 'agent' || role === 'jr_manager' || role === 'sr_manager' ? [MY_PAY_NAV] : []),
   ];
 
   // ── Notification bell (admin only) ──

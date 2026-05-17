@@ -160,6 +160,8 @@ export interface Payfile {
   published_at: string | null;
   last_version_number: number;
   rejection_notes: string | null;
+  /** Block 08 — TRUE when calc rolled a negative residual into negative_balances and forced total_amount to 0. */
+  had_negative_balance: boolean;
   created_at: string;
   updated_at: string;
 }
