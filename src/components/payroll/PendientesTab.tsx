@@ -9,6 +9,9 @@ import type {
   PayrollUploadRowError,
 } from '@/types/payroll';
 import type { SaleStatus } from '@/lib/payroll/constants';
+import SalesByWeekView from './SalesByWeekView';
+
+type PendientesSubTab = 'uploads' | 'salesByWeek';
 
 /**
  * Pendientes tab — block 04.
@@ -38,6 +41,7 @@ interface UploadDetail {
 
 export default function PendientesTab() {
   const { t, lang } = useLanguage();
+  const [subTab, setSubTab] = useState<PendientesSubTab>('uploads');
   const [rows, setRows] = useState<UploadListRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
@@ -53,10 +57,67 @@ export default function PendientesTab() {
     refresh();
   }, [refresh]);
 
+  return (
+    <div className="space-y-4">
+      {/* Sub-tab switcher (block 05 — added "Ventas por semana" view) */}
+      <div className="inline-flex rounded-xl border border-gray-200 dark:border-gray-700 p-0.5 bg-gray-50 dark:bg-gray-800">
+        {(['uploads', 'salesByWeek'] as PendientesSubTab[]).map((id) => (
+          <button
+            key={id}
+            onClick={() => setSubTab(id)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              subTab === id
+                ? 'bg-white dark:bg-gray-900 text-[var(--primary)] shadow-sm'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+            }`}
+          >
+            {t(`payroll.pendientes.subtab_${id}`)}
+          </button>
+        ))}
+      </div>
+
+      {subTab === 'salesByWeek' ? (
+        <SalesByWeekView />
+      ) : (
+        <UploadsView
+          t={t} lang={lang}
+          rows={rows} loading={loading}
+          onUploadClick={() => setShowUpload(true)}
+          onRowClick={(id) => setDetailId(id)}
+        />
+      )}
+
+      {showUpload && (
+        <UploadFormModal
+          onClose={() => setShowUpload(false)}
+          onUploaded={() => { setShowUpload(false); refresh(); }}
+        />
+      )}
+      {detailId && (
+        <UploadDetailModal
+          uploadId={detailId}
+          onClose={() => setDetailId(null)}
+          onChanged={refresh}
+          onDeleted={() => { setDetailId(null); refresh(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+interface UploadsViewProps {
+  t: (k: string) => string;
+  lang: 'es' | 'en';
+  rows: UploadListRow[];
+  loading: boolean;
+  onUploadClick: () => void;
+  onRowClick: (id: string) => void;
+}
+
+function UploadsView({ t, lang, rows, loading, onUploadClick, onRowClick }: UploadsViewProps) {
   if (loading) {
     return <div className="text-center py-20 text-gray-400">{t('common.loading')}</div>;
   }
-
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -65,7 +126,7 @@ export default function PendientesTab() {
           {t('payroll.pendientes.subtitle')}
         </p>
         <button
-          onClick={() => setShowUpload(true)}
+          onClick={onUploadClick}
           className="px-4 py-2 rounded-xl text-white font-semibold text-sm whitespace-nowrap"
           style={{ backgroundColor: 'var(--primary)' }}
         >
@@ -92,7 +153,7 @@ export default function PendientesTab() {
             {rows.map((row) => (
               <button
                 key={row.id}
-                onClick={() => setDetailId(row.id)}
+                onClick={() => onRowClick(row.id)}
                 className="w-full text-left grid grid-cols-12 gap-2 items-center px-3 sm:px-5 py-3 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors"
               >
                 <div className="col-span-12 sm:col-span-5 min-w-0">
@@ -131,30 +192,6 @@ export default function PendientesTab() {
           </div>
         )}
       </div>
-
-      {showUpload && (
-        <UploadFormModal
-          onClose={() => setShowUpload(false)}
-          onUploaded={() => {
-            setShowUpload(false);
-            refresh();
-          }}
-        />
-      )}
-
-      {detailId && (
-        <UploadDetailModal
-          uploadId={detailId}
-          onClose={() => setDetailId(null)}
-          onChanged={() => {
-            refresh();
-          }}
-          onDeleted={() => {
-            setDetailId(null);
-            refresh();
-          }}
-        />
-      )}
     </div>
   );
 }

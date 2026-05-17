@@ -26,6 +26,7 @@ import {
   isChargebackRow,
 } from '@/lib/payroll/uploadConfig';
 import { resolvePlanMapping, defaultStatusForPlanType } from '@/lib/payroll/planMapping';
+import { resolveTierForSale, resolveTermMonthsForSale } from '@/lib/payroll/tierResolution';
 import type { SaleStatus } from '@/lib/payroll/constants';
 import type { PlanMapping } from '@/types/payroll';
 
@@ -425,6 +426,14 @@ async function processRow(
     status === 'PAYABLE' && (await isWinbackContract(parsed.contract_id));
   if (isWinback) summary.winbackCount += 1;
 
+  // Block 05 — resolve tier/term up front so the row lands fully classified.
+  // Both functions return null when they don't apply (Retail, adders, etc.).
+  const assignedTier = resolveTierForSale({ plan_mapping_id: mapping?.id ?? null }, mapping);
+  const termResolution = resolveTermMonthsForSale(
+    { raw_term_months: parsed.raw_term_months },
+    mapping,
+  );
+
   // ── Insert payroll_sales row. ──────────────────────────────────────────────
   const insert: Record<string, unknown> = {
     upload_id: ctx.uploadId,
@@ -444,6 +453,8 @@ async function processRow(
     internal_agent_id: internalAgentId,
     pay_week: payWeekForRow,
     raw_term_months: parsed.raw_term_months,
+    assigned_tier: assignedTier,
+    assigned_term_months: termResolution.value,
     is_winback: isWinback,
     raw_row: parsed.raw,
   };

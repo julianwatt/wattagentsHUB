@@ -10,8 +10,9 @@
  */
 
 import { supabase } from '@/lib/supabase';
-import type { PlanMapping } from '@/types/payroll';
+import type { PlanMapping, PayrollSale } from '@/types/payroll';
 import type { PlanType } from '@/lib/payroll/constants';
+import { resolveTierForSale, resolveTermMonthsForSale } from '@/lib/payroll/tierResolution';
 
 /** Resolve a plan_name to its mapping, or null if no row exists yet. */
 export async function resolvePlanMapping(planName: string): Promise<PlanMapping | null> {
@@ -73,36 +74,129 @@ export function defaultStatusForPlanType(planType: PlanType): 'PAYABLE' | 'VERIF
 }
 
 /**
- * Auto-reprocess hook: every time a mapping is created or its plan_type
- * changes, every payroll_sales row currently sitting on VERIFY with that
- * exact plan_name should pick up the new mapping. Returns the count of
- * rows touched so callers can surface "X ventas resueltas" to admin.
+ * Auto-reprocess hook: when a plan_mapping is created or edited, every
+ * payroll_sales row with that plan_name picks up the new state. This runs
+ * for VERIFY rows (where status flips to PAYABLE/etc.) AND for rows that
+ * are already classified but whose tier/term might have changed when admin
+ * tier-tagged the mapping after the fact.
+ *
+ * Updates per sale (only when the new value differs from the stored one):
+ *   - plan_mapping_id   → from resolvePlanMapping(plan_name)
+ *   - assigned_tier     → from resolveTierForSale
+ *   - assigned_term_months → from resolveTermMonthsForSale
+ *   - status            → if VERIFY, advance to defaultStatusForPlanType
+ *                          (chargebacks are left alone — block 04 already
+ *                           gave them the correct status)
+ *   - pay_week          → if transitioning out of VERIFY, copy from the
+ *                         owning upload's pay_week
+ *
+ * Idempotent: a second call with no changes returns count=0 and writes
+ * nothing.
+ *
+ * Returns the number of sale rows that received any update.
  */
 export async function reprocessVerifyRowsForPlan(planName: string): Promise<number> {
   const mapping = await resolvePlanMapping(planName);
   if (!mapping) return 0;
 
-  const { data: hits, error } = await supabase
+  // Pull every sale for this plan_name. We process VERIFY rows AND already-
+  // classified rows whose tier/term might need refreshing.
+  const { data: salesData, error } = await supabase
     .from('payroll_sales')
-    .select('id')
-    .eq('plan_name', planName)
-    .eq('status', 'VERIFY');
-  if (error || !hits || hits.length === 0) return 0;
+    .select(`
+      id, status, plan_mapping_id, assigned_tier, assigned_term_months,
+      raw_term_months, pay_week, upload_id
+    `)
+    .eq('plan_name', planName);
+  if (error || !salesData || salesData.length === 0) return 0;
 
-  const newStatus = defaultStatusForPlanType(mapping.plan_type);
-  const { error: updErr } = await supabase
+  type SaleSlice = Pick<
+    PayrollSale,
+    'id' | 'status' | 'plan_mapping_id' | 'assigned_tier' | 'assigned_term_months'
+    | 'raw_term_months' | 'pay_week' | 'upload_id'
+  >;
+  const sales = salesData as SaleSlice[];
+
+  // Load upload pay_weeks in batch — needed when transitioning VERIFY → real.
+  const uploadIds = Array.from(new Set(sales.map((s) => s.upload_id)));
+  const { data: uploads } = await supabase
+    .from('payroll_uploads')
+    .select('id, pay_week, cutoff_date')
+    .in('id', uploadIds);
+  const uploadById = new Map(
+    (uploads ?? []).map((u) => [u.id, u as { id: string; pay_week: string | null; cutoff_date: string }]),
+  );
+
+  let touched = 0;
+
+  for (const sale of sales) {
+    const patch: Record<string, unknown> = {};
+
+    // plan_mapping_id
+    if (sale.plan_mapping_id !== mapping.id) {
+      patch.plan_mapping_id = mapping.id;
+    }
+
+    // assigned_tier
+    const tier = resolveTierForSale({ plan_mapping_id: mapping.id }, mapping);
+    if (tier !== sale.assigned_tier) patch.assigned_tier = tier;
+
+    // assigned_term_months
+    const term = resolveTermMonthsForSale(
+      { raw_term_months: sale.raw_term_months },
+      mapping,
+    );
+    if (term.value !== sale.assigned_term_months) {
+      patch.assigned_term_months = term.value;
+    }
+
+    // status + pay_week (only when leaving VERIFY)
+    if (sale.status === 'VERIFY') {
+      patch.status = defaultStatusForPlanType(mapping.plan_type);
+      const upload = uploadById.get(sale.upload_id);
+      if (upload?.pay_week) {
+        patch.pay_week = upload.pay_week;
+      }
+    }
+
+    if (Object.keys(patch).length > 0) {
+      const { error: updErr } = await supabase
+        .from('payroll_sales')
+        .update(patch)
+        .eq('id', sale.id);
+      if (!updErr) touched += 1;
+    }
+  }
+
+  return touched;
+}
+
+/**
+ * Block 05 — re-resolve internal_agent_id on every payroll_sales row that
+ * matches the given je_badge but is still missing the user link. Called by
+ * the Roster badge endpoints after a badge is registered or re-pointed.
+ *
+ * Idempotent. Returns the number of sales updated.
+ */
+export async function reprocessSalesForBadge(
+  jeBadge: string,
+  userId: string,
+): Promise<number> {
+  if (!jeBadge || !userId) return 0;
+  const { data, error } = await supabase
     .from('payroll_sales')
-    .update({
-      plan_mapping_id: mapping.id,
-      status: newStatus,
-    })
-    .in('id', hits.map((h) => h.id));
-  if (updErr) {
-    console.error('[reprocessVerifyRowsForPlan] update failed:', updErr);
+    .update({ internal_agent_id: userId })
+    .eq('je_badge', jeBadge)
+    .is('internal_agent_id', null)
+    .neq('status', 'CANCELLED')
+    .select('id');
+  if (error) {
+    console.error('[reprocessSalesForBadge] failed:', error);
     return 0;
   }
-  return hits.length;
+  return (data ?? []).length;
 }
+
 
 /**
  * Return the unique plan_names currently sitting on VERIFY (and how many

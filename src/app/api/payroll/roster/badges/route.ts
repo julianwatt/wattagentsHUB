@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { requirePayrollAdmin } from '@/lib/payroll/auth';
 import { ROSTER_CAMPAIGNS, ROSTER_POSITIONS } from '@/lib/payroll/constants';
+import { reprocessSalesForBadge } from '@/lib/payroll/planMapping';
 
 /**
  * POST /api/payroll/roster/badges  → create a JE badge for a user
@@ -62,14 +63,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  const trimmedBadge = String(je_badge).trim();
+
   // If this badge originally came from a je_badge_alerts row, resolve it.
   await supabase
     .from('je_badge_alerts')
     .update({ resolved_at: new Date().toISOString(), resolved_by: session.user.id })
-    .eq('je_badge', String(je_badge).trim())
+    .eq('je_badge', trimmedBadge)
     .is('resolved_at', null);
 
-  return NextResponse.json(data, { status: 201 });
+  // Block 05 side-effect: back-fill internal_agent_id on every existing sale
+  // that carried this badge in limbo. Idempotent.
+  const linkedSales = await reprocessSalesForBadge(trimmedBadge, user_id);
+
+  return NextResponse.json({ ...data, linked_sales: linkedSales }, { status: 201 });
 }
 
 export async function PATCH(req: NextRequest) {
