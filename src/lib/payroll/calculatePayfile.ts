@@ -585,19 +585,23 @@ async function upsertPayfile(userId: string, payWeek: string): Promise<Payfile> 
 }
 
 async function wipeAutoRows(payfileId: string, payWeek: string, userId: string): Promise<void> {
-  // Delete auto-generated line items only. Manual edits and manual additions
-  // are preserved. NEGATIVE_BALANCE_COLLECTION rows are owned by
-  // wipeAutoNegativeBalanceRowsForPayfile (block 08) and COLLECTION rows
-  // by wipeAutoCollectionRowsForPayfile (block 09) — those helpers have
-  // to revert the linked balances / installments before the lines die,
-  // so we exclude those types here.
+  // Delete auto-generated line items only. Manual edits, manual additions,
+  // and externally-driven lines are preserved:
+  //   - NEGATIVE_BALANCE_COLLECTION (block 08) → owned by its helper that
+  //     reverts the linked balance first.
+  //   - COLLECTION (block 09) → owned by its helper that reverts the
+  //     linked installment first.
+  //   - COMPANY_BONUS rows with source_bonus_distribution_id (block 10) →
+  //     admin-distributed bonuses; their lifecycle is the distribution
+  //     row, not the per-week calc.
   await supabase
     .from('payfile_line_items')
     .delete()
     .eq('payfile_id', payfileId)
     .eq('is_manually_edited', false)
     .eq('is_manually_added', false)
-    .not('line_type', 'in', '(NEGATIVE_BALANCE_COLLECTION,COLLECTION)');
+    .not('line_type', 'in', '(NEGATIVE_BALANCE_COLLECTION,COLLECTION)')
+    .or('line_type.neq.COMPANY_BONUS,source_bonus_distribution_id.is.null');
 
   // Delete auto-generated override rows for sales in this week where the
   // user is the receiving manager.

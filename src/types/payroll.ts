@@ -184,6 +184,7 @@ export interface PayfileLineItem {
   source_sale_id: string | null;
   source_collection_id: string | null;
   source_negative_balance_id: string | null;
+  source_bonus_distribution_id: string | null;
   amount: number;
   original_amount: number;
   is_manually_edited: boolean;
@@ -268,6 +269,7 @@ export interface CompanyBonus {
   description: string;
   pay_week: string;
   paid_to_agents: boolean;
+  notes: string | null;
   created_at: string;
 }
 
@@ -291,6 +293,7 @@ export interface Residual {
   amount: number;
   pay_week: string;
   original_je_data: Record<string, unknown> | null;
+  notes: string | null;
   created_at: string;
 }
 
