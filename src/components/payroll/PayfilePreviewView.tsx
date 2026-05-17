@@ -169,6 +169,7 @@ export default function PayfilePreviewView() {
                   fetchPayfiles(selectedWeek);
                 }}
                 onWithdraw={() => fetchPayfiles(selectedWeek)}
+                onRefresh={() => fetchPayfiles(selectedWeek)}
                 t={t}
                 lang={lang}
               />
@@ -205,12 +206,66 @@ interface PayfileRowProps {
   onAdd: () => void;
   onDelete: (li: PayfileLineItem) => void;
   onWithdraw: (li: PayfileLineItem) => void;
+  onRefresh: () => void;
   t: (k: string) => string;
   lang: 'es' | 'en';
 }
 
-function PayfileRow({ pf, expanded, onToggle, onEdit, onAdd, onDelete, onWithdraw, t, lang }: PayfileRowProps) {
+interface RepublishDiff {
+  abs_diff: number;
+  prior_total: number | null;
+  current_total: number;
+  within_threshold: boolean;
+  threshold: number;
+  is_first_publish: boolean;
+}
+
+function PayfileRow({ pf, expanded, onToggle, onEdit, onAdd, onDelete, onWithdraw, onRefresh, t, lang }: PayfileRowProps) {
   const hasCeoFlag = pf.line_items.some((li) => li.requires_ceo_approval);
+  const [busy, setBusy] = useState(false);
+  const [republishDiff, setRepublishDiff] = useState<RepublishDiff | null>(null);
+
+  // Fetch republish preview when we expand a DRAFT that already has a version.
+  useEffect(() => {
+    if (!expanded) return;
+    if (pf.state !== 'DRAFT') { setRepublishDiff(null); return; }
+    if (!pf.last_version_number || pf.last_version_number < 1) { setRepublishDiff(null); return; }
+    let cancelled = false;
+    (async () => {
+      const r = await fetch(`/api/payroll/payfiles/${pf.id}/republish`);
+      if (!r.ok || cancelled) return;
+      const j = await r.json();
+      if (cancelled) return;
+      setRepublishDiff(j.diff ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, [expanded, pf.id, pf.state, pf.last_version_number]);
+
+  async function action(url: string, body?: object): Promise<boolean> {
+    setBusy(true);
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    setBusy(false);
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      alert(j.error || (j.gate?.details ?? []).join('\n') || t('common.error'));
+      return false;
+    }
+    onRefresh();
+    return true;
+  }
+
+  async function submit() {
+    if (!confirm(t('payroll.payfiles.confirmSubmit'))) return;
+    await action(`/api/payroll/payfiles/${pf.id}/submit`);
+  }
+  async function republishNow() {
+    if (!confirm(t('payroll.payfiles.confirmRepublish'))) return;
+    await action(`/api/payroll/payfiles/${pf.id}/republish`);
+  }
   return (
     <div>
       <button
@@ -242,6 +297,55 @@ function PayfileRow({ pf, expanded, onToggle, onEdit, onAdd, onDelete, onWithdra
 
       {expanded && (
         <div className="bg-gray-50/50 dark:bg-gray-800/30 border-t border-gray-100 dark:border-gray-700 px-3 sm:px-5 py-3 space-y-2">
+          {/* Block 11 — rejection notes banner (visible after CEO rejects). */}
+          {pf.state === 'DRAFT' && pf.rejection_notes && (
+            <div className="rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/20 text-rose-800 dark:text-rose-200 px-3 py-2 text-xs">
+              <p className="font-bold">{t('payroll.payfiles.rejectionBannerTitle')}</p>
+              <p className="opacity-90 whitespace-pre-wrap mt-1">{pf.rejection_notes}</p>
+            </div>
+          )}
+
+          {/* Block 11 — transition actions row. */}
+          {pf.state === 'DRAFT' && (
+            <div className="flex flex-wrap gap-2 items-center">
+              {republishDiff && !republishDiff.is_first_publish && republishDiff.within_threshold && (
+                <>
+                  <button
+                    onClick={republishNow}
+                    disabled={busy}
+                    className="px-3 py-1.5 rounded-lg text-white font-bold text-xs disabled:opacity-50"
+                    style={{ backgroundColor: 'var(--primary)' }}
+                  >
+                    {busy ? t('common.loading') : t('payroll.payfiles.republishDirect')}
+                  </button>
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                    Δ ${republishDiff.abs_diff.toFixed(2)} ≤ ${republishDiff.threshold} · {t('payroll.payfiles.republishHint')}
+                  </span>
+                </>
+              )}
+              {republishDiff && !republishDiff.is_first_publish && !republishDiff.within_threshold && (
+                <span className="text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-2 py-1 rounded">
+                  Δ ${republishDiff.abs_diff.toFixed(2)} &gt; ${republishDiff.threshold} · {t('payroll.payfiles.republishBlocked')}
+                </span>
+              )}
+              <button
+                onClick={submit}
+                disabled={busy}
+                className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 font-semibold text-xs disabled:opacity-50"
+              >
+                {busy ? t('common.loading') : t('payroll.payfiles.submitToCeo')}
+              </button>
+            </div>
+          )}
+          {pf.state === 'PENDING_APPROVAL' && (
+            <p className="text-[11px] text-amber-700 dark:text-amber-300">{t('payroll.payfiles.inApprovalHint')}</p>
+          )}
+          {pf.state === 'PUBLISHED' && (
+            <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
+              {t('payroll.payfiles.publishedHint').replace('{v}', String(pf.last_version_number ?? 0))}
+            </p>
+          )}
+
           <div className="flex items-center justify-between">
             <p className="text-[10px] uppercase tracking-wide font-bold text-gray-500 dark:text-gray-400">{t('payroll.payfiles.itemsTitle')}</p>
             <button

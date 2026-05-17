@@ -95,6 +95,24 @@ export default function PublicadasTab() {
     if (openId === id) openDetail(id);
   }
 
+  async function handleReopen(pfId: string) {
+    const reason = window.prompt(t('payroll.publicadas.reopenReasonPrompt'));
+    if (reason === null) return;
+    setBusy(pfId);
+    const r = await fetch(`/api/payroll/payfiles/${pfId}/reopen`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
+    setBusy(null);
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      alert(j.error || t('common.error'));
+      return;
+    }
+    fetchPayfiles(selectedWeek);
+    if (openId === pfId) openDetail(pfId);
+  }
+
   async function handleRegenerate(versionId: string) {
     setBusy(versionId);
     const r = await fetch(`/api/payroll/payfile-versions/${versionId}/regenerate`, { method: 'POST' });
@@ -194,18 +212,30 @@ export default function PublicadasTab() {
                     {/* Gate banner */}
                     <Gate gate={detail.gate} t={t} />
 
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <p className="text-[10px] uppercase tracking-wide font-bold text-gray-500 dark:text-gray-400">
                         {t('payroll.publicadas.versionsTitle')}
                       </p>
-                      <button
-                        onClick={() => handleSnapshot(pf.id)}
-                        disabled={!detail.gate.ok || busy === pf.id}
-                        className="text-xs px-3 py-1 rounded-lg text-white font-semibold disabled:opacity-50"
-                        style={{ backgroundColor: 'var(--primary)' }}
-                      >
-                        {busy === pf.id ? t('common.loading') : `+ ${t('payroll.publicadas.snapshot')}`}
-                      </button>
+                      <div className="flex gap-2">
+                        {pf.state === 'PUBLISHED' && (
+                          <button
+                            onClick={() => handleReopen(pf.id)}
+                            disabled={busy === pf.id}
+                            className="text-xs px-3 py-1 rounded-lg border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 font-semibold disabled:opacity-50"
+                          >
+                            {t('payroll.publicadas.reopen')}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleSnapshot(pf.id)}
+                          disabled={!detail.gate.ok || busy === pf.id || pf.state !== 'DRAFT'}
+                          title={pf.state !== 'DRAFT' ? t('payroll.publicadas.snapshotOnlyDraft') : ''}
+                          className="text-xs px-3 py-1 rounded-lg text-white font-semibold disabled:opacity-50"
+                          style={{ backgroundColor: 'var(--primary)' }}
+                        >
+                          {busy === pf.id ? t('common.loading') : `+ ${t('payroll.publicadas.snapshot')}`}
+                        </button>
+                      </div>
                     </div>
 
                     {detail.versions.length === 0 ? (

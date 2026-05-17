@@ -12,6 +12,7 @@ import RastreoTab from './RastreoTab';
 import CollectionsTab from './CollectionsTab';
 import BonosTab from './BonosTab';
 import ResidualesTab from './ResidualesTab';
+import AprobacionTab from './AprobacionTab';
 
 /**
  * Payroll → top-level tabs. Blocks ship them one by one:
@@ -104,6 +105,7 @@ export default function PayrollClient({ session }: { session: Session }) {
 
         {/* Tab body */}
         {tab === 'pendientes' && <PendientesTab />}
+        {tab === 'aprobacion' && <AprobacionTab session={session} />}
         {tab === 'publicadas' && <PublicadasTab />}
         {tab === 'roster' && <RosterTab session={session} />}
         {tab === 'plan_mapping' && <PlanMappingTab onPendingCountChange={setPendingPlansCount} />}
@@ -112,7 +114,7 @@ export default function PayrollClient({ session }: { session: Session }) {
         {tab === 'bonos' && <BonosTab />}
         {tab === 'residuales' && <ResidualesTab />}
         {tab === 'rastreo' && <RastreoTab />}
-        {tab !== 'pendientes' && tab !== 'publicadas' && tab !== 'roster' && tab !== 'plan_mapping' && tab !== 'saldos_negativos' && tab !== 'collections' && tab !== 'bonos' && tab !== 'residuales' && tab !== 'rastreo' && <PlaceholderTab tabKey={tab} />}
+        {tab !== 'pendientes' && tab !== 'aprobacion' && tab !== 'publicadas' && tab !== 'roster' && tab !== 'plan_mapping' && tab !== 'saldos_negativos' && tab !== 'collections' && tab !== 'bonos' && tab !== 'residuales' && tab !== 'rastreo' && <PlaceholderTab tabKey={tab} />}
       </div>
     </AppLayout>
   );
