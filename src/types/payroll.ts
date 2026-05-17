@@ -33,6 +33,14 @@ import type {
 } from '@/lib/payroll/constants';
 
 // ── payroll_uploads ──────────────────────────────────────────────────────────
+export type PayrollUploadFileType = 'PRINCIPAL' | 'BONUS';
+export type PayrollUploadProcessingStatus =
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'PROCESSED'
+  | 'PARTIAL'
+  | 'FAILED';
+
 export interface PayrollUpload {
   id: string;
   file_name: string;
@@ -43,8 +51,25 @@ export interface PayrollUpload {
   processed: boolean;
   row_count: number;
   notes: string | null;
+  file_type: PayrollUploadFileType;
+  processing_status: PayrollUploadProcessingStatus;
+  error_count: number;
+  file_size_bytes: number | null;
+  deleted_at: string | null;
+  processed_at: string | null;
+  pay_week: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// ── payroll_upload_row_errors ────────────────────────────────────────────────
+export interface PayrollUploadRowError {
+  id: string;
+  upload_id: string;
+  row_number: number;
+  raw_row: Record<string, unknown> | null;
+  error_message: string;
+  created_at: string;
 }
 
 // ── plan_mappings ────────────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ import AppLayout from '@/components/AppLayout';
 import { useLanguage } from '@/components/LanguageContext';
 import RosterTab from './RosterTab';
 import PlanMappingTab from './PlanMappingTab';
+import PendientesTab from './PendientesTab';
 
 /**
  * Payroll → top-level tabs. Blocks ship them one by one:
@@ -32,7 +33,7 @@ type PayrollTab = (typeof TABS)[number];
 
 export default function PayrollClient({ session }: { session: Session }) {
   const { t } = useLanguage();
-  const [tab, setTab] = useState<PayrollTab>('roster');
+  const [tab, setTab] = useState<PayrollTab>('pendientes');
   const [pendingPlansCount, setPendingPlansCount] = useState(0);
 
   // Cheap polling for the pending count so the badge stays fresh on every
@@ -96,9 +97,10 @@ export default function PayrollClient({ session }: { session: Session }) {
         </div>
 
         {/* Tab body */}
+        {tab === 'pendientes' && <PendientesTab />}
         {tab === 'roster' && <RosterTab session={session} />}
         {tab === 'plan_mapping' && <PlanMappingTab onPendingCountChange={setPendingPlansCount} />}
-        {tab !== 'roster' && tab !== 'plan_mapping' && <PlaceholderTab tabKey={tab} />}
+        {tab !== 'pendientes' && tab !== 'roster' && tab !== 'plan_mapping' && <PlaceholderTab tabKey={tab} />}
       </div>
     </AppLayout>
   );
