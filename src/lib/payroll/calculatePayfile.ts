@@ -45,6 +45,12 @@ import {
   applyPendingBalancesToPayfile,
   finalizePayfileIfNegative,
 } from '@/lib/payroll/negativeBalances';
+import {
+  wipeAutoCollectionRowsForPayfile,
+  applyCollectionInstallmentsToDebtor,
+  creditBeneficiaries,
+  type PendingCredit,
+} from '@/lib/payroll/collections';
 import type {
   PayrollSale, PlanMapping, Payfile, PayfileLineItem,
 } from '@/types/payroll';
@@ -74,6 +80,12 @@ export interface CalculationResult {
   carry_over_lines_created: number;
   /** Block 08: payfiles whose final total was forced to 0 (residual rolled). */
   negative_payfiles: number;
+  /** Block 09: COLLECTION deduction line items (debtor side). */
+  collection_lines_created: number;
+  /** Block 09: COLLECTION_INCOME credits applied to beneficiaries. */
+  collection_credits_applied: number;
+  /** Block 09: CEO beneficiary records routed to company_bonuses. */
+  ceo_collection_credits: number;
   errors: CalculationError[];
 }
 
@@ -90,6 +102,9 @@ export async function calculatePayrollForWeek(payWeek: string): Promise<Calculat
       negative_balances_created: 0,
       carry_over_lines_created: 0,
       negative_payfiles: 0,
+      collection_lines_created: 0,
+      collection_credits_applied: 0,
+      ceo_collection_credits: 0,
       errors: validation.issues
         .filter((i) => i.level === 'critical')
         .map((i) => ({ code: i.code, message: i.detail })),
@@ -131,9 +146,20 @@ export async function calculatePayrollForWeek(payWeek: string): Promise<Calculat
   let totalOverrides = 0;
   let carryOverLines = 0;
   let negativePayfiles = 0;
+  let collectionLines = 0;
+
+  // Block 09: pending beneficiary credits buffered across the main loop,
+  // applied in a second pass before finalize-if-negative.
+  const beneficiaryCredits: PendingCredit[] = [];
+  // Map of payfileId → running total before finalize. Block 09 may bump
+  // beneficiary totals after the first-pass apply; we finalize once at the
+  // end with the right number.
+  const runningTotals = new Map<string, number>();
+  const payfileByUser = new Map<string, string>();
 
   for (const userId of affectedUsers) {
     const payfile = await upsertPayfile(userId, payWeek);
+    payfileByUser.set(userId, payfile.id);
 
     // ── 5a. Wipe auto rows from any previous calc on this payfile. ─────────
     await wipeAutoRows(payfile.id, payWeek, userId);
@@ -141,6 +167,9 @@ export async function calculatePayrollForWeek(payWeek: string): Promise<Calculat
     // auto-generated balances tied to this payfile (residual rolls). MUST
     // happen before the new carry-over apply step below.
     await wipeAutoNegativeBalanceRowsForPayfile(payfile.id);
+    // Block 09: revert collected_amount on linked collection installments +
+    // delete auto COLLECTION line items.
+    await wipeAutoCollectionRowsForPayfile(payfile.id);
 
     // ── 5b. Insert fresh auto line items and override rows. ────────────────
     const lines = linesPerUser.get(userId) ?? [];
@@ -162,9 +191,51 @@ export async function calculatePayrollForWeek(payWeek: string): Promise<Calculat
     const apply = await applyPendingBalancesToPayfile(userId, payfile.id, runningBefore);
     carryOverLines += apply.linesCreated;
 
-    // ── 5e. Finalize. If still negative → new balance + force total to 0. ──
-    const finalize = await finalizePayfileIfNegative(payfile.id, userId, payWeek, apply.totalAfterCollection);
+    // ── 5e. Apply pending collection installments (debtor side). ───────────
+    const coll = await applyCollectionInstallmentsToDebtor(
+      userId, payfile.id, payWeek, apply.totalAfterCollection,
+    );
+    collectionLines += coll.linesCreated;
+    if (coll.credits.length > 0) beneficiaryCredits.push(...coll.credits);
+
+    // Defer finalize to after the beneficiary-credit pass — credits could
+    // bump THIS user's running total if they're also a beneficiary of
+    // somebody else's collection.
+    runningTotals.set(payfile.id, coll.totalAfterCollections);
+  }
+
+  // ── 6. Beneficiary credit pass. Adds COLLECTION_INCOME lines to each
+  //       beneficiary's payfile, or routes CEO credits to company_bonuses.
+  const creditResult = await creditBeneficiaries(beneficiaryCredits);
+  // Beneficiary payfiles that got fresh credits need a recomputed total
+  // before finalize.
+  for (const pfId of creditResult.payfilesTouched) {
+    runningTotals.set(pfId, await sumLineItemAmounts(pfId));
+  }
+
+  // ── 7. Finalize per affected payfile (negative → new balance + total=0). ──
+  // Build the union of payfiles that need finalize: every user in the main
+  // loop + every beneficiary payfile that was touched in the credit pass.
+  const allPayfileIds = new Set<string>([
+    ...payfileByUser.values(),
+    ...creditResult.payfilesTouched,
+  ]);
+  let totalPayfilesGenerated = 0;
+  for (const payfileId of allPayfileIds) {
+    // Find owning user_id + running total.
+    const { data: pf } = await supabase
+      .from('payfiles')
+      .select('user_id')
+      .eq('id', payfileId)
+      .single();
+    if (!pf) continue;
+    const userId = (pf as { user_id: string }).user_id;
+    const running = runningTotals.has(payfileId)
+      ? runningTotals.get(payfileId)!
+      : await sumLineItemAmounts(payfileId);
+    const finalize = await finalizePayfileIfNegative(payfileId, userId, payWeek, running);
     if (finalize.hadNegativeBalance) negativePayfiles += 1;
+    totalPayfilesGenerated += 1;
   }
 
   // ── 6. Persist inactive-user chargebacks routed to negative_balances. ─────
@@ -177,12 +248,15 @@ export async function calculatePayrollForWeek(payWeek: string): Promise<Calculat
   return {
     ok: errors.length === 0,
     pay_week: payWeek,
-    payfiles_generated: affectedUsers.size,
+    payfiles_generated: totalPayfilesGenerated,
     total_line_items: totalLines,
     total_overrides: totalOverrides,
     negative_balances_created: negCreated,
     carry_over_lines_created: carryOverLines,
     negative_payfiles: negativePayfiles,
+    collection_lines_created: collectionLines,
+    collection_credits_applied: creditResult.lineItemsCreated,
+    ceo_collection_credits: creditResult.ceoRecords,
     errors,
   };
 }
@@ -513,16 +587,17 @@ async function upsertPayfile(userId: string, payWeek: string): Promise<Payfile> 
 async function wipeAutoRows(payfileId: string, payWeek: string, userId: string): Promise<void> {
   // Delete auto-generated line items only. Manual edits and manual additions
   // are preserved. NEGATIVE_BALANCE_COLLECTION rows are owned by
-  // wipeAutoNegativeBalanceRowsForPayfile (block 08) — it has to revert
-  // the linked balances' collected_amount before the line dies, so we
-  // exclude that type here.
+  // wipeAutoNegativeBalanceRowsForPayfile (block 08) and COLLECTION rows
+  // by wipeAutoCollectionRowsForPayfile (block 09) — those helpers have
+  // to revert the linked balances / installments before the lines die,
+  // so we exclude those types here.
   await supabase
     .from('payfile_line_items')
     .delete()
     .eq('payfile_id', payfileId)
     .eq('is_manually_edited', false)
     .eq('is_manually_added', false)
-    .neq('line_type', 'NEGATIVE_BALANCE_COLLECTION');
+    .not('line_type', 'in', '(NEGATIVE_BALANCE_COLLECTION,COLLECTION)');
 
   // Delete auto-generated override rows for sales in this week where the
   // user is the receiving manager.

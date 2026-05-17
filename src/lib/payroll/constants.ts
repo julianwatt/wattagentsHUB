@@ -82,6 +82,7 @@ export const PAYFILE_LINE_TYPES = [
   'COMPANY_BONUS',
   'NEGATIVE_BALANCE_COLLECTION',
   'COLLECTION',
+  'COLLECTION_INCOME',
   'MANUAL_ADJUSTMENT',
 ] as const;
 export type PayfileLineType = (typeof PAYFILE_LINE_TYPES)[number];
@@ -115,7 +116,7 @@ export const COLLECTION_STATUSES = ['ACTIVE', 'COMPLETED', 'CANCELLED'] as const
 export type CollectionStatus = (typeof COLLECTION_STATUSES)[number];
 
 export const COLLECTION_INSTALLMENT_STATUSES = [
-  'PENDING', 'PARTIALLY_COLLECTED', 'FULLY_COLLECTED',
+  'PENDING', 'PARTIALLY_COLLECTED', 'FULLY_COLLECTED', 'CANCELLED',
 ] as const;
 export type CollectionInstallmentStatus =
   (typeof COLLECTION_INSTALLMENT_STATUSES)[number];

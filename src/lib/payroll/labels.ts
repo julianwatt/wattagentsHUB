@@ -112,6 +112,7 @@ const PAYFILE_LINE_TYPE_LABELS: Bilingual<PayfileLineType> = {
   COMPANY_BONUS:               { es: 'Bono',                      en: 'Bonus' },
   NEGATIVE_BALANCE_COLLECTION: { es: 'Cobro saldo negativo',      en: 'Negative balance collection' },
   COLLECTION:                  { es: 'Cobro adicional',           en: 'Collection' },
+  COLLECTION_INCOME:           { es: 'Abono de cobro',            en: 'Collection credit' },
   MANUAL_ADJUSTMENT:           { es: 'Ajuste manual',             en: 'Manual adjustment' },
 };
 export const payfileLineTypeLabel = (t: PayfileLineType, lang: Lang) =>
@@ -159,6 +160,7 @@ const COLLECTION_INSTALLMENT_STATUS_LABELS: Bilingual<CollectionInstallmentStatu
   PENDING:             { es: 'Pendiente',            en: 'Pending' },
   PARTIALLY_COLLECTED: { es: 'Cobrado parcialmente', en: 'Partially collected' },
   FULLY_COLLECTED:     { es: 'Cobrado',              en: 'Fully collected' },
+  CANCELLED:           { es: 'Cancelado',            en: 'Cancelled' },
 };
 export const collectionInstallmentStatusLabel = (
   s: CollectionInstallmentStatus,
