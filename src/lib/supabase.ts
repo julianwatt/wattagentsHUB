@@ -74,6 +74,8 @@ export interface DbUser {
   hire_date: string;
   modality: Modality;
   payroll_status: UserPayrollStatus;
+  /** Preferred language. Added by the block-07 migration; defaults to 'es'. */
+  language: 'es' | 'en';
   created_at: string;
 }
 

@@ -6,6 +6,7 @@ import { useLanguage } from '@/components/LanguageContext';
 import RosterTab from './RosterTab';
 import PlanMappingTab from './PlanMappingTab';
 import PendientesTab from './PendientesTab';
+import PublicadasTab from './PublicadasTab';
 
 /**
  * Payroll → top-level tabs. Blocks ship them one by one:
@@ -98,9 +99,10 @@ export default function PayrollClient({ session }: { session: Session }) {
 
         {/* Tab body */}
         {tab === 'pendientes' && <PendientesTab />}
+        {tab === 'publicadas' && <PublicadasTab />}
         {tab === 'roster' && <RosterTab session={session} />}
         {tab === 'plan_mapping' && <PlanMappingTab onPendingCountChange={setPendingPlansCount} />}
-        {tab !== 'pendientes' && tab !== 'roster' && tab !== 'plan_mapping' && <PlaceholderTab tabKey={tab} />}
+        {tab !== 'pendientes' && tab !== 'publicadas' && tab !== 'roster' && tab !== 'plan_mapping' && <PlaceholderTab tabKey={tab} />}
       </div>
     </AppLayout>
   );
