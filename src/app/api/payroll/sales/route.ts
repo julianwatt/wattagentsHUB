@@ -38,6 +38,52 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(weeks);
   }
 
+  // Block 08: cross-week query — winbacks only. No pay_week required.
+  if (url.searchParams.get('winback_only') === '1') {
+    const fromDate = url.searchParams.get('from');
+    const toDate = url.searchParams.get('to');
+    const campaign = url.searchParams.get('campaign'); // D2D | RETAIL — matched against plan_mapping.campaign
+    const agentId = url.searchParams.get('agent_id');
+
+    let q = supabase
+      .from('payroll_sales')
+      .select('*')
+      .eq('is_winback', true)
+      .order('contract_signed_date', { ascending: false, nullsFirst: false })
+      .limit(500);
+    if (fromDate) q = q.gte('contract_signed_date', fromDate);
+    if (toDate) q = q.lte('contract_signed_date', toDate);
+    if (agentId) q = q.eq('internal_agent_id', agentId);
+
+    const { data: wbSales, error } = await q;
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const wbAgentIds = Array.from(new Set((wbSales ?? []).map((s) => s.internal_agent_id).filter((id): id is string => !!id)));
+    const wbMappingIds = Array.from(new Set((wbSales ?? []).map((s) => s.plan_mapping_id).filter((id): id is string => !!id)));
+    const [{ data: wbAgents }, { data: wbMappings }] = await Promise.all([
+      wbAgentIds.length > 0
+        ? supabase.from('users').select('id, name').in('id', wbAgentIds)
+        : Promise.resolve({ data: [] }),
+      wbMappingIds.length > 0
+        ? supabase.from('plan_mappings').select('id, plan_name, plan_type, campaign').in('id', wbMappingIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+    const wbAgentMap = new Map((wbAgents ?? []).map((a) => [a.id, a.name]));
+    const wbMappingMap = new Map((wbMappings ?? []).map((m) => [m.id, m]));
+    const filtered = (wbSales ?? []).filter((s) => {
+      if (!campaign) return true;
+      const m = s.plan_mapping_id ? wbMappingMap.get(s.plan_mapping_id) : null;
+      return m?.campaign === campaign;
+    });
+    return NextResponse.json({
+      sales: filtered.map((s) => ({
+        ...s,
+        agent_name: s.internal_agent_id ? wbAgentMap.get(s.internal_agent_id) ?? null : null,
+        plan_mapping: s.plan_mapping_id ? wbMappingMap.get(s.plan_mapping_id) ?? null : null,
+      })),
+    });
+  }
+
   const payWeek = url.searchParams.get('pay_week') ?? '';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(payWeek)) {
     return NextResponse.json({ error: 'pay_week inválido (use YYYY-MM-DD).' }, { status: 400 });

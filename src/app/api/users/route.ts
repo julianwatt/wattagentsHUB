@@ -163,6 +163,17 @@ export async function PATCH(req: NextRequest) {
     if (hierarchyError) return NextResponse.json({ error: hierarchyError }, { status: 400 });
   }
 
+  // Block 08 — detect inactive → active payroll_status transition BEFORE
+  // the update, so we can check the previous state and fire the
+  // "user reactivated with pending negative balance" notification after.
+  let payrollReactivated = false;
+  if ('payroll_status' in updates) {
+    const prev = await getUserById(id);
+    if (prev?.payroll_status === 'inactive' && updates.payroll_status === 'active') {
+      payrollReactivated = true;
+    }
+  }
+
   try {
     // If admin requests a password reset, generate a new temp password and force change on next login
     if (resetPassword) {
@@ -182,6 +193,36 @@ export async function PATCH(req: NextRequest) {
 
     console.log('[PATCH /api/users] updateUser', { id, manager_id: updates.manager_id, updates });
     await updateUser(id, updates);
+
+    // Block 08 — if just reactivated AND has open negative balances, alert admin.
+    if (payrollReactivated) {
+      const { data: openBalances } = await supabase
+        .from('negative_balances')
+        .select('id, original_amount, remaining_amount, origin, description')
+        .eq('user_id', id)
+        .in('status', ['PENDING', 'PARTIALLY_COLLECTED']);
+      const remaining = (openBalances ?? []).reduce((acc, b) => acc + Number(b.remaining_amount), 0);
+      if ((openBalances ?? []).length > 0 && remaining > 0) {
+        const target = await getUserById(id);
+        await supabase.from('admin_notifications').insert({
+          type: 'payroll_balance_reactivated',
+          user_id: id,
+          user_name: target?.name,
+          user_username: target?.username,
+          data: {
+            balance_count: (openBalances ?? []).length,
+            remaining_total: remaining,
+            balances: (openBalances ?? []).map((b) => ({
+              id: b.id,
+              origin: b.origin,
+              remaining: Number(b.remaining_amount),
+              description: b.description,
+            })),
+          },
+          status: 'pending',
+        });
+      }
+    }
 
     // If admin manually set a password, create a notification
     if (updates.password) {

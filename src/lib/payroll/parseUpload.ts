@@ -426,6 +426,12 @@ async function processRow(
     status === 'PAYABLE' && (await isWinbackContract(parsed.contract_id));
   if (isWinback) summary.winbackCount += 1;
 
+  // Block 08: when a row is the comeback after a prior chargeback, promote
+  // its status to WINBACK so the UI / downstream calc can distinguish a
+  // freshly-paid contract from a back-to-back winback without inspecting
+  // a separate flag. is_winback stays TRUE for backwards compatibility.
+  const effectiveStatus: SaleStatus = isWinback ? 'WINBACK' : status;
+
   // Block 05 — resolve tier/term up front so the row lands fully classified.
   // Both functions return null when they don't apply (Retail, adders, etc.).
   const assignedTier = resolveTierForSale({ plan_mapping_id: mapping?.id ?? null }, mapping);
@@ -449,7 +455,7 @@ async function processRow(
     kwh_or_rce: parsed.kwh_or_rce,
     commission_type: parsed.commission_type,
     je_paid_amount: parsed.je_paid_amount,
-    status,
+    status: effectiveStatus,
     internal_agent_id: internalAgentId,
     pay_week: payWeekForRow,
     raw_term_months: parsed.raw_term_months,
@@ -467,15 +473,14 @@ async function processRow(
     .single();
   if (saleErr) throw new Error(`Insert payroll_sales falló: ${saleErr.message}`);
   summary.insertedSales += 1;
-  summary.byStatus[status] += 1;
+  summary.byStatus[effectiveStatus] += 1;
 
   // ── Side-effects: RCE adders and residuals. ────────────────────────────────
-  // Only fire for live PAYABLE rows. A chargeback of an RCE adder is just a
-  // negative payroll_sales row — creating a positive company_bonuses entry
-  // for it would double-reverse. Block 11 will net the chargeback against
-  // the original bonus when computing the weekly payfile. Winback rows are
-  // PAYABLE-with-is_winback-true, so they fall into this branch as well.
-  const sideEffectsAllowed = status === 'PAYABLE';
+  // Fire for live PAYABLE and WINBACK rows. A chargeback of an RCE adder
+  // is just a negative payroll_sales row — creating a positive
+  // company_bonuses entry for it would double-reverse. Block 11 nets the
+  // chargeback against the original bonus when computing the weekly payfile.
+  const sideEffectsAllowed = effectiveStatus === 'PAYABLE' || effectiveStatus === 'WINBACK';
   if (sideEffectsAllowed && mapping && (mapping.plan_type === 'RCE_ADDER_D2D' || mapping.plan_type === 'RCE_ADDER_RETAIL')) {
     await insertCompanyBonus(parsed, saleData!.id, mapping.plan_type, ctx.payWeek);
     summary.insertedBonuses += 1;

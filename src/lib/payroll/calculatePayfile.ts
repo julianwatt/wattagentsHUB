@@ -39,6 +39,12 @@ import {
   type RosterRow,
   type HierarchySlot,
 } from '@/lib/payroll/managerHierarchy';
+import { resolveTierForSale, resolveTermMonthsForSale } from '@/lib/payroll/tierResolution';
+import {
+  wipeAutoNegativeBalanceRowsForPayfile,
+  applyPendingBalancesToPayfile,
+  finalizePayfileIfNegative,
+} from '@/lib/payroll/negativeBalances';
 import type {
   PayrollSale, PlanMapping, Payfile, PayfileLineItem,
 } from '@/types/payroll';
@@ -62,7 +68,12 @@ export interface CalculationResult {
   payfiles_generated: number;
   total_line_items: number;
   total_overrides: number;
+  /** Inactive-user chargebacks routed to negative_balances (from block 06). */
   negative_balances_created: number;
+  /** Block 08: NEGATIVE_BALANCE_COLLECTION line items inserted in this run. */
+  carry_over_lines_created: number;
+  /** Block 08: payfiles whose final total was forced to 0 (residual rolled). */
+  negative_payfiles: number;
   errors: CalculationError[];
 }
 
@@ -77,6 +88,8 @@ export async function calculatePayrollForWeek(payWeek: string): Promise<Calculat
       total_line_items: 0,
       total_overrides: 0,
       negative_balances_created: 0,
+      carry_over_lines_created: 0,
+      negative_payfiles: 0,
       errors: validation.issues
         .filter((i) => i.level === 'critical')
         .map((i) => ({ code: i.code, message: i.detail })),
@@ -102,25 +115,39 @@ export async function calculatePayrollForWeek(payWeek: string): Promise<Calculat
     }
   }
 
-  // ── 5. Write to DB: upsert payfiles, wipe auto rows, insert fresh. ────────
-  const affectedUsers = new Set([
+  // ── 5. Write to DB: upsert payfiles, wipe auto rows, insert fresh, ────────
+  //       apply block-08 carry-over, finalize negative case.
+  //
+  // We also touch users that have *pending balances even without sales this
+  // week*, so a user with only carry-over to collect still gets a payfile.
+  const affectedUsers = new Set<string>([
     ...linesPerUser.keys(),
     ...overridesPerUser.keys(),
   ]);
+  const carryOverOnlyUsers = await usersWithOpenBalances(affectedUsers);
+  for (const u of carryOverOnlyUsers) affectedUsers.add(u);
 
   let totalLines = 0;
   let totalOverrides = 0;
+  let carryOverLines = 0;
+  let negativePayfiles = 0;
 
   for (const userId of affectedUsers) {
     const payfile = await upsertPayfile(userId, payWeek);
-    await wipeAutoRows(payfile.id, payWeek, userId);
 
+    // ── 5a. Wipe auto rows from any previous calc on this payfile. ─────────
+    await wipeAutoRows(payfile.id, payWeek, userId);
+    // Block 08: revert collected_amount on linked balances + delete
+    // auto-generated balances tied to this payfile (residual rolls). MUST
+    // happen before the new carry-over apply step below.
+    await wipeAutoNegativeBalanceRowsForPayfile(payfile.id);
+
+    // ── 5b. Insert fresh auto line items and override rows. ────────────────
     const lines = linesPerUser.get(userId) ?? [];
     if (lines.length > 0) {
       const inserted = await insertLineItems(payfile.id, lines);
       totalLines += inserted;
     }
-
     const overrides = overridesPerUser.get(userId) ?? [];
     for (const ov of overrides) {
       const li = await insertOverrideLineItem(payfile.id, ov);
@@ -128,10 +155,19 @@ export async function calculatePayrollForWeek(payWeek: string): Promise<Calculat
       totalOverrides += 1;
     }
 
-    await recomputeTotal(payfile.id);
+    // ── 5c. Compute running total before carry-over. ───────────────────────
+    const runningBefore = await sumLineItemAmounts(payfile.id);
+
+    // ── 5d. Apply pending negative balances oldest-first. ──────────────────
+    const apply = await applyPendingBalancesToPayfile(userId, payfile.id, runningBefore);
+    carryOverLines += apply.linesCreated;
+
+    // ── 5e. Finalize. If still negative → new balance + force total to 0. ──
+    const finalize = await finalizePayfileIfNegative(payfile.id, userId, payWeek, apply.totalAfterCollection);
+    if (finalize.hadNegativeBalance) negativePayfiles += 1;
   }
 
-  // ── 6. Persist negative balances for inactive-user chargebacks. ───────────
+  // ── 6. Persist inactive-user chargebacks routed to negative_balances. ─────
   let negCreated = 0;
   for (const nb of negativeBalances) {
     const ok = await insertNegativeBalance(nb);
@@ -145,8 +181,36 @@ export async function calculatePayrollForWeek(payWeek: string): Promise<Calculat
     total_line_items: totalLines,
     total_overrides: totalOverrides,
     negative_balances_created: negCreated,
+    carry_over_lines_created: carryOverLines,
+    negative_payfiles: negativePayfiles,
     errors,
   };
+}
+
+/**
+ * Block 08 — find users who have open negative_balances but no sales this
+ * week. They still need a payfile so the carry-over can chip away at the
+ * debt when they have residual / collection income (rare today, but the
+ * orchestrator should handle it consistently).
+ */
+async function usersWithOpenBalances(exclude: Set<string>): Promise<string[]> {
+  const { data } = await supabase
+    .from('negative_balances')
+    .select('user_id')
+    .in('status', ['PENDING', 'PARTIALLY_COLLECTED']);
+  const ids = new Set<string>();
+  for (const r of (data ?? []) as Array<{ user_id: string }>) {
+    if (!exclude.has(r.user_id)) ids.add(r.user_id);
+  }
+  return Array.from(ids);
+}
+
+async function sumLineItemAmounts(payfileId: string): Promise<number> {
+  const { data } = await supabase
+    .from('payfile_line_items')
+    .select('amount')
+    .eq('payfile_id', payfileId);
+  return (data ?? []).reduce((acc, r) => acc + Number(r.amount), 0);
 }
 
 // ── Context (cache layer) ───────────────────────────────────────────────────
@@ -448,13 +512,17 @@ async function upsertPayfile(userId: string, payWeek: string): Promise<Payfile> 
 
 async function wipeAutoRows(payfileId: string, payWeek: string, userId: string): Promise<void> {
   // Delete auto-generated line items only. Manual edits and manual additions
-  // are preserved.
+  // are preserved. NEGATIVE_BALANCE_COLLECTION rows are owned by
+  // wipeAutoNegativeBalanceRowsForPayfile (block 08) — it has to revert
+  // the linked balances' collected_amount before the line dies, so we
+  // exclude that type here.
   await supabase
     .from('payfile_line_items')
     .delete()
     .eq('payfile_id', payfileId)
     .eq('is_manually_edited', false)
-    .eq('is_manually_added', false);
+    .eq('is_manually_added', false)
+    .neq('line_type', 'NEGATIVE_BALANCE_COLLECTION');
 
   // Delete auto-generated override rows for sales in this week where the
   // user is the receiving manager.

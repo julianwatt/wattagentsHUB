@@ -7,6 +7,8 @@ import RosterTab from './RosterTab';
 import PlanMappingTab from './PlanMappingTab';
 import PendientesTab from './PendientesTab';
 import PublicadasTab from './PublicadasTab';
+import SaldosNegativosTab from './SaldosNegativosTab';
+import RastreoTab from './RastreoTab';
 
 /**
  * Payroll → top-level tabs. Blocks ship them one by one:
@@ -102,7 +104,9 @@ export default function PayrollClient({ session }: { session: Session }) {
         {tab === 'publicadas' && <PublicadasTab />}
         {tab === 'roster' && <RosterTab session={session} />}
         {tab === 'plan_mapping' && <PlanMappingTab onPendingCountChange={setPendingPlansCount} />}
-        {tab !== 'pendientes' && tab !== 'publicadas' && tab !== 'roster' && tab !== 'plan_mapping' && <PlaceholderTab tabKey={tab} />}
+        {tab === 'saldos_negativos' && <SaldosNegativosTab />}
+        {tab === 'rastreo' && <RastreoTab />}
+        {tab !== 'pendientes' && tab !== 'publicadas' && tab !== 'roster' && tab !== 'plan_mapping' && tab !== 'saldos_negativos' && tab !== 'rastreo' && <PlaceholderTab tabKey={tab} />}
       </div>
     </AppLayout>
   );

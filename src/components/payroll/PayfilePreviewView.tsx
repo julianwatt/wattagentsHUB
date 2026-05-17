@@ -168,6 +168,7 @@ export default function PayfilePreviewView() {
                   }
                   fetchPayfiles(selectedWeek);
                 }}
+                onWithdraw={() => fetchPayfiles(selectedWeek)}
                 t={t}
                 lang={lang}
               />
@@ -203,11 +204,12 @@ interface PayfileRowProps {
   onEdit: (li: PayfileLineItem) => void;
   onAdd: () => void;
   onDelete: (li: PayfileLineItem) => void;
+  onWithdraw: (li: PayfileLineItem) => void;
   t: (k: string) => string;
   lang: 'es' | 'en';
 }
 
-function PayfileRow({ pf, expanded, onToggle, onEdit, onAdd, onDelete, t, lang }: PayfileRowProps) {
+function PayfileRow({ pf, expanded, onToggle, onEdit, onAdd, onDelete, onWithdraw, t, lang }: PayfileRowProps) {
   const hasCeoFlag = pf.line_items.some((li) => li.requires_ceo_approval);
   return (
     <div>
@@ -285,6 +287,26 @@ function PayfileRow({ pf, expanded, onToggle, onEdit, onAdd, onDelete, t, lang }
                       <button onClick={() => onEdit(li)} className="text-[var(--primary)] hover:underline text-xs">
                         {t('common.edit')}
                       </button>
+                      {li.line_type === 'NEGATIVE_BALANCE_COLLECTION' && !li.is_manually_added && (
+                        <>
+                          {' · '}
+                          <button
+                            onClick={async () => {
+                              if (!confirm(t('payroll.payfiles.confirmWithdrawCollection'))) return;
+                              const r = await fetch(`/api/payroll/payfile-line-items/${li.id}/withdraw-collection`, { method: 'POST' });
+                              if (!r.ok) {
+                                const j = await r.json().catch(() => ({}));
+                                alert(j.error || t('common.error'));
+                                return;
+                              }
+                              onWithdraw(li);
+                            }}
+                            className="text-amber-600 hover:underline text-xs"
+                          >
+                            {t('payroll.payfiles.withdrawCollection')}
+                          </button>
+                        </>
+                      )}
                       {li.is_manually_added && (
                         <>
                           {' · '}
