@@ -13,6 +13,10 @@
 
 import { supabase } from '@/lib/supabase';
 import type { Payfile, PayfileLineItem, PayfileOverride } from '@/types/payroll';
+import {
+  getDownlineUserIds,
+  filterOverridesForViewer,
+} from '@/lib/payroll/hierarchyAccess';
 
 export interface PayfileBundle {
   payfile: Payfile;
@@ -30,12 +34,17 @@ export interface ViewerCtx {
 
 /**
  * Returns the payfile + line items + overrides the viewer is allowed to see.
- *   - Admin / CEO  → full visibility.
- *   - Dueño del payfile (any other role) → own line items + own override
- *     rows only. Other managers' overrides on the same sale are stripped.
- *   - Anyone else (not the owner, not admin/CEO) → null. Manager scoping
- *     for "I manage this person, can I see their payfile?" is a block 13
- *     concern — out of scope here.
+ *   - Admin / CEO         → full visibility.
+ *   - Owner of the payfile → own line items + own override rows only.
+ *   - Sr / Jr manager whose downline contains the payfile owner →
+ *     line items + overrides filtered to viewer + viewer's downline
+ *     (block 13 horizontal-privacy rule).
+ *   - Anyone else → null.
+ *
+ * Block 13: downline is computed once here (BFS through payroll_roster).
+ * For team-view APIs that already build the downline, callers may want
+ * to skip via an in-memory cache; for now the function eats the extra
+ * query — payfiles are read one at a time from the UI.
  */
 export async function getPayfileForUser(
   payfileId: string,
@@ -48,10 +57,18 @@ export async function getPayfileForUser(
     .maybeSingle();
   if (!payfile) return null;
 
+  const ownerId = (payfile as Payfile).user_id;
   const isPrivileged = viewer.role === 'admin' || viewer.role === 'ceo';
-  const isOwner = (payfile as Payfile).user_id === viewer.user_id;
+  const isOwner = ownerId === viewer.user_id;
+  const isManager = viewer.role === 'jr_manager' || viewer.role === 'sr_manager';
 
-  if (!isPrivileged && !isOwner) return null;
+  // Resolve access + downline.
+  let downline = new Set<string>();
+  if (!isPrivileged && !isOwner) {
+    if (!isManager) return null;
+    downline = await getDownlineUserIds(viewer.user_id);
+    if (!downline.has(ownerId)) return null;
+  }
 
   const { data: lineItems } = await supabase
     .from('payfile_line_items')
@@ -74,10 +91,7 @@ export async function getPayfileForUser(
     overrides = (data ?? []) as PayfileOverride[];
   }
 
-  // Owner who isn't admin/CEO only sees their own override rows.
-  if (!isPrivileged) {
-    overrides = overrides.filter((o) => o.manager_id === viewer.user_id);
-  }
+  overrides = filterOverridesForViewer(viewer, ownerId, overrides, downline);
 
   return {
     payfile: payfile as Payfile,

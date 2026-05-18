@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { supabase } from '@/lib/supabase';
 import { canAccessPayrollAdmin, canSeeOwnPay } from '@/lib/payroll/permissions';
 import { createSignedDownloadUrl } from '@/lib/payroll/publishPayfile';
+import { getDownlineUserIds } from '@/lib/payroll/hierarchyAccess';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -40,9 +41,24 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
   if (!payfile) return NextResponse.json({ error: 'Payfile no encontrado.' }, { status: 404 });
 
   const role = session.user.role ?? '';
+  const ownerId = (payfile as { user_id: string }).user_id;
   const isPrivileged = canAccessPayrollAdmin(role);
-  const isOwner = (payfile as { user_id: string }).user_id === session.user.id;
-  if (!isPrivileged && !isOwner) {
+  const isOwner = ownerId === session.user.id;
+
+  // Block 13 — a Jr / Sr manager can download any payfile in their
+  // downline. The PDF content was generated from the canonical
+  // (everything) snapshot; viewer-specific privacy is enforced by the
+  // /api/payroll/my-pay/week endpoint when the manager is browsing
+  // line items, not on the PDF itself (master plan §13 keeps the PDF
+  // identical to the agent's copy for managers since they need to
+  // verify the same artifact).
+  let isDownlineManager = false;
+  if (!isPrivileged && !isOwner && (role === 'jr_manager' || role === 'sr_manager')) {
+    const downline = await getDownlineUserIds(session.user.id);
+    isDownlineManager = downline.has(ownerId);
+  }
+
+  if (!isPrivileged && !isOwner && !isDownlineManager) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   if (isOwner && !canSeeOwnPay(role)) {

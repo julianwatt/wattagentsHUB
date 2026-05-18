@@ -65,10 +65,11 @@ interface SummaryResponse {
   year: { start: string; total: number; payables: number; chargebacks: number; monthly_buckets: number[] };
 }
 
-type SubTab = 'current' | 'history' | 'summary';
+type SubTab = 'current' | 'history' | 'summary' | 'team';
 
 export default function MyPayClient({ session }: { session: Session }) {
   const { t, lang } = useLanguage();
+  const isManager = session.user.role === 'jr_manager' || session.user.role === 'sr_manager';
   const [tab, setTab] = useState<SubTab>('current');
   const [currentResp, setCurrentResp] = useState<CurrentResponse | null>(null);
   const [activePayfileId, setActivePayfileId] = useState<string | null>(null);
@@ -143,7 +144,7 @@ export default function MyPayClient({ session }: { session: Session }) {
 
         {/* Sub-tabs */}
         <div className="inline-flex rounded-xl border border-gray-200 dark:border-gray-700 p-0.5 bg-gray-50 dark:bg-gray-800">
-          {(['current', 'history', 'summary'] as SubTab[]).map((id) => (
+          {((['current', 'history', 'summary', ...(isManager ? ['team' as const] : [])]) as SubTab[]).map((id) => (
             <button
               key={id}
               onClick={() => setTab(id)}
@@ -181,6 +182,7 @@ export default function MyPayClient({ session }: { session: Session }) {
           />
         )}
         {tab === 'summary' && <SummaryView summary={summary} t={t} lang={lang} />}
+        {tab === 'team' && isManager && <TeamView session={session} t={t} lang={lang} />}
       </div>
     </AppLayout>
   );
@@ -489,6 +491,347 @@ function SummaryTile({ label, value, accent }: { label: string; value: string; a
     <div className={`rounded-xl border px-3 py-2 ${colors[accent] ?? colors.gray}`}>
       <p className="text-base font-extrabold leading-tight font-mono">{value}</p>
       <p className="text-[10px] uppercase tracking-wide opacity-80 mt-0.5">{label}</p>
+    </div>
+  );
+}
+
+// ── Team view (block 13) ────────────────────────────────────────────────────
+
+interface TeamMember {
+  user: { id: string; name: string; role: string };
+  payfile: {
+    id: string; pay_week: string; state: string; total_amount: number;
+    last_version_number: number; had_negative_balance: boolean;
+  } | null;
+  sales_count: number;
+}
+interface JrBranch {
+  user: { id: string; name: string; role: string };
+  payfile: TeamMember['payfile'];
+  sales_count: number;
+  agents: TeamMember[];
+}
+interface TeamTree {
+  viewer_role: 'jr_manager' | 'sr_manager';
+  pay_week: string;
+  jr_managers: JrBranch[];
+  direct_agents: TeamMember[];
+  flat: TeamMember[];
+  totals: { team_total: number; sales_count: number; member_count: number };
+}
+
+function TeamView({ session, t, lang }: { session: Session; t: (k: string) => string; lang: 'es' | 'en' }) {
+  const [weeks, setWeeks] = useState<string[]>([]);
+  const [selectedWeek, setSelectedWeek] = useState<string>('');
+  const [tree, setTree] = useState<TeamTree | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'tree' | 'flat'>('tree');
+  const [drawerPayfileId, setDrawerPayfileId] = useState<string | null>(null);
+  const [drawerMemberName, setDrawerMemberName] = useState<string>('');
+  const isSr = session.user.role === 'sr_manager';
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const r = await fetch('/api/payroll/my-pay/team/weeks');
+      if (!r.ok || cancelled) { if (!cancelled) setLoading(false); return; }
+      const ws: string[] = await r.json();
+      if (cancelled) return;
+      setWeeks(ws);
+      if (ws.length > 0 && !selectedWeek) setSelectedWeek(ws[0]);
+      else if (ws.length === 0) setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fetchTree = useCallback(async (week: string) => {
+    setLoading(true);
+    const r = await fetch(`/api/payroll/my-pay/team?pay_week=${encodeURIComponent(week)}`);
+    if (r.ok) setTree(await r.json());
+    setLoading(false);
+  }, []);
+  useEffect(() => { if (selectedWeek) fetchTree(selectedWeek); }, [selectedWeek, fetchTree]);
+
+  if (weeks.length === 0 && !loading) {
+    return <div className="text-center py-16 text-gray-400 text-sm">{t('myPay.team.noTeamWeeks')}</div>;
+  }
+
+  function openMember(member: TeamMember | JrBranch) {
+    if (!member.payfile) return;
+    setDrawerPayfileId(member.payfile.id);
+    setDrawerMemberName(member.user.name);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end gap-2">
+        <div>
+          <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-0.5">
+            {t('myPay.weekSelector')}
+          </label>
+          <select
+            value={selectedWeek} onChange={(e) => setSelectedWeek(e.target.value)}
+            className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
+          >
+            {weeks.map((w) => <option key={w} value={w}>{w}</option>)}
+          </select>
+        </div>
+        {isSr && (
+          <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 p-0.5 bg-gray-50 dark:bg-gray-800">
+            {(['tree', 'flat'] as const).map((m) => (
+              <button
+                key={m} onClick={() => setViewMode(m)}
+                className={`px-2.5 py-1 rounded text-[11px] font-semibold ${
+                  viewMode === m ? 'bg-white dark:bg-gray-900 text-[var(--primary)]' : 'text-gray-500 dark:text-gray-400'
+                }`}
+              >
+                {t(`myPay.team.viewMode_${m}`)}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {tree && (
+        <div className="grid grid-cols-3 gap-2">
+          <SummaryTile label={t('myPay.team.teamTotal')} value={`$${tree.totals.team_total.toFixed(2)}`} accent="emerald" />
+          <SummaryTile label={t('myPay.team.salesCount')} value={String(tree.totals.sales_count)} accent="indigo" />
+          <SummaryTile label={t('myPay.team.memberCount')} value={String(tree.totals.member_count)} accent="sky" />
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-center py-16 text-gray-400 text-sm">{t('common.loading')}</div>
+      ) : !tree ? null : (isSr && viewMode === 'tree') ? (
+        <TreeView tree={tree} onOpen={openMember} t={t} lang={lang} />
+      ) : (
+        <FlatView tree={tree} onOpen={openMember} t={t} lang={lang} />
+      )}
+
+      {drawerPayfileId && (
+        <TeamMemberDrawer
+          payfileId={drawerPayfileId}
+          memberName={drawerMemberName}
+          onClose={() => setDrawerPayfileId(null)}
+          t={t}
+          lang={lang}
+        />
+      )}
+    </div>
+  );
+}
+
+function TreeView({ tree, onOpen, t, lang }: { tree: TeamTree; onOpen: (m: TeamMember | JrBranch) => void; t: (k: string) => string; lang: 'es' | 'en' }) {
+  return (
+    <div className="space-y-3">
+      {tree.jr_managers.map((jr) => (
+        <details key={jr.user.id} open className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
+          <summary className="cursor-pointer px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/40">
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{jr.user.name}</p>
+              <p className="text-[10px] text-gray-400">Jr Manager · {jr.agents.length} {t('myPay.team.agentsShort')}</p>
+            </div>
+            <MemberAmount payfile={jr.payfile} onOpen={() => onOpen(jr)} t={t} />
+          </summary>
+          <div className="border-t border-gray-100 dark:border-gray-800 divide-y divide-gray-50 dark:divide-gray-800">
+            {jr.agents.map((a) => (<MemberRow key={a.user.id} member={a} onOpen={() => onOpen(a)} t={t} lang={lang} />))}
+            {jr.agents.length === 0 && (
+              <p className="text-xs text-gray-400 italic px-4 py-3">{t('myPay.team.noAgents')}</p>
+            )}
+          </div>
+        </details>
+      ))}
+      {tree.direct_agents.length > 0 && (
+        <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
+          <p className="px-4 py-2 text-[10px] uppercase tracking-wide font-bold text-gray-500 dark:text-gray-400">
+            {t('myPay.team.directAgents')}
+          </p>
+          <div className="border-t border-gray-100 dark:border-gray-800 divide-y divide-gray-50 dark:divide-gray-800">
+            {tree.direct_agents.map((a) => (<MemberRow key={a.user.id} member={a} onOpen={() => onOpen(a)} t={t} lang={lang} />))}
+          </div>
+        </div>
+      )}
+      {tree.jr_managers.length === 0 && tree.direct_agents.length === 0 && (
+        <div className="text-center py-12 text-gray-400 text-sm">{t('myPay.team.empty')}</div>
+      )}
+    </div>
+  );
+}
+
+function FlatView({ tree, onOpen, t, lang }: { tree: TeamTree; onOpen: (m: TeamMember) => void; t: (k: string) => string; lang: 'es' | 'en' }) {
+  const sorted = [...tree.flat].sort((a, b) => Number(b.payfile?.total_amount ?? 0) - Number(a.payfile?.total_amount ?? 0));
+  return (
+    <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
+      <div className="divide-y divide-gray-50 dark:divide-gray-800">
+        {sorted.map((m) => (<MemberRow key={m.user.id} member={m} onOpen={() => onOpen(m)} t={t} lang={lang} showRole />))}
+        {sorted.length === 0 && (
+          <div className="text-center py-12 text-gray-400 text-sm">{t('myPay.team.empty')}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MemberRow({ member, onOpen, t, lang, showRole }: { member: TeamMember; onOpen: () => void; t: (k: string) => string; lang: 'es' | 'en'; showRole?: boolean }) {
+  void lang;
+  const total = Number(member.payfile?.total_amount ?? 0);
+  return (
+    <button onClick={onOpen} className="w-full text-left px-4 py-2 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{member.user.name}</p>
+        <p className="text-[10px] text-gray-400 mt-0.5">
+          {showRole && <span>{member.user.role} · </span>}
+          {member.sales_count} {t('myPay.team.salesShort')}
+          {member.payfile?.state && member.payfile.state !== 'PUBLISHED' && (
+            <span className="ml-1 inline-block bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1 py-0.5 rounded text-[8.5px] font-bold">{member.payfile.state}</span>
+          )}
+        </p>
+      </div>
+      <p className={`font-mono text-sm font-bold ${total < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-gray-900 dark:text-gray-100'}`}>
+        ${total.toFixed(2)}
+      </p>
+    </button>
+  );
+}
+
+function MemberAmount({ payfile, onOpen, t }: { payfile: TeamMember['payfile']; onOpen: () => void; t: (k: string) => string }) {
+  const total = Number(payfile?.total_amount ?? 0);
+  void t;
+  return (
+    <span
+      onClick={(e) => { e.preventDefault(); onOpen(); }}
+      className={`font-mono text-sm font-bold ${total < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-gray-900 dark:text-gray-100'} hover:underline cursor-pointer`}
+    >
+      ${total.toFixed(2)}
+    </span>
+  );
+}
+
+// ── Drawer that fetches + renders a team member's payfile bundle ────────────
+
+function TeamMemberDrawer({ payfileId, memberName, onClose, t, lang }: { payfileId: string; memberName: string; onClose: () => void; t: (k: string) => string; lang: 'es' | 'en' }) {
+  const [bundle, setBundle] = useState<PayfileBundle | InProgressResponse | null>(null);
+  const [downloading, setDownloading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const r = await fetch(`/api/payroll/my-pay/week?payfile_id=${encodeURIComponent(payfileId)}`);
+      if (!r.ok || cancelled) return;
+      const j = await r.json();
+      if (cancelled) return;
+      setBundle(j as PayfileBundle | InProgressResponse);
+    })();
+    return () => { cancelled = true; };
+  }, [payfileId]);
+
+  async function downloadPdf() {
+    setDownloading(true);
+    const r = await fetch(`/api/payroll/payfiles/${payfileId}/download`);
+    setDownloading(false);
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      alert(j.error || t('common.error'));
+      return;
+    }
+    const j = await r.json();
+    window.open(j.url, '_blank', 'noopener');
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center p-0 sm:p-4 bg-black/60" onClick={onClose}>
+      <div className="bg-white dark:bg-gray-900 sm:rounded-2xl shadow-2xl w-full sm:max-w-xl max-h-screen sm:max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 bg-white dark:bg-gray-900 px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-wide font-bold text-gray-500 dark:text-gray-400">
+              {t('myPay.team.viewingHeader')}
+            </p>
+            <h4 className="font-bold text-gray-800 dark:text-gray-100 truncate text-sm">{memberName}</h4>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+        </div>
+        <div className="p-5 space-y-4">
+          {!bundle ? (
+            <p className="text-center text-gray-400 text-sm py-8">{t('common.loading')}</p>
+          ) : 'in_progress' in bundle && bundle.in_progress ? (
+            <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 px-3 py-3 text-sm">
+              {t('myPay.team.memberInProgress')}
+            </div>
+          ) : 'payfile' in bundle ? (
+            <TeamMemberBundleBody bundle={bundle as PayfileBundle} onDownload={downloadPdf} downloading={downloading} t={t} lang={lang} />
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TeamMemberBundleBody({ bundle, onDownload, downloading, t, lang }: { bundle: PayfileBundle; onDownload: () => void; downloading: boolean; t: (k: string) => string; lang: 'es' | 'en' }) {
+  void lang;
+  const buckets: Record<string, PayfileLineItem[]> = {};
+  for (const li of bundle.line_items) (buckets[li.line_type] ??= []).push(li);
+  const order: { key: PayfileLineType; titleKey: string }[] = [
+    { key: 'COMMISSION', titleKey: 'myPay.catCommission' },
+    { key: 'OVERRIDE', titleKey: 'myPay.catOverride' },
+    { key: 'COMPANY_BONUS', titleKey: 'myPay.catBonus' },
+    { key: 'COLLECTION_INCOME', titleKey: 'myPay.catCollectionIncome' },
+    { key: 'NEGATIVE_BALANCE_COLLECTION', titleKey: 'myPay.catNegativeBalance' },
+    { key: 'COLLECTION', titleKey: 'myPay.catCollection' },
+    { key: 'MANUAL_ADJUSTMENT', titleKey: 'myPay.catManual' },
+  ];
+  return (
+    <div className="space-y-3">
+      <div className="rounded-2xl bg-gradient-to-br from-[var(--primary)]/10 to-transparent border border-gray-100 dark:border-gray-800 p-4">
+        <p className="text-[10px] uppercase tracking-wide font-bold text-gray-500 dark:text-gray-400">
+          {bundle.payfile.pay_week} · v{bundle.payfile.last_version_number}
+        </p>
+        <div className="flex items-center justify-between gap-3 mt-1">
+          <p className="text-2xl font-extrabold text-gray-900 dark:text-gray-100 font-mono">
+            ${Number(bundle.payfile.total_amount).toFixed(2)}
+          </p>
+          <button
+            onClick={onDownload}
+            disabled={downloading}
+            className="px-3 py-1.5 rounded-xl text-white font-semibold text-xs disabled:opacity-60"
+            style={{ backgroundColor: 'var(--primary)' }}
+          >
+            {downloading ? t('common.loading') : `↓ ${t('myPay.downloadPdf')}`}
+          </button>
+        </div>
+      </div>
+
+      {order.map(({ key, titleKey }) => {
+        const items = buckets[key];
+        if (!items || items.length === 0) return null;
+        const subtotal = items.reduce((acc, i) => acc + Number(i.amount), 0);
+        return (
+          <details key={key} className="rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
+            <summary className="cursor-pointer px-3 py-2 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/40">
+              <span className="text-xs font-bold text-gray-800 dark:text-gray-100">
+                {t(titleKey)} <span className="text-gray-400">({items.length})</span>
+              </span>
+              <span className={`font-mono font-bold text-xs ${subtotal < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-gray-900 dark:text-gray-100'}`}>
+                ${subtotal.toFixed(2)}
+              </span>
+            </summary>
+            <div className="border-t border-gray-100 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
+              {items.map((li) => (
+                <div key={li.id} className="px-3 py-1.5 flex items-center justify-between gap-2">
+                  <p className="text-[11px] text-gray-700 dark:text-gray-200 truncate" title={li.description}>{li.description}</p>
+                  <p className={`font-mono text-[11px] whitespace-nowrap ${Number(li.amount) < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-gray-900 dark:text-gray-100'}`}>
+                    ${Number(li.amount).toFixed(2)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </details>
+        );
+      })}
+
+      <p className="text-[10px] text-gray-400 text-center pt-1">
+        {t('myPay.team.privacyNote')}
+      </p>
     </div>
   );
 }
