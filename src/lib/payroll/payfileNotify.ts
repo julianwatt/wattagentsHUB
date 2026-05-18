@@ -1,20 +1,18 @@
 /**
  * Block 11 — payfile publish-time notification helper.
- * ============================================================================
+ * Block 15 — refactored to route through the central dispatcher
+ * (src/lib/payroll/notifications.ts). The in-app inbox row lands in
+ * user_notifications; the push side is enqueued in
+ * payroll_notification_queue.
  *
- * Single entry point for the "your payfile is ready" push that fires when
- * a payfile transitions to PUBLISHED. Also enqueues a row in
- * payfile_change_notifications for the audit/inbox trail.
- *
- * Skip rules (per spec):
- *   - Same-total republish (|diff| = 0) → no push.
- *   - Owner has no language preference → fall back to 'es'.
+ * Skip rules (unchanged):
+ *   - Same-total republish (|diff| = 0) → no notification.
  *
  * Server-side only.
  */
 
 import { supabase } from '@/lib/supabase';
-import { sendPushToUser } from '@/lib/push';
+import { dispatchPayrollNotification, PAYROLL_NOTIFICATION_TYPES } from '@/lib/payroll/notifications';
 
 export interface NotifyPublishArgs {
   payfile_id: string;
@@ -30,19 +28,6 @@ export interface NotifyPublishResult {
   skipped_reason?: string;
 }
 
-const PUSH_STRINGS = {
-  es: {
-    titleFirst: 'Tu primer payfile fue publicado',
-    titleUpdate: 'Tu payfile fue actualizado',
-    body: (total: number) => `Total: $${total.toFixed(2)}. Revisa Mis Pagos.`,
-  },
-  en: {
-    titleFirst: 'Your first payfile is ready',
-    titleUpdate: 'Your payfile was updated',
-    body: (total: number) => `Total: $${total.toFixed(2)}. Check My Payments.`,
-  },
-};
-
 export async function notifyPayfilePublished(args: NotifyPublishArgs): Promise<NotifyPublishResult> {
   // Zero-delta republish never bothers the recipient.
   if (args.prior_total !== null && args.prior_total === args.current_total) {
@@ -51,49 +36,34 @@ export async function notifyPayfilePublished(args: NotifyPublishArgs): Promise<N
 
   const { data: payfile } = await supabase
     .from('payfiles')
-    .select('id, user_id, pay_week')
+    .select('id, user_id, pay_week, total_amount')
     .eq('id', args.payfile_id)
     .maybeSingle();
   if (!payfile) return { enqueued: false, push_sent: false, skipped_reason: 'payfile_not_found' };
+
   const userId = (payfile as { user_id: string }).user_id;
+  const payWeek = (payfile as { pay_week: string }).pay_week;
 
-  const { data: user } = await supabase
-    .from('users')
-    .select('language')
-    .eq('id', userId)
-    .maybeSingle();
-  const lang = ((user as { language?: string } | null)?.language === 'en' ? 'en' : 'es') as 'es' | 'en';
-  const s = PUSH_STRINGS[lang];
+  const type = args.prior_total === null
+    ? PAYROLL_NOTIFICATION_TYPES.PAYFILE_FIRST_PUBLISHED
+    : PAYROLL_NOTIFICATION_TYPES.PAYFILE_UPDATED;
 
-  // 1. Enqueue notification row (the inbox audit trail).
-  await supabase
-    .from('payfile_change_notifications')
-    .insert({
+  const result = await dispatchPayrollNotification({
+    type,
+    recipient_user_id: userId,
+    payload: {
       payfile_id: args.payfile_id,
-      user_id: userId,
-      // sent_at stays NULL until the push call below succeeds.
-    });
-
-  // 2. Send push. The web-push helper handles missing-subscription /
-  //    expired-subscription cases internally.
-  const title = args.prior_total === null ? s.titleFirst : s.titleUpdate;
-  const body = s.body(args.current_total);
-  const url = '/payroll/me'; // block 12 will own this route; harmless 404 today.
-  const sendResult = await sendPushToUser(userId, { title, body, url }, 'payfile_published');
-
-  // 3. Mark the notification row sent (best effort).
-  if (sendResult.sent) {
-    await supabase
-      .from('payfile_change_notifications')
-      .update({ sent_at: new Date().toISOString() })
-      .eq('payfile_id', args.payfile_id)
-      .eq('user_id', userId)
-      .is('sent_at', null);
-  }
+      pay_week: payWeek,
+      current_total: args.current_total,
+      prior_total: args.prior_total,
+    },
+    // push goes through the async queue; the worker route drains it.
+    channels: ['inapp', 'push'],
+  });
 
   return {
-    enqueued: true,
-    push_sent: sendResult.sent,
-    skipped_reason: sendResult.sent ? undefined : sendResult.error,
+    enqueued: !!result.inbox_id,
+    push_sent: result.queued_for_push, // queued; the worker actually sends
+    skipped_reason: result.skipped_reason,
   };
 }

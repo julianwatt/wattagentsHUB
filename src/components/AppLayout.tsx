@@ -14,6 +14,7 @@ import { getSupabaseBrowser } from '@/lib/supabase-browser';
 import { usePushSubscription } from './usePushSubscription';
 import { fmtDistance } from '@/lib/geo';
 import { useIsStandaloneIOS } from './useStandalone';
+import UserNotificationsBell from './UserNotificationsBell';
 import { isLegacyShiftPanelEnabled } from '@/lib/flags';
 import { canManageAssignments, canSeeOwnPerformance } from '@/lib/permissions';
 
@@ -204,7 +205,7 @@ export default function AppLayout({ session, children }: Props) {
   ];
 
   // ── Notification bell (admin only) ──
-  interface NotifData { actor_name?: string; alert_type?: string; store_name?: string; distance_meters?: number; event_type?: string; shift_log_id?: string; assignment_id?: string; shift_date?: string; scheduled_start_time?: string; rejection_reason?: string; }
+  interface NotifData { actor_name?: string; alert_type?: string; store_name?: string; distance_meters?: number; event_type?: string; shift_log_id?: string; assignment_id?: string; shift_date?: string; scheduled_start_time?: string; rejection_reason?: string; title?: string; body?: string; url?: string; }
   interface NotifItem { id: string; type: string; user_name?: string; user_username?: string; data?: NotifData | null; status: string; created_at: string; }
   const notifTypeLabel = (type: string) => {
     if (type === 'password_reset') return t('notifications.passwordReset');
@@ -218,6 +219,12 @@ export default function AppLayout({ session, children }: Props) {
     if (type === 'assignment_exited_warn') return `⚠️ ${t('assignments.bellExitedWarn')}`;
     if (type === 'assignment_exited_final') return `🛑 ${t('assignments.bellExitedFinal')}`;
     if (type === 'assignment_reentered') return `🔄 ${t('assignments.bellReentered')}`;
+    // Block 15 — payroll admin/CEO inbox types
+    if (type === 'payroll_balance_reactivated') return `💰 ${t('notifications.payrollBalanceReactivated')}`;
+    if (type === 'payroll_orphan_badges_detected') return `🪪 ${t('notifications.payrollOrphanBadges')}`;
+    if (type === 'payroll_unmapped_plans_detected') return `📋 ${t('notifications.payrollUnmappedPlans')}`;
+    if (type === 'payroll_file_processed_with_errors') return `⚠️ ${t('notifications.payrollFileErrors')}`;
+    if (type === 'payroll_week_rejected_by_ceo') return `🛑 ${t('notifications.payrollWeekRejected')}`;
     return type;
   };
   const notifBadgeColor = (type: string) => {
@@ -232,6 +239,12 @@ export default function AppLayout({ session, children }: Props) {
     if (type === 'assignment_exited_warn') return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300';
     if (type === 'assignment_exited_final') return 'bg-red-200 dark:bg-red-900/50 text-red-700 dark:text-red-200 ring-1 ring-red-300 dark:ring-red-700';
     if (type === 'assignment_reentered') return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300';
+    // Block 15 — payroll admin/CEO inbox types
+    if (type === 'payroll_balance_reactivated') return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300';
+    if (type === 'payroll_orphan_badges_detected') return 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300';
+    if (type === 'payroll_unmapped_plans_detected') return 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300';
+    if (type === 'payroll_file_processed_with_errors') return 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300';
+    if (type === 'payroll_week_rejected_by_ceo') return 'bg-red-200 dark:bg-red-900/50 text-red-700 dark:text-red-200 ring-1 ring-red-300 dark:ring-red-700';
     return 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300';
   };
   const notifPreviewText = (n: NotifItem) => {
@@ -267,6 +280,10 @@ export default function AppLayout({ session, children }: Props) {
       const store = d?.store_name ? ` · ${d.store_name}` : '';
       const dist = d?.distance_meters ? ` (${fmtDistance(d.distance_meters)})` : '';
       return `${n.user_name ?? '—'}${store}${dist}`;
+    }
+    // Block 15 — payroll inbox rows store their resolved body in data.body.
+    if (n.type.startsWith('payroll_')) {
+      return n.data?.body ?? n.data?.title ?? n.user_name ?? '—';
     }
     return n.user_name ?? '—';
   };
@@ -440,6 +457,9 @@ export default function AppLayout({ session, children }: Props) {
             >
               {lang === 'es' ? 'EN' : 'ES'}
             </button>
+
+            {/* Block 15 — per-user notifications bell (every role) */}
+            {!previewRole && <UserNotificationsBell userId={session.user.id} />}
 
             {/* Notification bell (admin + CEO) */}
             {showBell && (

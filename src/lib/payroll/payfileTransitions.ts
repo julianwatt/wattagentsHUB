@@ -34,6 +34,8 @@ import { canPublishPayfile, type CanPublishPayfileResult } from '@/lib/payroll/c
 import { createPayfileSnapshot } from '@/lib/payroll/publishPayfile';
 import { calculatePayfileDiffSinceLastVersion } from '@/lib/payroll/payfileDiff';
 import { notifyPayfilePublished } from '@/lib/payroll/payfileNotify';
+import { dispatchPayrollNotification, PAYROLL_NOTIFICATION_TYPES } from '@/lib/payroll/notifications';
+import { REPUBLISH_REAPPROVAL_THRESHOLD_USD } from '@/lib/payroll/constants';
 import type { PayfileState } from '@/lib/payroll/constants';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -96,8 +98,73 @@ export async function submitForApproval(
   if (error) return fail(error.message);
 
   await audit(payfileId, actor.user_id, 'DRAFT', 'PENDING_APPROVAL', 'Enviado a aprobación CEO.');
+
+  // Block 15 — notify the CEO. If this is a republish whose delta exceeds
+  // the $500 threshold, use the more pointed LARGE_CHANGE_REPUBLISH copy
+  // so the CEO knows why approval is required this time.
+  await fireSubmitForApprovalNotifications(payfileId, (pf as { pay_week: string }).pay_week);
+
   return { ok: true, new_state: 'PENDING_APPROVAL', gate };
 }
+
+async function fireSubmitForApprovalNotifications(payfileId: string, payWeek: string) {
+  try {
+    const ceos = await fetchCeoIds();
+    if (ceos.length === 0) return;
+
+    // Count items >3x still pending CEO approval (block 11 flag).
+    const { count: over3xCount } = await supabase
+      .from('payfile_line_items')
+      .select('id', { count: 'exact', head: true })
+      .eq('payfile_id', payfileId)
+      .eq('requires_ceo_approval', true);
+
+    const diff = await calculatePayfileDiffSinceLastVersion(payfileId);
+    const isLargeRepublish =
+      !diff.is_first_publish && diff.abs_diff > REPUBLISH_REAPPROVAL_THRESHOLD_USD;
+
+    for (const ceoId of ceos) {
+      if (isLargeRepublish) {
+        await dispatchPayrollNotification({
+          type: PAYROLL_NOTIFICATION_TYPES.LARGE_CHANGE_REPUBLISH_PENDING,
+          recipient_user_id: ceoId,
+          payload: {
+            payfile_id: payfileId,
+            pay_week: payWeek,
+            abs_diff: diff.abs_diff,
+            threshold: REPUBLISH_REAPPROVAL_THRESHOLD_USD,
+          },
+        });
+      } else {
+        await dispatchPayrollNotification({
+          type: PAYROLL_NOTIFICATION_TYPES.WEEK_READY_FOR_APPROVAL,
+          recipient_user_id: ceoId,
+          payload: { payfile_id: payfileId, pay_week: payWeek },
+        });
+      }
+      if ((over3xCount ?? 0) > 0) {
+        await dispatchPayrollNotification({
+          type: PAYROLL_NOTIFICATION_TYPES.ITEMS_OVER_3X_PENDING,
+          recipient_user_id: ceoId,
+          payload: { payfile_id: payfileId, pay_week: payWeek, count: over3xCount },
+          channels: ['inapp'],
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[fireSubmitForApprovalNotifications] failed:', err);
+  }
+}
+
+async function fetchCeoIds(): Promise<string[]> {
+  const { data } = await supabase
+    .from('users')
+    .select('id')
+    .eq('role', 'ceo')
+    .eq('is_active', true);
+  return (data ?? []).map((u) => u.id);
+}
+
 
 // ── approve ────────────────────────────────────────────────────────────────
 
@@ -200,6 +267,32 @@ export async function reject(
   if (error) return fail(error.message);
 
   await audit(payfileId, actor.user_id, 'PENDING_APPROVAL', 'DRAFT', `Rechazado por CEO: ${notes.trim()}`);
+
+  // Block 15 — admin inbox alert so the admin sees the rejection in
+  // the bell without having to navigate to the approval tab.
+  try {
+    const { data: pf2 } = await supabase
+      .from('payfiles')
+      .select('pay_week, user_id')
+      .eq('id', payfileId)
+      .maybeSingle();
+    const { data: owner } = pf2
+      ? await supabase.from('users').select('name').eq('id', (pf2 as { user_id: string }).user_id).maybeSingle()
+      : { data: null };
+    await dispatchPayrollNotification({
+      type: PAYROLL_NOTIFICATION_TYPES.WEEK_REJECTED_BY_CEO,
+      payload: {
+        payfile_id: payfileId,
+        pay_week: (pf2 as { pay_week?: string } | null)?.pay_week ?? '',
+        notes: notes.trim(),
+        owner_name: (owner as { name?: string } | null)?.name ?? null,
+      },
+      channels: ['inapp'],
+    });
+  } catch (err) {
+    console.error('[reject] notify failed:', err);
+  }
+
   return { ok: true, new_state: 'DRAFT' };
 }
 

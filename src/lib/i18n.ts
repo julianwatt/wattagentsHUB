@@ -637,6 +637,17 @@ const es = {
     assignmentRejectedLabel: 'Asignación rechazada',
     assignmentAcceptedDesc: 'aceptó la asignación',
     assignmentRejectedDesc: 'rechazó la asignación',
+    // Block 15 — payroll admin/CEO inbox labels
+    payrollBalanceReactivated: 'Reactivación con saldo',
+    payrollOrphanBadges: 'Badges huérfanos',
+    payrollUnmappedPlans: 'Planes sin mapear',
+    payrollFileErrors: 'Archivo con errores',
+    payrollWeekRejected: 'Semana rechazada',
+  },
+  userBell: {
+    title: 'Tus notificaciones',
+    empty: 'Sin notificaciones nuevas.',
+    markAllRead: 'Marcar todas',
   },
   common: {
     loading: 'Cargando...',
@@ -1917,6 +1928,17 @@ const en: typeof es = {
     assignmentRejectedLabel: 'Assignment rejected',
     assignmentAcceptedDesc: 'accepted the assignment',
     assignmentRejectedDesc: 'rejected the assignment',
+    // Block 15 — payroll admin/CEO inbox labels
+    payrollBalanceReactivated: 'Reactivated with debt',
+    payrollOrphanBadges: 'Orphan badges',
+    payrollUnmappedPlans: 'Unmapped plans',
+    payrollFileErrors: 'File errors',
+    payrollWeekRejected: 'Week rejected',
+  },
+  userBell: {
+    title: 'Your notifications',
+    empty: 'No new notifications.',
+    markAllRead: 'Mark all',
   },
   common: {
     loading: 'Loading...',

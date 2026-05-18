@@ -794,6 +794,44 @@ export async function editLineItem(args: EditLineItemArgs): Promise<EditLineItem
 
   await recomputeTotal(updated.payfile_id);
 
+  // Block 15 — if an admin pushed this past 3× and CEO approval is now
+  // required, ping the CEO inbox so the item doesn't sit silently until
+  // someone navigates to the approval tab.
+  if (requiresCeoApproval) {
+    try {
+      const { dispatchPayrollNotification, PAYROLL_NOTIFICATION_TYPES } =
+        await import('@/lib/payroll/notifications');
+      const { data: pfRow } = await supabase
+        .from('payfiles')
+        .select('id, pay_week')
+        .eq('id', updated.payfile_id)
+        .maybeSingle();
+      const { data: ceos } = await supabase
+        .from('users')
+        .select('id')
+        .eq('role', 'ceo')
+        .eq('is_active', true);
+      const { count: over3xCount } = await supabase
+        .from('payfile_line_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('payfile_id', updated.payfile_id)
+        .eq('requires_ceo_approval', true);
+      for (const c of ceos ?? []) {
+        await dispatchPayrollNotification({
+          type: PAYROLL_NOTIFICATION_TYPES.ITEMS_OVER_3X_PENDING,
+          recipient_user_id: c.id,
+          payload: {
+            payfile_id: updated.payfile_id,
+            pay_week: (pfRow as { pay_week?: string } | null)?.pay_week ?? '',
+            count: over3xCount ?? 1,
+          },
+        });
+      }
+    } catch (err) {
+      console.error('[editLineItem >3x notify] failed:', err);
+    }
+  }
+
   return {
     ok: true,
     line_item: updated as PayfileLineItem,

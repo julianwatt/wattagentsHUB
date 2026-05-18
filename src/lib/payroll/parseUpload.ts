@@ -77,10 +77,77 @@ export async function parseUpload(
     });
 
     await finalizeUpload(uploadId, summary);
+    await fireParseNotifications(uploadId, upload.file_name, summary);
     return summary;
   } catch (err) {
     await markFailed(uploadId, err instanceof Error ? err.message : String(err));
     throw err;
+  }
+}
+
+/**
+ * Block 15 — fan out parse-time alerts to the admin inbox. All three
+ * conditions are quiet on the happy path:
+ *   - orphan badges (≥1 in this upload),
+ *   - new VERIFY plans needing mapping,
+ *   - hard parse errors on individual rows.
+ * Dispatcher swallows its own errors, so wrapping in try/catch here is
+ * defense in depth against future regressions.
+ */
+async function fireParseNotifications(
+  uploadId: string,
+  fileName: string,
+  summary: UploadParseSummary,
+) {
+  try {
+    const { dispatchPayrollNotification, PAYROLL_NOTIFICATION_TYPES } =
+      await import('@/lib/payroll/notifications');
+
+    // Orphan badges — count comes from upload-scoped badge alerts that
+    // were inserted/refreshed this run. We re-read the count of unresolved
+    // alerts that touched this upload's window: the simpler signal here
+    // is the `badgeAlertsCount` summary field (new alerts created this
+    // run). If we want full accuracy across re-opens, the badge_alerts
+    // table is the source of truth.
+    if (summary.badgeAlertsCount > 0) {
+      await dispatchPayrollNotification({
+        type: PAYROLL_NOTIFICATION_TYPES.ORPHAN_BADGE_DETECTED,
+        payload: {
+          file_name: fileName,
+          upload_id: uploadId,
+          count: summary.badgeAlertsCount,
+        },
+        channels: ['inapp'], // admin inbox only — no push
+      });
+    }
+
+    if (summary.verifyPlans.length > 0) {
+      await dispatchPayrollNotification({
+        type: PAYROLL_NOTIFICATION_TYPES.UNMAPPED_PLAN_DETECTED,
+        payload: {
+          file_name: fileName,
+          upload_id: uploadId,
+          count: summary.verifyPlans.length,
+          plans: summary.verifyPlans.slice(0, 20),
+        },
+        channels: ['inapp'],
+      });
+    }
+
+    if (summary.errors > 0) {
+      await dispatchPayrollNotification({
+        type: PAYROLL_NOTIFICATION_TYPES.FILE_PROCESSED_WITH_ERRORS,
+        payload: {
+          file_name: fileName,
+          upload_id: uploadId,
+          error_count: summary.errors,
+          total_rows: summary.totalRows,
+        },
+        channels: ['inapp'],
+      });
+    }
+  } catch (err) {
+    console.error('[fireParseNotifications] failed:', err);
   }
 }
 
