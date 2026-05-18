@@ -119,6 +119,20 @@ export async function POST(req: NextRequest) {
       status: 'pending',
     });
 
+    await supabase.from('payroll_audit_log').insert({
+      entity_type: 'user',
+      entity_id: user.id,
+      action: 'CREATE',
+      actor_id: session.user.id,
+      new_value: {
+        username: user.username, name: user.name, role: user.role,
+        manager_id: user.manager_id, email: user.email,
+        modality: user.modality, payroll_status: user.payroll_status,
+        hire_date: user.hire_date,
+      },
+      change_notes: `Usuario creado por ${session.user.name}`,
+    });
+
     return NextResponse.json({ ...user, tempPassword, emailSent, emailDebug }, { status: 201 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Error creating user';
@@ -163,13 +177,16 @@ export async function PATCH(req: NextRequest) {
     if (hierarchyError) return NextResponse.json({ error: hierarchyError }, { status: 400 });
   }
 
+  // Snapshot the user before the update so we can write a meaningful
+  // before/after pair to the audit log.
+  const beforeUser = await getUserById(id);
+
   // Block 08 — detect inactive → active payroll_status transition BEFORE
   // the update, so we can check the previous state and fire the
   // "user reactivated with pending negative balance" notification after.
   let payrollReactivated = false;
   if ('payroll_status' in updates) {
-    const prev = await getUserById(id);
-    if (prev?.payroll_status === 'inactive' && updates.payroll_status === 'active') {
+    if (beforeUser?.payroll_status === 'inactive' && updates.payroll_status === 'active') {
       payrollReactivated = true;
     }
   }
@@ -193,6 +210,40 @@ export async function PATCH(req: NextRequest) {
 
     console.log('[PATCH /api/users] updateUser', { id, manager_id: updates.manager_id, updates });
     await updateUser(id, updates);
+
+    // Audit: pick the diff (the parts of `updates` that actually changed)
+    // so the log doesn't grow noisy with no-op fields and never leaks
+    // a raw password.
+    const auditOld: Record<string, unknown> = {};
+    const auditNew: Record<string, unknown> = {};
+    const trackable = [
+      'name', 'email', 'role', 'manager_id', 'must_change_password',
+      'hire_date', 'is_active', 'modality', 'payroll_status',
+    ] as const;
+    const updatesAsRecord = updates as Record<string, unknown>;
+    const beforeAsRecord = beforeUser as unknown as Record<string, unknown> | null;
+    for (const k of trackable) {
+      if (k in updatesAsRecord && beforeAsRecord && beforeAsRecord[k] !== updatesAsRecord[k]) {
+        auditOld[k] = beforeAsRecord[k] ?? null;
+        auditNew[k] = updatesAsRecord[k] ?? null;
+      }
+    }
+    if ('password' in updatesAsRecord) {
+      auditNew.password_changed = true;
+    }
+    if (Object.keys(auditNew).length > 0) {
+      await supabase.from('payroll_audit_log').insert({
+        entity_type: 'user',
+        entity_id: id,
+        action: 'UPDATE',
+        actor_id: session.user.id,
+        old_value: Object.keys(auditOld).length > 0 ? auditOld : null,
+        new_value: auditNew,
+        change_notes: 'password_changed' in auditNew
+          ? 'Password modificada por admin/CEO'
+          : null,
+      });
+    }
 
     // Block 08 — if just reactivated AND has open negative balances, alert admin.
     if (payrollReactivated) {
@@ -256,14 +307,26 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
   if (id === session.user.id) return NextResponse.json({ error: 'Cannot delete your own account' }, { status: 400 });
 
+  const beforeDelete = await getUserById(id);
+
   // CEO can't delete admin users
   if (session.user.role === 'ceo') {
-    const target = await getUserById(id);
-    if (target?.role === 'admin') {
+    if (beforeDelete?.role === 'admin') {
       return NextResponse.json({ error: 'CEO no puede eliminar usuarios admin' }, { status: 403 });
     }
   }
 
   await deleteUser(id);
+
+  if (beforeDelete) {
+    await supabase.from('payroll_audit_log').insert({
+      entity_type: 'user',
+      entity_id: id,
+      action: 'DELETE',
+      actor_id: session.user.id,
+      old_value: beforeDelete as unknown as Record<string, unknown>,
+      change_notes: `Usuario ${beforeDelete.name} (${beforeDelete.username}) eliminado`,
+    });
+  }
   return NextResponse.json({ success: true });
 }

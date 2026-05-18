@@ -13,6 +13,7 @@ import CollectionsTab from './CollectionsTab';
 import BonosTab from './BonosTab';
 import ResidualesTab from './ResidualesTab';
 import AprobacionTab from './AprobacionTab';
+import AuditLogTab from './AuditLogTab';
 
 /**
  * Payroll → top-level tabs. Blocks ship them one by one:
@@ -114,19 +115,9 @@ export default function PayrollClient({ session }: { session: Session }) {
         {tab === 'bonos' && <BonosTab />}
         {tab === 'residuales' && <ResidualesTab />}
         {tab === 'rastreo' && <RastreoTab />}
-        {tab !== 'pendientes' && tab !== 'aprobacion' && tab !== 'publicadas' && tab !== 'roster' && tab !== 'plan_mapping' && tab !== 'saldos_negativos' && tab !== 'collections' && tab !== 'bonos' && tab !== 'residuales' && tab !== 'rastreo' && <PlaceholderTab tabKey={tab} />}
+        {tab === 'audit_log' && <AuditLogTab />}
       </div>
     </AppLayout>
   );
 }
 
-function PlaceholderTab({ tabKey }: { tabKey: PayrollTab }) {
-  const { t } = useLanguage();
-  return (
-    <div className="text-center py-20">
-      <p className="text-4xl mb-3">🚧</p>
-      <p className="text-gray-600 dark:text-gray-300 font-medium">{t(`payroll.tab_${tabKey}`)}</p>
-      <p className="text-sm text-gray-400 mt-1">{t('payroll.tabPlaceholder')}</p>
-    </div>
-  );
-}

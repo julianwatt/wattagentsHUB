@@ -475,6 +475,20 @@ async function processRow(
   summary.insertedSales += 1;
   summary.byStatus[effectiveStatus] += 1;
 
+  // Audit: only log the winback auto-detection (the routine PAYABLE inserts
+  // are millions of rows; logging each is noise). Winbacks are a flagged,
+  // exception-class event that admins want to see in the audit trail.
+  if (isWinback) {
+    await supabase.from('payroll_audit_log').insert({
+      entity_type: 'payroll_sale',
+      entity_id: saleData!.id,
+      action: 'STATE_CHANGE',
+      actor_id: null,
+      new_value: { contract_id: parsed.contract_id, is_winback: true, status: effectiveStatus },
+      change_notes: `Sistema marcó contract ${parsed.contract_id} como Winback automáticamente.`,
+    });
+  }
+
   // ── Side-effects: RCE adders and residuals. ────────────────────────────────
   // Fire for live PAYABLE and WINBACK rows. A chargeback of an RCE adder
   // is just a negative payroll_sales row — creating a positive

@@ -76,6 +76,17 @@ export async function POST(req: NextRequest) {
   // that carried this badge in limbo. Idempotent.
   const linkedSales = await reprocessSalesForBadge(trimmedBadge, user_id);
 
+  await supabase.from('payroll_audit_log').insert({
+    entity_type: 'roster_entry',
+    entity_id: data.id,
+    action: 'CREATE',
+    actor_id: session.user.id,
+    new_value: data,
+    change_notes: linkedSales > 0
+      ? `JE badge ${trimmedBadge} agregado · ${linkedSales} venta(s) reprocesada(s)`
+      : `JE badge ${trimmedBadge} agregado`,
+  });
+
   return NextResponse.json({ ...data, linked_sales: linkedSales }, { status: 201 });
 }
 
@@ -104,6 +115,12 @@ export async function PATCH(req: NextRequest) {
     patch.valid_until = new Date().toISOString().slice(0, 10);
   }
 
+  const { data: before } = await supabase
+    .from('payroll_roster')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+
   const { data, error } = await supabase
     .from('payroll_roster')
     .update(patch)
@@ -120,5 +137,22 @@ export async function PATCH(req: NextRequest) {
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  const action = patch.je_badge_status === 'inactive'
+    && (before as { je_badge_status?: string } | null)?.je_badge_status === 'active'
+    ? 'STATE_CHANGE'
+    : 'UPDATE';
+  await supabase.from('payroll_audit_log').insert({
+    entity_type: 'roster_entry',
+    entity_id: id,
+    action,
+    actor_id: session.user.id,
+    old_value: before,
+    new_value: patch,
+    change_notes: action === 'STATE_CHANGE'
+      ? `JE badge ${(before as { je_badge?: string } | null)?.je_badge ?? ''} inactivado`
+      : null,
+  });
+
   return NextResponse.json(data);
 }

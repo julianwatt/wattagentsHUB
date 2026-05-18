@@ -120,6 +120,16 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await supabase.from('payroll_audit_log').insert({
+    entity_type: 'custom_rate',
+    entity_id: data.id,
+    action: 'CREATE',
+    actor_id: session.user.id,
+    new_value: data,
+    change_notes: `Tarifa custom ${body.campaign}${body.tier !== null && body.tier !== undefined ? ` tier ${body.tier}` : ''}${body.term_months ? ` ${body.term_months}m` : ''} = $${body.commission_amount}`,
+  });
+
   return NextResponse.json(data, { status: 201 });
 }
 
@@ -142,6 +152,12 @@ export async function PATCH(req: NextRequest) {
   if (updates.term_months !== undefined) patch.term_months = updates.term_months;
   if (updates.campaign !== undefined) patch.campaign = updates.campaign;
 
+  const { data: before } = await supabase
+    .from('roster_custom_rates')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+
   const { data, error } = await supabase
     .from('roster_custom_rates')
     .update(patch)
@@ -149,6 +165,16 @@ export async function PATCH(req: NextRequest) {
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await supabase.from('payroll_audit_log').insert({
+    entity_type: 'custom_rate',
+    entity_id: id,
+    action: 'UPDATE',
+    actor_id: session.user.id,
+    old_value: before,
+    new_value: patch,
+  });
+
   return NextResponse.json(data);
 }
 
@@ -159,7 +185,24 @@ export async function DELETE(req: NextRequest) {
   const { id } = await req.json();
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
 
+  const { data: before } = await supabase
+    .from('roster_custom_rates')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+
   const { error } = await supabase.from('roster_custom_rates').delete().eq('id', id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  if (before) {
+    await supabase.from('payroll_audit_log').insert({
+      entity_type: 'custom_rate',
+      entity_id: id,
+      action: 'DELETE',
+      actor_id: session.user.id,
+      old_value: before,
+    });
+  }
+
   return NextResponse.json({ success: true });
 }

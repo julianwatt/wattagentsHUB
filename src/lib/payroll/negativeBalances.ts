@@ -290,6 +290,19 @@ export async function finalizePayfileIfNegative(
     return { finalTotal: runningTotal, hadNegativeBalance: false, newBalanceId: null };
   }
 
+  await supabase.from('payroll_audit_log').insert({
+    entity_type: 'negative_balance',
+    entity_id: newBal.id,
+    action: 'CREATE',
+    actor_id: null,
+    new_value: {
+      user_id: userId, origin, original_amount: absResidual,
+      origin_week: payWeek, auto_generated_for_payfile_id: payfileId,
+      user_status_when_created: userStatus,
+    },
+    change_notes: `Sistema creó saldo negativo de $${absResidual.toFixed(2)} al finalizar payfile.`,
+  });
+
   await supabase
     .from('payfiles')
     .update({ total_amount: 0, had_negative_balance: true })
