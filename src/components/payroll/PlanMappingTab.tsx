@@ -45,13 +45,30 @@ export default function PlanMappingTab({ onPendingCountChange }: { onPendingCoun
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  // Returns the missing-data reason for a mapping, or null when it's complete.
+  // D2D COMMISSION rows must have a tier; RCE adders need extra_amount. The rest
+  // are considered fully specified once they exist as a row.
+  const incompleteReason = (m: PlanMapping): 'tier' | 'extra' | null => {
+    if (m.plan_type === 'COMMISSION' && m.campaign === 'D2D' && m.tier === null) return 'tier';
+    if ((m.plan_type === 'RCE_ADDER_D2D' || m.plan_type === 'RCE_ADDER_RETAIL') && (m.extra_amount === null || m.extra_amount === undefined)) return 'extra';
+    return null;
+  };
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return mappings.filter((m) => {
+    const list = mappings.filter((m) => {
       if (typeFilter !== 'all' && m.plan_type !== typeFilter) return false;
       if (campaignFilter !== 'all' && m.campaign !== campaignFilter) return false;
       if (q && !m.plan_name.toLowerCase().includes(q)) return false;
       return true;
+    });
+    // Sort: incomplete rows first (so problematic mappings jump to the top),
+    // then alphabetically by plan_name.
+    return list.sort((a, b) => {
+      const aIncomplete = incompleteReason(a) !== null;
+      const bIncomplete = incompleteReason(b) !== null;
+      if (aIncomplete !== bIncomplete) return aIncomplete ? -1 : 1;
+      return a.plan_name.localeCompare(b.plan_name);
     });
   }, [mappings, search, typeFilter, campaignFilter]);
 
@@ -160,30 +177,44 @@ export default function PlanMappingTab({ onPendingCountChange }: { onPendingCoun
           <div className="p-12 text-center text-gray-400 text-sm">{t('common.noData')}</div>
         ) : (
           <div className="divide-y divide-gray-50 dark:divide-gray-800">
-            {filtered.map((m) => (
-              <button
-                key={m.id}
-                onClick={() => setEditing(m)}
-                className="w-full text-left grid grid-cols-12 gap-2 items-center px-3 sm:px-5 py-3 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors"
-              >
-                <div className="col-span-12 sm:col-span-6 min-w-0">
-                  <p className="text-xs font-mono font-semibold text-gray-900 dark:text-gray-100 truncate">{m.plan_name}</p>
-                  {m.notes && <p className="text-[10px] text-gray-400 truncate mt-0.5">{m.notes}</p>}
-                </div>
-                <div className="col-span-4 sm:col-span-3">
-                  <PlanTypeBadge type={m.plan_type} lang={lang} />
-                </div>
-                <div className="col-span-4 sm:col-span-2 text-[11px] text-gray-600 dark:text-gray-300">
-                  {m.campaign ?? '—'}
-                  {m.tier !== null && <> · T{m.tier}</>}
-                  {m.term_months !== null && <> · {m.term_months}M</>}
-                  {m.extra_amount !== null && <> · ${m.extra_amount.toFixed(0)}</>}
-                </div>
-                <div className="col-span-4 sm:col-span-1 text-[10px] text-gray-400 text-right">
-                  {t('common.edit')}
-                </div>
-              </button>
-            ))}
+            {filtered.map((m) => {
+              const incomplete = incompleteReason(m);
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => setEditing(m)}
+                  className={`w-full text-left grid grid-cols-12 gap-2 items-center px-3 sm:px-5 py-3 transition-colors ${
+                    incomplete
+                      ? 'bg-rose-50/40 dark:bg-rose-900/10 hover:bg-rose-50 dark:hover:bg-rose-900/20 border-l-2 border-rose-400 dark:border-rose-600'
+                      : 'hover:bg-gray-50/50 dark:hover:bg-gray-800/30'
+                  }`}
+                >
+                  <div className="col-span-12 sm:col-span-6 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <p className="text-xs font-mono font-semibold text-gray-900 dark:text-gray-100 truncate">{m.plan_name}</p>
+                      {incomplete && (
+                        <span className="flex-shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-800">
+                          ⚠ {incomplete === 'tier' ? t('payroll.planMapping.tagMissingTier') : t('payroll.planMapping.tagMissingExtra')}
+                        </span>
+                      )}
+                    </div>
+                    {m.notes && <p className="text-[10px] text-gray-400 truncate mt-0.5">{m.notes}</p>}
+                  </div>
+                  <div className="col-span-4 sm:col-span-3">
+                    <PlanTypeBadge type={m.plan_type} lang={lang} />
+                  </div>
+                  <div className="col-span-4 sm:col-span-2 text-[11px] text-gray-600 dark:text-gray-300">
+                    {m.campaign ?? '—'}
+                    {m.tier !== null && <> · T{m.tier}</>}
+                    {m.term_months !== null && <> · {m.term_months}M</>}
+                    {m.extra_amount !== null && <> · ${m.extra_amount.toFixed(0)}</>}
+                  </div>
+                  <div className="col-span-4 sm:col-span-1 text-[10px] text-gray-400 text-right">
+                    {t('common.edit')}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
