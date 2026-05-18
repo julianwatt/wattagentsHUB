@@ -79,15 +79,16 @@ export default function PayrollClient({ session }: { session: Session }) {
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{t('payroll.subtitle')}</p>
         </div>
 
-        {/* Tab switcher — scrolls horizontally on mobile because there are 11 tabs */}
-        <div className="flex gap-0 border-b border-gray-200 dark:border-gray-700 overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0">
+        {/* Tab switcher — horizontal scroll on mobile/tablet (11 tabs don't fit);
+            wraps to multi-line on desktop so nothing gets hidden behind a scroll. */}
+        <div className="flex gap-0 border-b border-gray-200 dark:border-gray-700 overflow-x-auto md:overflow-visible md:flex-wrap -mx-3 sm:mx-0 px-3 sm:px-0">
           {TABS.map((id) => {
             const showBadge = id === 'plan_mapping' && pendingPlansCount > 0;
             return (
               <button
                 key={id}
                 onClick={() => setTab(id)}
-                className={`px-3.5 py-2.5 text-xs sm:text-sm font-semibold border-b-2 -mb-px transition-colors whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5 ${
+                className={`px-3 md:px-3 lg:px-3.5 py-2.5 text-xs sm:text-sm font-semibold border-b-2 -mb-px transition-colors whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5 ${
                   tab === id
                     ? 'border-[var(--primary)] text-[var(--primary)]'
                     : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
