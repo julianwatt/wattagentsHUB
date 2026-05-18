@@ -1,11 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { requirePayrollAdmin } from '@/lib/payroll/auth';
 import { parseUpload } from '@/lib/payroll/parseUpload';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+// See /api/payroll/uploads — same background-parse pattern via after().
+export const maxDuration = 300;
 
 interface RouteCtx {
   params: Promise<{ id: string }>;
@@ -40,18 +41,36 @@ export async function POST(_req: NextRequest, ctx: RouteCtx) {
     return NextResponse.json({ error: 'Upload eliminado, no se puede reprocesar.' }, { status: 410 });
   }
 
-  try {
-    const summary = await parseUpload(id);
-    await supabase.from('payroll_audit_log').insert({
-      entity_type: 'payroll_upload',
-      entity_id: id,
-      action: 'UPDATE',
-      actor_id: session.user.id,
-      change_notes: `Reprocesado: ${summary.totalRows} filas, ${summary.errors} errores`,
-    });
-    return NextResponse.json({ summary });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: `Reprocess falló: ${message}` }, { status: 500 });
-  }
+  // Flip to PENDING up front so the UI's polling picks up the change
+  // immediately — parseUpload will then bump it to PROCESSING on start.
+  await supabase
+    .from('payroll_uploads')
+    .update({ processing_status: 'PENDING', notes: null })
+    .eq('id', id);
+
+  await supabase.from('payroll_audit_log').insert({
+    entity_type: 'payroll_upload',
+    entity_id: id,
+    action: 'UPDATE',
+    actor_id: session.user.id,
+    change_notes: 'Reprocess solicitado.',
+  });
+
+  after(async () => {
+    try {
+      const summary = await parseUpload(id);
+      await supabase.from('payroll_audit_log').insert({
+        entity_type: 'payroll_upload',
+        entity_id: id,
+        action: 'UPDATE',
+        actor_id: session.user.id,
+        change_notes: `Reprocesado: ${summary.totalRows} filas, ${summary.errors} errores`,
+      });
+    } catch (err) {
+      console.error(`[uploads reprocess after()] failed for ${id}:`, err);
+      // parseUpload already marks FAILED on error.
+    }
+  });
+
+  return NextResponse.json({ queued: true }, { status: 202 });
 }

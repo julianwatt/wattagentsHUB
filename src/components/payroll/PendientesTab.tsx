@@ -58,6 +58,19 @@ export default function PendientesTab() {
     refresh();
   }, [refresh]);
 
+  // Auto-poll while any upload is in flight. The parser flips
+  // processing_status PENDING → PROCESSING → PROCESSED / PARTIAL / FAILED
+  // from background (block-16 after() refactor); without polling the UI
+  // would only catch up on the next manual refresh.
+  const hasInFlight = rows.some(
+    (r) => r.processing_status === 'PENDING' || r.processing_status === 'PROCESSING',
+  );
+  useEffect(() => {
+    if (!hasInFlight) return;
+    const id = setInterval(() => { refresh(); }, 3000);
+    return () => clearInterval(id);
+  }, [hasInFlight, refresh]);
+
   return (
     <div className="space-y-4">
       {/* Sub-tab switcher (block 05 — added "Ventas por semana" view) */}
@@ -311,17 +324,19 @@ function UploadFormModal({ onClose, onUploaded }: { onClose: () => void; onUploa
       setDuplicate(j.existing);
       return;
     }
-    if (!res.ok && res.status !== 207) {
+    if (!res.ok && res.status !== 207 && res.status !== 202) {
       setError(j.error || t('payroll.pendientes.errGeneric'));
       return;
     }
     if (res.status === 207) {
-      // Upload row created but parse failed — still show as success-ish, user
-      // can reprocess from the detail view.
+      // Legacy fallback — parse used to run inline and could fail. Kept so
+      // a stale deploy doesn't break the modal flow.
       setError(j.error || t('payroll.pendientes.errParse'));
       onUploaded();
       return;
     }
+    // 201 (synchronous legacy) or 202 (queued background parse). In both
+    // cases the row is in DB; the list will pick it up and poll it.
     onUploaded();
   }
 
@@ -459,11 +474,24 @@ function UploadDetailModal({
     fetchDetail();
   }, [fetchDetail]);
 
+  // Poll while the upload is still in flight so the user sees PROCESSING
+  // → PROCESSED / PARTIAL / FAILED without closing the modal.
+  const status = detail?.upload.processing_status;
+  const inFlight = status === 'PENDING' || status === 'PROCESSING';
+  useEffect(() => {
+    if (!inFlight) return;
+    const id = setInterval(() => {
+      fetchDetail();
+      onChanged();
+    }, 3000);
+    return () => clearInterval(id);
+  }, [inFlight, fetchDetail, onChanged]);
+
   async function handleReprocess() {
     setBusy(true);
     const r = await fetch(`/api/payroll/uploads/${uploadId}/reprocess`, { method: 'POST' });
     setBusy(false);
-    if (r.ok) {
+    if (r.ok || r.status === 202) {
       await fetchDetail();
       onChanged();
     } else {

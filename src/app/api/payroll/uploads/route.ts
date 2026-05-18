@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { supabase, getSupabase } from '@/lib/supabase';
 import { requirePayrollAdmin } from '@/lib/payroll/auth';
 import {
@@ -11,7 +11,11 @@ import { parseUpload } from '@/lib/payroll/parseUpload';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+// 300s ceiling for the background parse (Vercel Pro). The HTTP response
+// itself returns in ~1–2s (Storage upload + DB insert + audit); parsing
+// runs after() with the rest of the budget. Bigger files that still
+// can't fit in 300s would need a real queue worker — out of scope here.
+export const maxDuration = 300;
 
 const STORAGE_BUCKET = 'payroll-uploads';
 
@@ -176,21 +180,26 @@ export async function POST(req: NextRequest) {
     new_value: row,
   });
 
-  // ── Parse synchronously ───────────────────────────────────────────────────
-  try {
-    const summary = await parseUpload(row.id, { isFirstRun: true });
-    return NextResponse.json({ upload: row, summary }, { status: 201 });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json(
-      {
-        upload: row,
-        summary: null,
-        error: `Procesamiento falló: ${message}`,
-      },
-      { status: 207 }, // Multi-Status — upload OK, parse failed
-    );
-  }
+  // ── Parse in background after the response returns ────────────────────────
+  // Parsing a 5k-row .xlsx with side effects (sales + bonuses + residuals +
+  // company_bonuses inserts, badge alerts, plan_mappings reprocess) blows
+  // past Vercel's 25–60s request timeout window even though the function
+  // budget allows more. after() lets the response come back immediately
+  // while the parse keeps running on the same Lambda invocation up to
+  // maxDuration. The UI polls payroll_uploads.processing_status to know
+  // when it's done — the parser itself flips PROCESSING → PROCESSED /
+  // PARTIAL / FAILED at the end.
+  after(async () => {
+    try {
+      await parseUpload(row.id, { isFirstRun: true });
+    } catch (err) {
+      console.error(`[uploads POST after()] parse failed for ${row.id}:`, err);
+      // parseUpload's catch block already marks the row FAILED via
+      // markFailed(). Nothing else to do here.
+    }
+  });
+
+  return NextResponse.json({ upload: row, summary: null }, { status: 202 });
 }
 
 async function softDeleteUpload(uploadId: string, actorId: string) {
